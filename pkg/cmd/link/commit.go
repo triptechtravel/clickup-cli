@@ -34,6 +34,14 @@ creating duplicates.
 If SHA is not provided, the HEAD commit is used.
 The ClickUp task ID is auto-detected from the current git branch name,
 or can be specified explicitly with --task.`,
+		Example: `  # Link the latest commit
+  clickup link commit
+
+  # Link a specific commit
+  clickup link commit a1b2c3d
+
+  # Link to a specific task and repo
+  clickup link commit a1b2c3d --task CU-abc123 --repo owner/repo`,
 		Args:              cobra.MaximumNArgs(1),
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {

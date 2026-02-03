@@ -10,7 +10,7 @@ func NewCmdTask(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "task <command>",
 		Short: "Manage ClickUp tasks",
-		Long:  "View, list, create, and edit tasks in your ClickUp workspace.",
+		Long:  "View, list, create, edit, and search tasks. Track time, manage dependencies and checklists.",
 	}
 
 	cmd.AddCommand(NewCmdView(f))

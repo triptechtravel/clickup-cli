@@ -14,7 +14,9 @@ func NewCmdChecklist(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "checklist <command>",
 		Short: "Manage task checklists",
-		Long:  "Add, remove, and manage checklists and their items on ClickUp tasks.",
+		Long: `Add, remove, and manage checklists and their items on ClickUp tasks.
+
+To find checklist and item IDs, use: clickup task view <task-id> --json`,
 	}
 
 	cmd.AddCommand(newCmdChecklistAdd(f))

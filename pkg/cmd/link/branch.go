@@ -29,6 +29,11 @@ than creating duplicates.
 
 The ClickUp task ID is auto-detected from the current git branch name,
 or can be specified explicitly with --task.`,
+		Example: `  # Link current branch to auto-detected task
+  clickup link branch
+
+  # Link to a specific task
+  clickup link branch --task CU-abc123`,
 		Args:              cobra.NoArgs,
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {

@@ -50,6 +50,17 @@ from the current git branch name. At least one field flag must be provided.
 Custom fields can be set with --field "Name=value" (repeatable) and cleared
 with --clear-field "Name" (repeatable). Use 'clickup field list' to discover
 available custom fields and their types.`,
+		Example: `  # Update status and priority
+  clickup task edit --status "in progress" --priority 2
+
+  # Edit a specific task with a custom field
+  clickup task edit CU-abc123 --field "Environment=production"
+
+  # Set due date and time estimate
+  clickup task edit --due-date 2025-03-01 --time-estimate 4h
+
+  # Clear a custom field
+  clickup task edit CU-abc123 --clear-field "Environment"`,
 		Args:              cobra.MaximumNArgs(1),
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {

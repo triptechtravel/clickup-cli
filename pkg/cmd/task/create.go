@@ -53,7 +53,21 @@ Additional properties can be set with flags:
   --due-date       Due date in YYYY-MM-DD format
   --start-date     Start date in YYYY-MM-DD format
   --time-estimate  Time estimate (e.g. "2h", "30m", "1h30m")
-  --points         Sprint/story points`,
+  --points         Sprint/story points
+  --field          Set a custom field ("Name=value", repeatable)
+  --parent         Create as subtask of another task
+  --type           Task type (0=task, 1=milestone)`,
+		Example: `  # Create with flags
+  clickup task create --list-id 12345 --name "Fix login bug" --priority 2
+
+  # Interactive mode (prompts for details)
+  clickup task create --list-id 12345
+
+  # Create with custom field and due date
+  clickup task create --list-id 12345 --name "Deploy v2" --field "Environment=staging" --due-date 2025-03-01
+
+  # Create a subtask
+  clickup task create --list-id 12345 --name "Write tests" --parent 86abc123`,
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if opts.listID == "" {

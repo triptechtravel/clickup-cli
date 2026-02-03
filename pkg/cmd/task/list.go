@@ -46,7 +46,7 @@ Results can be filtered by assignee, status, and sprint.`,
 	}
 
 	cmd.Flags().StringVar(&opts.listID, "list-id", "", "ClickUp list ID (required)")
-	cmd.Flags().StringSliceVar(&opts.assignee, "assignee", nil, "Filter by assignee ID(s)")
+	cmd.Flags().StringSliceVar(&opts.assignee, "assignee", nil, `Filter by assignee ID(s), or "me" for yourself`)
 	cmd.Flags().StringSliceVar(&opts.status, "status", nil, "Filter by status(es)")
 	cmd.Flags().StringVar(&opts.sprint, "sprint", "", "Filter by sprint name")
 	cmd.Flags().IntVar(&opts.page, "page", 0, "Page number for pagination (starts at 0)")
