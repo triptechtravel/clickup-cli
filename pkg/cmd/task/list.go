@@ -112,6 +112,8 @@ func printTaskTable(f *cmdutil.Factory, tasks []clickup.Task) error {
 	tp.AddField(cs.Bold("STATUS"))
 	tp.AddField(cs.Bold("PRIORITY"))
 	tp.AddField(cs.Bold("ASSIGNEE"))
+	tp.AddField(cs.Bold("TAGS"))
+	tp.AddField(cs.Bold("DUE"))
 	tp.EndRow()
 
 	tp.SetTruncateColumn(1) // Truncate name column if table is too wide.
@@ -135,6 +137,20 @@ func printTaskTable(f *cmdutil.Factory, tasks []clickup.Task) error {
 			assigneeNames = append(assigneeNames, a.Username)
 		}
 		tp.AddField(strings.Join(assigneeNames, ", "))
+
+		tagNames := make([]string, 0, len(t.Tags))
+		for _, tag := range t.Tags {
+			tagNames = append(tagNames, tag.Name)
+		}
+		tp.AddField(strings.Join(tagNames, ", "))
+
+		var dueStr string
+		if t.DueDate != nil {
+			if dt := t.DueDate.Time(); dt != nil {
+				dueStr = dt.Format("Jan 02")
+			}
+		}
+		tp.AddField(dueStr)
 
 		tp.EndRow()
 	}

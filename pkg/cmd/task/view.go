@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/raksul/go-clickup/clickup"
 	"github.com/spf13/cobra"
@@ -138,15 +139,39 @@ func printTaskView(f *cmdutil.Factory, task *clickup.Task) error {
 		fmt.Fprintf(out, "%s %s\n", cs.Bold("Tags:"), strings.Join(tagNames, ", "))
 	}
 
+	// Points
+	if pts := task.Points.Value.String(); pts != "" && pts != "0" {
+		fmt.Fprintf(out, "%s %s\n", cs.Bold("Points:"), pts)
+	}
+
+	// Time Estimate & Time Spent
+	if s := formatMillisDuration(task.TimeEstimate); s != "" {
+		fmt.Fprintf(out, "%s %s\n", cs.Bold("Time Estimate:"), s)
+	}
+	if s := formatMillisDuration(task.TimeSpent); s != "" {
+		fmt.Fprintf(out, "%s %s\n", cs.Bold("Time Spent:"), s)
+	}
+
 	// Dates
 	if task.DateCreated != "" {
-		fmt.Fprintf(out, "%s %s\n", cs.Bold("Created:"), task.DateCreated)
+		if t, err := parseUnixMillis(task.DateCreated); err == nil {
+			fmt.Fprintf(out, "%s %s (%s)\n", cs.Bold("Created:"), t.Format("2006-01-02 15:04"), text.RelativeTime(t))
+		}
 	}
 	if task.DateUpdated != "" {
-		fmt.Fprintf(out, "%s %s\n", cs.Bold("Updated:"), task.DateUpdated)
+		if t, err := parseUnixMillis(task.DateUpdated); err == nil {
+			fmt.Fprintf(out, "%s %s (%s)\n", cs.Bold("Updated:"), t.Format("2006-01-02 15:04"), text.RelativeTime(t))
+		}
+	}
+	if task.StartDate != "" {
+		if t, err := parseUnixMillis(task.StartDate); err == nil {
+			fmt.Fprintf(out, "%s %s (%s)\n", cs.Bold("Start Date:"), t.Format("2006-01-02 15:04"), text.RelativeTime(t))
+		}
 	}
 	if task.DueDate != nil {
-		fmt.Fprintf(out, "%s %s\n", cs.Bold("Due:"), task.DueDate.String())
+		if dt := task.DueDate.Time(); dt != nil {
+			fmt.Fprintf(out, "%s %s (%s)\n", cs.Bold("Due:"), dt.Format("2006-01-02 15:04"), text.RelativeTime(*dt))
+		}
 	}
 
 	// URL
@@ -161,4 +186,24 @@ func printTaskView(f *cmdutil.Factory, task *clickup.Task) error {
 	}
 
 	return nil
+}
+
+// formatMillisDuration converts milliseconds to a human-readable duration string.
+func formatMillisDuration(ms int64) string {
+	if ms <= 0 {
+		return ""
+	}
+	d := time.Duration(ms) * time.Millisecond
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	if h > 0 && m > 0 {
+		return fmt.Sprintf("%dh %dm", h, m)
+	}
+	if h > 0 {
+		return fmt.Sprintf("%dh", h)
+	}
+	if m > 0 {
+		return fmt.Sprintf("%dm", m)
+	}
+	return "< 1m"
 }

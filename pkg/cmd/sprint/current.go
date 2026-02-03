@@ -48,13 +48,16 @@ and linked GitHub branches.`,
 }
 
 type sprintTaskEntry struct {
-	ID       string `json:"id"`
-	CustomID string `json:"custom_id,omitempty"`
-	Name     string `json:"name"`
-	Status   string `json:"status"`
-	Assignee string `json:"assignee"`
-	Priority string `json:"priority"`
-	DueDate  string `json:"due_date,omitempty"`
+	ID           string `json:"id"`
+	CustomID     string `json:"custom_id,omitempty"`
+	Name         string `json:"name"`
+	Status       string `json:"status"`
+	Assignee     string `json:"assignee"`
+	Priority     string `json:"priority"`
+	DueDate      string `json:"due_date,omitempty"`
+	Points       string `json:"points,omitempty"`
+	TimeEstimate string `json:"time_estimate,omitempty"`
+	TimeSpent    string `json:"time_spent,omitempty"`
 }
 
 func runSprintCurrent(f *cmdutil.Factory, folderID string, jsonFlags *cmdutil.JSONFlags) error {
@@ -215,14 +218,22 @@ func runSprintCurrent(f *cmdutil.Factory, folderID string, jsonFlags *cmdutil.JS
 			}
 		}
 
+		var pts string
+		if p := t.Points.Value.String(); p != "" && p != "0" {
+			pts = p
+		}
+
 		entries = append(entries, sprintTaskEntry{
-			ID:       id,
-			CustomID: customID,
-			Name:     t.Name,
-			Status:   t.Status.Status,
-			Assignee: strings.Join(assigneeNames, ", "),
-			Priority: priority,
-			DueDate:  dueStr,
+			ID:           id,
+			CustomID:     customID,
+			Name:         t.Name,
+			Status:       t.Status.Status,
+			Assignee:     strings.Join(assigneeNames, ", "),
+			Priority:     priority,
+			DueDate:      dueStr,
+			Points:       pts,
+			TimeEstimate: formatSprintDuration(t.TimeEstimate),
+			TimeSpent:    formatSprintDuration(t.TimeSpent),
 		})
 	}
 
@@ -256,6 +267,9 @@ func runSprintCurrent(f *cmdutil.Factory, folderID string, jsonFlags *cmdutil.JS
 			tp.AddField(e.Name)
 			tp.AddField(e.Assignee)
 			tp.AddField(e.Priority)
+			tp.AddField(e.Points)
+			tp.AddField(e.TimeEstimate)
+			tp.AddField(e.TimeSpent)
 			if e.DueDate != "" {
 				tp.AddField(e.DueDate)
 			}
@@ -266,4 +280,24 @@ func runSprintCurrent(f *cmdutil.Factory, folderID string, jsonFlags *cmdutil.JS
 	}
 
 	return nil
+}
+
+// formatSprintDuration converts milliseconds to a human-readable duration string.
+func formatSprintDuration(ms int64) string {
+	if ms <= 0 {
+		return ""
+	}
+	d := time.Duration(ms) * time.Millisecond
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	if h > 0 && m > 0 {
+		return fmt.Sprintf("%dh %dm", h, m)
+	}
+	if h > 0 {
+		return fmt.Sprintf("%dh", h)
+	}
+	if m > 0 {
+		return fmt.Sprintf("%dm", m)
+	}
+	return "< 1m"
 }

@@ -10,13 +10,20 @@ import (
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
 
+const pointsNotSet = -999.0
+
 type createOptions struct {
-	listID      string
-	name        string
-	description string
-	status      string
-	priority    int
-	assignees   []int
+	listID       string
+	name         string
+	description  string
+	status       string
+	priority     int
+	assignees    []int
+	tags         []string
+	dueDate      string
+	startDate    string
+	timeEstimate string
+	points       float64
 }
 
 // NewCmdCreate returns a command to create a new ClickUp task.
@@ -30,7 +37,14 @@ func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
 
 The --list-id flag is required to specify which list to create the task in.
 If --name is not provided, the command enters interactive mode and prompts
-for the task name, description, status, and priority.`,
+for the task name, description, status, priority, due date, and time estimate.
+
+Additional properties can be set with flags:
+  --tags           Tags to add (comma-separated or repeat flag)
+  --due-date       Due date in YYYY-MM-DD format
+  --start-date     Start date in YYYY-MM-DD format
+  --time-estimate  Time estimate (e.g. "2h", "30m", "1h30m")
+  --points         Sprint/story points`,
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if opts.listID == "" {
@@ -46,6 +60,11 @@ for the task name, description, status, and priority.`,
 	cmd.Flags().StringVar(&opts.status, "status", "", "Task status")
 	cmd.Flags().IntVar(&opts.priority, "priority", 0, "Task priority (1=Urgent, 2=High, 3=Normal, 4=Low)")
 	cmd.Flags().IntSliceVar(&opts.assignees, "assignee", nil, "Assignee user ID(s)")
+	cmd.Flags().StringSliceVar(&opts.tags, "tags", nil, "Tags to add to the task")
+	cmd.Flags().StringVar(&opts.dueDate, "due-date", "", "Due date (YYYY-MM-DD)")
+	cmd.Flags().StringVar(&opts.startDate, "start-date", "", "Start date (YYYY-MM-DD)")
+	cmd.Flags().StringVar(&opts.timeEstimate, "time-estimate", "", "Time estimate (e.g. 2h, 30m, 1h30m)")
+	cmd.Flags().Float64Var(&opts.points, "points", pointsNotSet, "Sprint/story points")
 
 	_ = cmd.MarkFlagRequired("list-id")
 
@@ -92,6 +111,18 @@ func runCreate(f *cmdutil.Factory, opts *createOptions) error {
 		// Map selection index to ClickUp priority value (0 = none).
 		priorityMap := []int{0, 1, 2, 3, 4}
 		opts.priority = priorityMap[priorityIdx]
+
+		dueDate, err := p.Input("Due date (YYYY-MM-DD, leave empty for none):", "")
+		if err != nil {
+			return err
+		}
+		opts.dueDate = dueDate
+
+		timeEstimate, err := p.Input("Time estimate (e.g. 2h, 30m, 1h30m, leave empty for none):", "")
+		if err != nil {
+			return err
+		}
+		opts.timeEstimate = timeEstimate
 	}
 
 	client, err := f.ApiClient()
@@ -116,10 +147,45 @@ func runCreate(f *cmdutil.Factory, opts *createOptions) error {
 		taskReq.Assignees = opts.assignees
 	}
 
+	if len(opts.tags) > 0 {
+		taskReq.Tags = opts.tags
+	}
+
+	if opts.dueDate != "" {
+		d, err := parseDate(opts.dueDate)
+		if err != nil {
+			return err
+		}
+		taskReq.DueDate = d
+	}
+
+	if opts.startDate != "" {
+		d, err := parseDate(opts.startDate)
+		if err != nil {
+			return err
+		}
+		taskReq.StartDate = d
+	}
+
+	if opts.timeEstimate != "" {
+		ms, err := parseDuration(opts.timeEstimate)
+		if err != nil {
+			return err
+		}
+		taskReq.TimeEstimate = ms
+	}
+
 	ctx := context.Background()
 	task, _, err := client.Clickup.Tasks.CreateTask(ctx, opts.listID, taskReq)
 	if err != nil {
 		return fmt.Errorf("failed to create task: %w", err)
+	}
+
+	// Set points via raw API call if specified (not supported by go-clickup library).
+	if opts.points != pointsNotSet {
+		if err := setTaskPoints(client, task.ID, opts.points); err != nil {
+			return fmt.Errorf("task created but failed to set points: %w", err)
+		}
 	}
 
 	cs := ios.ColorScheme()

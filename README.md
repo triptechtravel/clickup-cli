@@ -18,6 +18,8 @@ A command-line tool for working with ClickUp tasks, comments, and sprints -- des
 - **Sprint dashboard** -- shows current sprint tasks grouped by status with assignees and priorities
 - **Inbox** -- surfaces recent @mentions across your workspace
 - **Fuzzy status matching** -- change task status with partial or fuzzy input
+- **Time tracking** -- log and view time entries on tasks
+- **Full task properties** -- set tags, due dates, start dates, time estimates, and story points from the CLI
 - **AI-friendly** -- structured `--json` output and explicit `--task`/`--repo` flags make it easy for AI coding agents (Claude Code, Copilot, Cursor) to read ClickUp context and update tasks as part of a development workflow
 - **GitHub Actions ready** -- automate status changes, PR linking, and task updates on PR events
 - **JSON output** -- all list/view commands support `--json` and `--jq` for scripting
@@ -91,10 +93,14 @@ clickup link pr
 | `clickup task view [task-id]` | View task details (auto-detects from branch) |
 | `clickup task list --list-id ID` | List tasks with optional filters |
 | `clickup task create --list-id ID` | Create a new task (interactive or flags) |
-| `clickup task edit [task-id]` | Edit task fields (name, status, priority, etc.) |
+| `clickup task edit [task-id]` | Edit task fields (name, status, priority, dates, tags, points, etc.) |
 | `clickup comment add [task-id]` | Add a comment to a task |
 | `clickup comment list [task-id]` | List comments on a task |
 | `clickup comment edit` | Edit an existing comment |
+| `clickup task search <query>` | Search tasks with fuzzy matching |
+| `clickup task activity [task-id]` | View task details and comment history |
+| `clickup task time log [task-id]` | Log time to a task |
+| `clickup task time list [task-id]` | View time entries for a task |
 | `clickup status set STATUS [task-id]` | Change task status with fuzzy matching |
 | `clickup status list` | List available statuses for a space |
 

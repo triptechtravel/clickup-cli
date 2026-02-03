@@ -58,7 +58,7 @@ View, list, create, and edit ClickUp tasks.
 
 ### `task view [TASK-ID]`
 
-Display detailed information about a single task, including name, status, priority, assignees, tags, dates, URL, and description.
+Display detailed information about a single task, including name, status, priority, assignees, tags, dates, points, time estimate, time spent, start date, URL, and description.
 
 If no task ID is provided, the CLI auto-detects it from the current git branch name.
 
@@ -80,7 +80,7 @@ clickup task view 86a3xrwkp --json
 
 ### `task list`
 
-List tasks from a ClickUp list with optional filters. Displays a table with ID, name, status, priority, and assignee columns.
+List tasks from a ClickUp list with optional filters. Displays a table with ID, name, status, priority, assignee, tags, and due date columns.
 
 ```sh
 # List tasks in a ClickUp list
@@ -102,7 +102,7 @@ clickup task list --list-id 12345 --assignee me --status "in progress"
 
 ### `task create`
 
-Create a new task in a ClickUp list. If `--name` is not provided, the command enters interactive mode and prompts for the task name, description, status, and priority.
+Create a new task in a ClickUp list. If `--name` is not provided, the command enters interactive mode and prompts for the task name, description, status, and priority. Supports setting tags, due dates, start dates, time estimates, and sprint points at creation time.
 
 ```sh
 # Create with flags
@@ -110,6 +110,9 @@ clickup task create --list-id 12345 --name "Fix login bug" --priority 2
 
 # Interactive mode
 clickup task create --list-id 12345
+
+# Create with due date and points
+clickup task create --list-id 12345 --name "Fix auth" --priority 2 --due-date 2025-02-14 --points 3
 ```
 
 | Flag | Description |
@@ -120,6 +123,11 @@ clickup task create --list-id 12345
 | `--status STATUS` | Task status |
 | `--priority N` | Priority: 1=Urgent, 2=High, 3=Normal, 4=Low |
 | `--assignee ID` | Assignee user ID(s) (repeatable) |
+| `--tags TAG` | Tags to add (repeatable) |
+| `--due-date DATE` | Due date (YYYY-MM-DD) |
+| `--start-date DATE` | Start date (YYYY-MM-DD) |
+| `--time-estimate DUR` | Time estimate (e.g. "2h", "30m", "1h30m") |
+| `--points N` | Sprint/story points |
 
 ### `task edit [TASK-ID]`
 
@@ -131,6 +139,15 @@ clickup task edit --name "Updated title" --priority 2
 
 # Edit a specific task
 clickup task edit CU-abc123 --status "in review"
+
+# Set due date and time estimate
+clickup task edit --due-date 2025-02-14 --time-estimate 4h
+
+# Remove an assignee
+clickup task edit CU-abc123 --remove-assignee 12345
+
+# Set sprint points
+clickup task edit --points 5
 ```
 
 | Flag | Description |
@@ -140,6 +157,70 @@ clickup task edit CU-abc123 --status "in review"
 | `--status STATUS` | New task status |
 | `--priority N` | New priority: 1=Urgent, 2=High, 3=Normal, 4=Low |
 | `--assignee ID` | Assignee user ID(s) to set (repeatable) |
+| `--remove-assignee ID` | Assignee user ID(s) to remove (repeatable) |
+| `--tags TAG` | Set tags (replaces existing, repeatable) |
+| `--due-date DATE` | Due date (YYYY-MM-DD, "none" to clear) |
+| `--start-date DATE` | Start date (YYYY-MM-DD, "none" to clear) |
+| `--time-estimate DUR` | Time estimate (e.g. "2h", "30m"; "0" to clear) |
+| `--points N` | Sprint/story points (-1 to clear) |
+
+### `task search <query>`
+
+Search tasks by name with fuzzy matching and optional comment search.
+
+```sh
+clickup task search "geozone" --comments --pick
+```
+
+| Flag | Description |
+|------|-------------|
+| `--space ID` | Limit search to a specific space |
+| `--folder ID` | Limit search to a specific folder |
+| `--pick` | Interactively pick from results |
+| `--comments` | Also search within task comments |
+| `--json` | Output as JSON |
+| `--jq EXPR` | Filter JSON output with a jq expression |
+
+### `task activity [TASK-ID]`
+
+View a task's details and chronological comment history.
+
+```sh
+clickup task activity 86a3xrwkp
+```
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output as JSON |
+| `--jq EXPR` | Filter JSON output with a jq expression |
+
+### `task time log [TASK-ID]`
+
+Log a time entry against a task.
+
+```sh
+clickup task time log --duration 2h --description "Implemented auth"
+```
+
+| Flag | Description |
+|------|-------------|
+| `--duration DUR` | Duration to log (required, e.g. "2h", "30m", "1h30m") |
+| `--description TEXT` | Description of the work performed |
+| `--date DATE` | Date for the time entry (defaults to today) |
+| `--billable` | Mark the time entry as billable |
+
+### `task time list [TASK-ID]`
+
+View time entries for a task.
+
+```sh
+clickup task time list 86a3xrwkp
+```
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output as JSON |
+| `--jq EXPR` | Filter JSON output with a jq expression |
 
 ---
 

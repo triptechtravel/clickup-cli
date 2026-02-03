@@ -37,3 +37,20 @@ func TestNewCmdSearch_Flags(t *testing.T) {
 	assert.NotNil(t, cmd.Flags().Lookup("json"))
 	assert.Equal(t, "search <query>", cmd.Use)
 }
+
+func TestNewCmdSearch_CommentsFlag(t *testing.T) {
+	cmd := NewCmdSearch(nil)
+	assert.NotNil(t, cmd.Flags().Lookup("comments"))
+}
+
+func TestScoreTaskName_Substring(t *testing.T) {
+	kind, rank, ok := scoreTaskName("geozone", "Geozone schema updates")
+	assert.True(t, ok)
+	assert.Equal(t, matchSubstring, kind)
+	assert.Equal(t, 0, rank)
+}
+
+func TestScoreTaskName_NoMatch(t *testing.T) {
+	_, _, ok := scoreTaskName("xyz123abc", "Totally different task")
+	assert.False(t, ok)
+}

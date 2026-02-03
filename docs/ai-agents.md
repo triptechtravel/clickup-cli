@@ -112,9 +112,44 @@ When AI agents create PRs automatically, combine the CLI with GitHub Actions to 
     clickup comment add "" "AI-generated PR #${{ github.event.pull_request.number }} created"
 ```
 
+## Task properties and time tracking
+
+AI agents can set detailed task properties after planning or completing work. This is useful for agents that estimate effort, set deadlines, or track time spent on implementation.
+
+### Setting task properties
+
+After analyzing a task and planning the implementation, an agent can set story points, time estimates, and due dates:
+
+```sh
+# AI agent sets task details after planning
+clickup task edit CU-abc123 --points 3 --time-estimate 4h --due-date 2025-03-01
+```
+
+### Logging time
+
+After completing work, an agent can log the time it spent:
+
+```sh
+# AI agent logs time after completing work
+clickup task time log CU-abc123 --duration 2h --description "Implemented feature X"
+```
+
+### Viewing task activity
+
+An agent can review the full comment history and activity on a task to understand context before starting work:
+
+```sh
+# AI agent checks task history for context
+clickup task activity CU-abc123 --json
+```
+
+These commands combine naturally with the existing workflow. For example, an agent might read the task, check its activity for context, implement the feature, then set points, log time, and update the status -- all in a single automated session.
+
 ## Tips
 
 - Use `--json` output when you need the agent to parse task data programmatically
 - Use `clickup comment list` to give the agent context from team discussions
 - Use `clickup sprint current --json` to help the agent understand project priorities
 - The `link sync` command is idempotent -- safe to run multiple times without duplicating data
+- Use `clickup task activity` to give the agent full historical context before starting work
+- Use `clickup task time log` to automatically track time spent by the agent

@@ -223,6 +223,28 @@ func printActivity(f *cmdutil.Factory, task *clickup.Task, comments []comment) e
 		fmt.Fprintf(out, "%s %s\n", cs.Bold("Assignees:"), strings.Join(names, ", "))
 	}
 
+	// Tags
+	if len(task.Tags) > 0 {
+		tagNames := make([]string, 0, len(task.Tags))
+		for _, t := range task.Tags {
+			tagNames = append(tagNames, t.Name)
+		}
+		fmt.Fprintf(out, "%s %s\n", cs.Bold("Tags:"), strings.Join(tagNames, ", "))
+	}
+
+	// Points
+	if pts := task.Points.Value.String(); pts != "" && pts != "0" {
+		fmt.Fprintf(out, "%s %s\n", cs.Bold("Points:"), pts)
+	}
+
+	// Time Estimate & Time Spent
+	if s := formatMillisDuration(task.TimeEstimate); s != "" {
+		fmt.Fprintf(out, "%s %s\n", cs.Bold("Time Estimate:"), s)
+	}
+	if s := formatMillisDuration(task.TimeSpent); s != "" {
+		fmt.Fprintf(out, "%s %s\n", cs.Bold("Time Spent:"), s)
+	}
+
 	// Dates
 	if task.DateCreated != "" {
 		if t, err := parseUnixMillis(task.DateCreated); err == nil {
@@ -234,8 +256,15 @@ func printActivity(f *cmdutil.Factory, task *clickup.Task, comments []comment) e
 			fmt.Fprintf(out, "%s %s (%s)\n", cs.Bold("Updated:"), t.Format("2006-01-02 15:04"), text.RelativeTime(t))
 		}
 	}
+	if task.StartDate != "" {
+		if t, err := parseUnixMillis(task.StartDate); err == nil {
+			fmt.Fprintf(out, "%s %s (%s)\n", cs.Bold("Start Date:"), t.Format("2006-01-02 15:04"), text.RelativeTime(t))
+		}
+	}
 	if task.DueDate != nil {
-		fmt.Fprintf(out, "%s %s\n", cs.Bold("Due:"), task.DueDate.String())
+		if dt := task.DueDate.Time(); dt != nil {
+			fmt.Fprintf(out, "%s %s (%s)\n", cs.Bold("Due:"), dt.Format("2006-01-02 15:04"), text.RelativeTime(*dt))
+		}
 	}
 
 	// URL
