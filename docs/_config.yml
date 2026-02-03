@@ -1,8 +1,11 @@
 title: clickup CLI
 description: Manage ClickUp tasks from the command line
-theme: just-the-docs
+remote_theme: just-the-docs/just-the-docs
 url: "https://triptechtravel.github.io"
 baseurl: "/clickup-cli"
+
+plugins:
+  - jekyll-remote-theme
 
 aux_links:
   "GitHub":
