@@ -13,6 +13,7 @@ type commitOptions struct {
 	factory *cmdutil.Factory
 	sha     string
 	taskID  string
+	repo    string
 }
 
 // NewCmdLinkCommit returns the "link commit" command.
@@ -40,6 +41,7 @@ or can be specified explicitly with --task.`,
 	}
 
 	cmd.Flags().StringVar(&opts.taskID, "task", "", "ClickUp task ID (auto-detected from branch if not set)")
+	cmd.Flags().StringVar(&opts.repo, "repo", "", "GitHub repository (owner/repo) for the commit URL")
 
 	return cmd
 }
@@ -55,10 +57,14 @@ func commitRun(opts *commitOptions) error {
 	}
 	taskID := resolved.TaskID
 
-	if resolved.GitCtx == nil {
-		return fmt.Errorf("could not detect git context: not inside a git repository")
+	// Determine repo slug for commit URL.
+	repoSlug := opts.repo
+	if repoSlug == "" && resolved.GitCtx != nil {
+		repoSlug = fmt.Sprintf("%s/%s", resolved.GitCtx.RepoOwner, resolved.GitCtx.RepoName)
 	}
-	gitCtx := resolved.GitCtx
+	if repoSlug == "" {
+		return fmt.Errorf("could not detect repository. Use --repo to specify (e.g., --repo owner/repo)")
+	}
 
 	// Resolve commit SHA and message.
 	gitClient := opts.factory.GitClient()
@@ -100,8 +106,7 @@ func commitRun(opts *commitOptions) error {
 	}
 
 	// Build rich text comment blocks.
-	commitURL := fmt.Sprintf("https://github.com/%s/%s/commit/%s",
-		gitCtx.RepoOwner, gitCtx.RepoName, fullSHA)
+	commitURL := fmt.Sprintf("https://github.com/%s/commit/%s", repoSlug, fullSHA)
 	blocks := []commentBlock{
 		{Text: "\xf0\x9f\x94\x97 "},
 		{Text: "Commit linked", Attributes: map[string]interface{}{"bold": true}},

@@ -7,10 +7,13 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/lithammer/fuzzysearch/fuzzy"
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/api"
 	"github.com/triptechtravel/clickup-cli/internal/iostreams"
 	"github.com/triptechtravel/clickup-cli/internal/prompter"
 	"github.com/triptechtravel/clickup-cli/internal/tableprinter"
@@ -23,6 +26,7 @@ type searchOptions struct {
 	space     string
 	folder    string
 	pick      bool
+	comments  bool
 	jsonFlags cmdutil.JSONFlags
 }
 
@@ -46,6 +50,66 @@ type searchResponse struct {
 	Tasks []searchTask `json:"tasks"`
 }
 
+// matchKind describes how a task matched the query.
+type matchKind int
+
+const (
+	matchSubstring matchKind = iota // exact substring match (highest priority)
+	matchFuzzy                      // fuzzy match by name
+	matchComment                    // matched via comment text
+)
+
+// scoredTask wraps a searchTask with match metadata for sorting.
+type scoredTask struct {
+	searchTask
+	kind      matchKind
+	fuzzyRank int // lower is better; only meaningful for matchFuzzy
+}
+
+// scoreTaskName checks whether a task name matches the query and returns the
+// match kind and fuzzy rank. Returns ok=false if there is no match at all.
+func scoreTaskName(query, name string) (kind matchKind, rank int, ok bool) {
+	lowerName := strings.ToLower(name)
+	lowerQuery := strings.ToLower(query)
+
+	if strings.Contains(lowerName, lowerQuery) {
+		return matchSubstring, 0, true
+	}
+
+	rank = fuzzy.RankMatchNormalizedFold(query, lowerName)
+	if rank > -1 {
+		return matchFuzzy, rank, true
+	}
+
+	return 0, 0, false
+}
+
+// sortScoredTasks sorts scored results by relevance: exact substring matches
+// first, then fuzzy matches sorted by rank (ascending), then comment matches.
+func sortScoredTasks(tasks []scoredTask) {
+	sort.SliceStable(tasks, func(i, j int) bool {
+		if tasks[i].kind != tasks[j].kind {
+			return tasks[i].kind < tasks[j].kind
+		}
+		// Within the same kind, sort fuzzy matches by rank.
+		if tasks[i].kind == matchFuzzy {
+			return tasks[i].fuzzyRank < tasks[j].fuzzyRank
+		}
+		return false
+	})
+}
+
+// commentSearchResponse is the response from the ClickUp comments API.
+type commentSearchResponse struct {
+	Comments []struct {
+		ID          string `json:"id"`
+		CommentText string `json:"comment_text"`
+		User        struct {
+			Username string `json:"username"`
+		} `json:"user"`
+	} `json:"comments"`
+}
+
 // NewCmdSearch returns a command to search ClickUp tasks by name.
 func NewCmdSearch(f *cmdutil.Factory) *cobra.Command {
 	opts := &searchOptions{
@@ -57,8 +121,12 @@ func NewCmdSearch(f *cmdutil.Factory) *cobra.Command {
 		Short: "Search tasks by name",
 		Long: `Search ClickUp tasks across the workspace by name.
 
-Returns tasks whose names match the search query. Use --space and --folder
-to narrow the search scope for faster results.
+Returns tasks whose names match the search query using substring and fuzzy
+matching. Exact substring matches are shown first, followed by fuzzy matches
+sorted by relevance.
+
+Use --space and --folder to narrow the search scope for faster results.
+Use --comments to also search through task comments (slower).
 
 In interactive mode (TTY), if many results are found you will be asked
 whether to refine the search. Use --pick to interactively select a single
@@ -74,6 +142,9 @@ words from the query and shows potentially related tasks.`,
 
   # Search within a specific folder
   clickup task search nextjs --folder "Engineering sprint"
+
+  # Also search through task comments
+  clickup task search "migration issue" --comments
 
   # Interactively pick a task (prints selected task ID)
   clickup task search geozone --pick
@@ -91,6 +162,7 @@ words from the query and shows potentially related tasks.`,
 	cmd.Flags().StringVar(&opts.space, "space", "", "Limit search to a specific space (name or ID)")
 	cmd.Flags().StringVar(&opts.folder, "folder", "", "Limit search to a specific folder (name, substring match)")
 	cmd.Flags().BoolVar(&opts.pick, "pick", false, "Interactively select a task and print its ID")
+	cmd.Flags().BoolVar(&opts.comments, "comments", false, "Also search through task comments (slower)")
 	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 
 	return cmd
@@ -105,19 +177,22 @@ func runSearch(opts *searchOptions) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
-	allTasks, err := doSearch(ctx, opts)
+	scored, err := doSearch(ctx, opts)
 	if err != nil {
 		return err
 	}
 
-	// Deduplicate by task ID.
-	allTasks = dedup(allTasks)
+	// Deduplicate by task ID (keep best match kind per task).
+	scored = dedupScored(scored)
+
+	// Sort by relevance.
+	sortScoredTasks(scored)
 
 	// Interactive: if too many results, offer to narrow down.
-	if interactive && len(allTasks) > 15 {
+	if interactive && len(scored) > 15 {
 		p := prompter.New(ios)
-		fmt.Fprintf(ios.ErrOut, "Found %d results.\n", len(allTasks))
-		refine, err := p.Confirm(fmt.Sprintf("Narrow down? (%d results)", len(allTasks)), true)
+		fmt.Fprintf(ios.ErrOut, "Found %d results.\n", len(scored))
+		refine, err := p.Confirm(fmt.Sprintf("Narrow down? (%d results)", len(scored)), true)
 		if err != nil {
 			return err
 		}
@@ -128,20 +203,20 @@ func runSearch(opts *searchOptions) error {
 			}
 			if extra != "" {
 				extra = strings.ToLower(extra)
-				var filtered []searchTask
-				for _, t := range allTasks {
+				var filtered []scoredTask
+				for _, t := range scored {
 					if strings.Contains(strings.ToLower(t.Name), extra) {
 						filtered = append(filtered, t)
 					}
 				}
-				allTasks = filtered
-				fmt.Fprintf(ios.ErrOut, "Narrowed to %d results.\n", len(allTasks))
+				scored = filtered
+				fmt.Fprintf(ios.ErrOut, "Narrowed to %d results.\n", len(scored))
 			}
 		}
 	}
 
-	// If no exact results, try splitting the query into individual words.
-	if len(allTasks) == 0 {
+	// If no results, try splitting the query into individual words.
+	if len(scored) == 0 {
 		words := strings.Fields(opts.query)
 		if len(words) > 1 {
 			fmt.Fprintf(ios.ErrOut, "No exact match for %q, trying individual words...\n", opts.query)
@@ -155,13 +230,22 @@ func runSearch(opts *searchOptions) error {
 				if err != nil {
 					continue
 				}
-				allTasks = append(allTasks, wordTasks...)
+				scored = append(scored, wordTasks...)
 			}
-			allTasks = dedup(allTasks)
-			if len(allTasks) > 0 {
-				fmt.Fprintf(ios.ErrOut, "Found %d potentially related tasks.\n", len(allTasks))
+			scored = dedupScored(scored)
+			sortScoredTasks(scored)
+			if len(scored) > 0 {
+				fmt.Fprintf(ios.ErrOut, "Found %d potentially related tasks.\n", len(scored))
 			}
 		}
+	}
+
+	// Convert scored tasks back to plain tasks for output.
+	allTasks := make([]searchTask, len(scored))
+	matchKinds := make([]matchKind, len(scored))
+	for i, s := range scored {
+		allTasks[i] = s.searchTask
+		matchKinds[i] = s.kind
 	}
 
 	if len(allTasks) == 0 {
@@ -186,10 +270,11 @@ func runSearch(opts *searchOptions) error {
 	tp.AddField(cs.Bold("NAME"))
 	tp.AddField(cs.Bold("STATUS"))
 	tp.AddField(cs.Bold("ASSIGNEE"))
+	tp.AddField(cs.Bold("MATCH"))
 	tp.EndRow()
 	tp.SetTruncateColumn(1)
 
-	for _, t := range allTasks {
+	for i, t := range allTasks {
 		id := t.ID
 		if t.CustomID != "" {
 			id = t.CustomID
@@ -205,6 +290,16 @@ func runSearch(opts *searchOptions) error {
 			names = append(names, a.Username)
 		}
 		tp.AddField(strings.Join(names, ", "))
+
+		// Show match type indicator.
+		switch matchKinds[i] {
+		case matchSubstring:
+			tp.AddField(cs.Green("name"))
+		case matchFuzzy:
+			tp.AddField(cs.Yellow("fuzzy"))
+		case matchComment:
+			tp.AddField(cs.Cyan("comment"))
+		}
 		tp.EndRow()
 	}
 
@@ -213,7 +308,7 @@ func runSearch(opts *searchOptions) error {
 
 // doSearch performs the actual search using either the paginated team endpoint
 // or the space/folder hierarchy (when --space or --folder is specified).
-func doSearch(ctx context.Context, opts *searchOptions) ([]searchTask, error) {
+func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 	ios := opts.factory.IOStreams
 
 	client, err := opts.factory.ApiClient()
@@ -237,7 +332,8 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]searchTask, error) {
 	}
 
 	// Search across multiple pages of the team tasks endpoint.
-	var allTasks []searchTask
+	query := strings.ToLower(opts.query)
+	var allScored []scoredTask
 	for page := 0; page < 10; page++ {
 		if ctx.Err() != nil {
 			fmt.Fprintf(ios.ErrOut, "Search timed out\n")
@@ -278,27 +374,132 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]searchTask, error) {
 			break
 		}
 
-		query := strings.ToLower(opts.query)
-		for _, t := range result.Tasks {
-			if strings.Contains(strings.ToLower(t.Name), query) {
-				allTasks = append(allTasks, t)
+		// Score tasks by name (substring + fuzzy).
+		nameMatched, unmatched := filterTasksByName(query, result.Tasks)
+		allScored = append(allScored, nameMatched...)
+
+		// If --comments is enabled, check comments on unmatched tasks.
+		if opts.comments && len(unmatched) > 0 {
+			limit := len(unmatched)
+			if limit > 100 {
+				limit = 100
 			}
+			fmt.Fprintf(ios.ErrOut, "  checking comments on %d tasks...\n", limit)
+			commentMatches := searchTaskComments(ctx, client, query, unmatched[:limit])
+			allScored = append(allScored, commentMatches...)
 		}
 
 		fmt.Fprintf(ios.ErrOut, "  scanned page %d (%d tasks)...\n", page+1, len(result.Tasks))
 	}
 
 	// If nothing found via pagination, fall back to space traversal.
-	if len(allTasks) == 0 {
+	if len(allScored) == 0 {
 		fmt.Fprintf(ios.ErrOut, "Falling back to space/folder search...\n")
 		spaceTasks, err := searchViaSpaces(ctx, opts)
 		if err != nil {
 			return nil, err
 		}
-		allTasks = append(allTasks, spaceTasks...)
+		allScored = append(allScored, spaceTasks...)
 	}
 
-	return allTasks, nil
+	return allScored, nil
+}
+
+// filterTasksByName scores tasks by name and separates matched from unmatched.
+func filterTasksByName(query string, tasks []searchTask) (matched []scoredTask, unmatched []searchTask) {
+	for _, t := range tasks {
+		kind, rank, ok := scoreTaskName(query, t.Name)
+		if ok {
+			matched = append(matched, scoredTask{
+				searchTask: t,
+				kind:       kind,
+				fuzzyRank:  rank,
+			})
+		} else {
+			unmatched = append(unmatched, t)
+		}
+	}
+	return
+}
+
+// searchTaskComments checks task comments for the query string using the
+// ClickUp API. Returns scored tasks that matched via comments.
+func searchTaskComments(ctx context.Context, client *api.Client, query string, tasks []searchTask) []scoredTask {
+	var results []scoredTask
+	for _, t := range tasks {
+		if ctx.Err() != nil {
+			break
+		}
+		if taskMatchesComment(ctx, client, query, t.ID) {
+			results = append(results, scoredTask{
+				searchTask: t,
+				kind:       matchComment,
+			})
+		}
+	}
+	return results
+}
+
+// taskMatchesComment fetches comments for a single task and returns true if
+// any comment text contains the query (case-insensitive substring match).
+func taskMatchesComment(ctx context.Context, client *api.Client, query, taskID string) bool {
+	commentURL := fmt.Sprintf("https://api.clickup.com/api/v2/task/%s/comment", url.PathEscape(taskID))
+	req, err := http.NewRequestWithContext(ctx, "GET", commentURL, nil)
+	if err != nil {
+		return false
+	}
+
+	resp, err := client.DoRequest(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return false
+	}
+
+	var result commentSearchResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return false
+	}
+
+	lowerQuery := strings.ToLower(query)
+	for _, c := range result.Comments {
+		if strings.Contains(strings.ToLower(c.CommentText), lowerQuery) {
+			return true
+		}
+	}
+	return false
+}
+
+// dedupScored deduplicates scored tasks by ID, keeping the entry with the
+// best (lowest) match kind for each task.
+func dedupScored(tasks []scoredTask) []scoredTask {
+	best := make(map[string]scoredTask)
+	order := make(map[string]int) // preserve first-seen order for stability
+	idx := 0
+	for _, t := range tasks {
+		existing, exists := best[t.ID]
+		if !exists {
+			best[t.ID] = t
+			order[t.ID] = idx
+			idx++
+		} else if t.kind < existing.kind {
+			best[t.ID] = t
+		} else if t.kind == existing.kind && t.kind == matchFuzzy && t.fuzzyRank < existing.fuzzyRank {
+			best[t.ID] = t
+		}
+	}
+	result := make([]scoredTask, 0, len(best))
+	for _, t := range best {
+		result = append(result, t)
+	}
+	// Sort by first-seen order to keep stable ordering before relevance sort.
+	sort.Slice(result, func(i, j int) bool {
+		return order[result[i].ID] < order[result[j].ID]
+	})
+	return result
 }
 
 func dedup(tasks []searchTask) []searchTask {
@@ -390,7 +591,7 @@ func pickTask(ios *iostreams.IOStreams, allTasks []searchTask) error {
 	return nil
 }
 
-func searchViaSpaces(ctx context.Context, opts *searchOptions) ([]searchTask, error) {
+func searchViaSpaces(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 	ios := opts.factory.IOStreams
 	client, err := opts.factory.ApiClient()
 	if err != nil {
@@ -411,7 +612,7 @@ func searchViaSpaces(ctx context.Context, opts *searchOptions) ([]searchTask, er
 	}
 
 	query := strings.ToLower(opts.query)
-	var results []searchTask
+	var results []scoredTask
 
 	for _, space := range spaces {
 		if ctx.Err() != nil {
@@ -505,10 +706,18 @@ func searchViaSpaces(ctx context.Context, opts *searchOptions) ([]searchTask, er
 
 			var taskResp searchResponse
 			if json.Unmarshal(body, &taskResp) == nil {
-				for _, t := range taskResp.Tasks {
-					if strings.Contains(strings.ToLower(t.Name), query) {
-						results = append(results, t)
+				nameMatched, unmatched := filterTasksByName(query, taskResp.Tasks)
+				results = append(results, nameMatched...)
+
+				// If --comments is enabled, check comments on unmatched tasks.
+				if opts.comments && len(unmatched) > 0 {
+					limit := len(unmatched)
+					if limit > 100 {
+						limit = 100
 					}
+					fmt.Fprintf(ios.ErrOut, "      checking comments on %d tasks...\n", limit)
+					commentMatches := searchTaskComments(ctx, client, query, unmatched[:limit])
+					results = append(results, commentMatches...)
 				}
 			}
 		}
