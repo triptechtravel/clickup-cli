@@ -317,7 +317,7 @@ func printTaskView(f *cmdutil.Factory, task *clickup.Task) error {
 	fmt.Fprintln(out, cs.Gray("Quick actions:"))
 	fmt.Fprintf(out, "  %s  clickup task edit %s --status <status>\n", cs.Gray("Edit:"), id)
 	fmt.Fprintf(out, "  %s  clickup status set <status> %s\n", cs.Gray("Status:"), id)
-	fmt.Fprintf(out, "  %s  clickup comment add %s \"text\"\n", cs.Gray("Comment:"), id)
+	fmt.Fprintf(out, "  %s  clickup comment add %s \"@user text\" (supports @mentions)\n", cs.Gray("Comment:"), id)
 	fmt.Fprintf(out, "  %s  clickup link pr --task %s\n", cs.Gray("Link PR:"), id)
 	fmt.Fprintf(out, "  %s  clickup task view %s --json\n", cs.Gray("JSON:"), id)
 

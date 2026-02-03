@@ -269,7 +269,7 @@ func inboxRun(opts *inboxOptions) error {
 	fmt.Fprintln(ios.Out)
 	fmt.Fprintln(ios.Out, cs.Gray("---"))
 	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
-	fmt.Fprintf(ios.Out, "  %s  clickup comment add <task-id> \"text\"\n", cs.Gray("Reply:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup comment add <task-id> \"@user text\" (supports @mentions)\n", cs.Gray("Reply:"))
 	fmt.Fprintf(ios.Out, "  %s  clickup task view <task-id>\n", cs.Gray("View:"))
 	fmt.Fprintf(ios.Out, "  %s  clickup inbox --json\n", cs.Gray("JSON:"))
 

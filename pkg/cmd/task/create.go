@@ -298,7 +298,7 @@ func runCreate(f *cmdutil.Factory, opts *createOptions) error {
 	fmt.Fprintf(ios.Out, "  %s  clickup task view %s\n", cs.Gray("View:"), id)
 	fmt.Fprintf(ios.Out, "  %s  clickup task edit %s --status <status>\n", cs.Gray("Edit:"), id)
 	fmt.Fprintf(ios.Out, "  %s  clickup link pr --task %s\n", cs.Gray("Link PR:"), id)
-	fmt.Fprintf(ios.Out, "  %s  clickup comment add %s \"text\"\n", cs.Gray("Comment:"), id)
+	fmt.Fprintf(ios.Out, "  %s  clickup comment add %s \"@user text\" (supports @mentions)\n", cs.Gray("Comment:"), id)
 
 	return nil
 }

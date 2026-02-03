@@ -426,12 +426,17 @@ Manage comments on ClickUp tasks.
 
 Add a comment to a task. If `TASK` is not provided, the task ID is auto-detected from the current git branch. If `BODY` is not provided (or `--editor` is used), your configured editor opens for composing the comment.
 
+**@mentions:** Use `@username` in the comment body to mention workspace members. Usernames are resolved against your workspace's member list (same as `clickup member list`) using case-insensitive matching. Resolved mentions become real ClickUp @mentions that trigger notifications. Unresolved `@` text is left as-is.
+
 ```sh
 # Add a comment to the branch's task
 clickup comment add "" "Fixed the login bug"
 
 # Add a comment to a specific task
 clickup comment add abc123 "Deployed to staging"
+
+# Mention a teammate
+clickup comment add abc123 "Hey @Isaac can you review this?"
 
 # Open your editor to compose the comment
 clickup comment add --editor

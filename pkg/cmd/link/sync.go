@@ -142,7 +142,7 @@ func syncRun(opts *syncOptions) error {
 	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
 	fmt.Fprintf(ios.Out, "  %s  clickup task view %s\n", cs.Gray("View:"), taskID)
 	fmt.Fprintf(ios.Out, "  %s  clickup status set <status> %s\n", cs.Gray("Status:"), taskID)
-	fmt.Fprintf(ios.Out, "  %s  clickup comment add %s \"text\"\n", cs.Gray("Comment:"), taskID)
+	fmt.Fprintf(ios.Out, "  %s  clickup comment add %s \"@user text\" (supports @mentions)\n", cs.Gray("Comment:"), taskID)
 
 	return nil
 }

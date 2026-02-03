@@ -184,7 +184,7 @@ func setRun(opts *setOptions) error {
 	fmt.Fprintln(ios.Out, cs.Gray("---"))
 	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
 	fmt.Fprintf(ios.Out, "  %s  clickup task view %s\n", cs.Gray("View:"), taskID)
-	fmt.Fprintf(ios.Out, "  %s  clickup comment add %s \"text\"\n", cs.Gray("Comment:"), taskID)
+	fmt.Fprintf(ios.Out, "  %s  clickup comment add %s \"@user text\" (supports @mentions)\n", cs.Gray("Comment:"), taskID)
 	fmt.Fprintf(ios.Out, "  %s  clickup task view %s --json\n", cs.Gray("JSON:"), taskID)
 
 	return nil
