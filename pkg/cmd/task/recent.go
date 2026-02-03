@@ -13,6 +13,7 @@ type recentOptions struct {
 	factory   *cmdutil.Factory
 	limit     int
 	all       bool
+	sprint    bool
 	jsonFlags cmdutil.JSONFlags
 }
 
@@ -38,6 +39,9 @@ where work is happening when you're unsure which list or folder to search.`,
   # Show all team activity
   clickup task recent --all
 
+  # Only show tasks from the sprint folder
+  clickup task recent --sprint
+
   # Show more results
   clickup task recent --limit 30
 
@@ -51,6 +55,7 @@ where work is happening when you're unsure which list or folder to search.`,
 
 	cmd.Flags().IntVar(&opts.limit, "limit", 20, "Maximum number of tasks to show")
 	cmd.Flags().BoolVar(&opts.all, "all", false, "Show all team tasks, not just yours")
+	cmd.Flags().BoolVar(&opts.sprint, "sprint", false, "Only show tasks from the current sprint folder")
 	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 
 	return cmd
@@ -72,6 +77,18 @@ func runRecent(opts *recentOptions) error {
 	}
 	if err != nil {
 		return err
+	}
+
+	// --sprint: filter to tasks in sprint folders only.
+	if opts.sprint {
+		var sprintTasks []cmdutil.RecentTask
+		for _, t := range tasks {
+			lower := strings.ToLower(t.FolderName)
+			if strings.Contains(lower, "sprint") && !strings.Contains(lower, "archive") {
+				sprintTasks = append(sprintTasks, t)
+			}
+		}
+		tasks = sprintTasks
 	}
 
 	if len(tasks) == 0 {
@@ -119,6 +136,7 @@ func runRecent(opts *recentOptions) error {
 	fmt.Fprintf(ios.Out, "  %s  clickup task view <id>\n", cs.Gray("View:"))
 	fmt.Fprintf(ios.Out, "  %s  clickup task search <query>\n", cs.Gray("Search:"))
 	fmt.Fprintf(ios.Out, "  %s  clickup task edit <id> --status <status>\n", cs.Gray("Edit:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup sprint current\n", cs.Gray("Sprint:"))
 	fmt.Fprintf(ios.Out, "  %s  clickup task recent --json\n", cs.Gray("JSON:"))
 
 	return nil

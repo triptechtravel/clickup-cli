@@ -96,20 +96,25 @@ func fetchRecentTeamTasks(client *api.Client, teamID string, assignees []string,
 		tasks = tasks[:limit]
 	}
 
-	results := make([]RecentTask, len(tasks))
-	for i, t := range tasks {
+	var results []RecentTask
+	for _, t := range tasks {
+		// Filter out tasks from archived folders.
+		if strings.Contains(strings.ToLower(t.Folder.Name), "archive") {
+			continue
+		}
+
 		id := t.ID
 		if t.CustomID != "" {
 			id = t.CustomID
 		}
-		results[i] = RecentTask{
+		results = append(results, RecentTask{
 			ID:         id,
 			CustomID:   t.CustomID,
 			Name:       t.Name,
 			Status:     t.Status.Status,
 			ListName:   t.List.Name,
 			FolderName: t.Folder.Name,
-		}
+		})
 	}
 
 	return results, nil

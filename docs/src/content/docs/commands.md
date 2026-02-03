@@ -105,6 +105,8 @@ clickup task list --list-id 12345 --assignee me --status "in progress"
 
 Create a new task in a ClickUp list. If `--name` is not provided, the command enters interactive mode and prompts for the task name, description, status, and priority. Supports setting tags, due dates, start dates, time estimates, sprint points, custom fields, parent tasks, and task types at creation time.
 
+When `--status` is provided, the CLI validates it against the available statuses for the list's space using fuzzy matching (same strategy as `status set`). If the provided status fuzzy-matches a valid status, a warning is shown (e.g., `Status "prog" matched to "in progress"`). If no match is found, an error is returned listing all available statuses.
+
 ```sh
 # Create with flags
 clickup task create --list-id 12345 --name "Fix login bug" --priority 2
@@ -149,6 +151,8 @@ clickup task create --list-id 12345 --name "v2.0 Release" --type 1
 ### `task edit [TASK-ID]`
 
 Edit fields on an existing task. At least one field flag must be provided. If no task ID is given, it is auto-detected from the current git branch.
+
+When `--status` is provided, the CLI validates it against available statuses for the task's space using fuzzy matching. A warning is shown if the match is not exact (e.g., `Status "prog" matched to "in progress"`). An error is returned if no match is found.
 
 ```sh
 # Edit the task detected from the current branch
@@ -208,7 +212,9 @@ clickup task edit CU-abc123 --type 1
 
 Search tasks by name with fuzzy matching and optional comment search. The `<query>` argument matches against task names as a case-insensitive substring. To search by task ID, pass the full ID (e.g., `CU-abc123`).
 
-If no results are found, the CLI suggests running `clickup task recent` to discover active folders and lists. In interactive mode, "Show my recent tasks" is offered as a menu option.
+If no results are found, the CLI suggests running `clickup task recent` or `clickup sprint current` to discover active work. In interactive mode, "Show my recent tasks" is offered as a menu option.
+
+When no exact substring matches are found but fuzzy results exist, a message indicates the results are fuzzy. Use `--exact` to suppress fuzzy matches and only show exact substring results.
 
 ```sh
 # Search by name substring
@@ -216,6 +222,9 @@ clickup task search "geozone" --comments --pick
 
 # Search within a specific folder (use 'task recent' to discover folders)
 clickup task search "geozone" --folder "Engineering Sprint"
+
+# Only show exact substring matches (no fuzzy results)
+clickup task search "FAQ" --exact
 
 # Search and output as JSON
 clickup task search "login bug" --json
@@ -227,12 +236,13 @@ clickup task search "login bug" --json
 | `--folder NAME` | Limit search to a specific folder (name, substring match) |
 | `--pick` | Interactively pick from results and print its task ID |
 | `--comments` | Also search within task comment bodies |
+| `--exact` | Only show exact substring matches (no fuzzy results) |
 | `--json` | Output as JSON |
 | `--jq EXPR` | Filter JSON output with a jq expression |
 
 ### `task recent`
 
-Show recently updated tasks with folder and list context. By default shows tasks assigned to you. Use `--all` for all team activity.
+Show recently updated tasks with folder and list context. By default shows tasks assigned to you. Use `--all` for all team activity. Tasks from archived folders are automatically filtered out.
 
 This command is particularly useful for discovering which folders and lists contain active work, so you can narrow searches with `--folder` or `--space`.
 
@@ -243,6 +253,9 @@ clickup task recent
 # Show all team activity
 clickup task recent --all
 
+# Only show tasks from sprint folders
+clickup task recent --sprint
+
 # JSON output for scripting or AI agents
 clickup task recent --json --limit 10
 ```
@@ -251,6 +264,7 @@ clickup task recent --json --limit 10
 |------|-------------|
 | `--limit N` | Maximum number of tasks to show (default 20) |
 | `--all` | Show all team tasks, not just yours |
+| `--sprint` | Only show tasks from sprint folders |
 | `--json` | Output as JSON |
 | `--jq EXPR` | Filter JSON output with a jq expression |
 

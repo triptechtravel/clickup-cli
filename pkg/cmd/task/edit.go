@@ -148,6 +148,13 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 		return err
 	}
 
+	var getOpts *clickup.GetTaskOptions
+	if isCustomID {
+		getOpts = &clickup.GetTaskOptions{
+			CustomTaskIDs: true,
+		}
+	}
+
 	updateReq := &clickup.TaskUpdateRequest{}
 
 	if cmd.Flags().Changed("name") {
@@ -158,6 +165,15 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 	}
 	// markdown-description is handled via raw API after the main update call.
 	if cmd.Flags().Changed("status") {
+		// Validate status against the task's space statuses.
+		fetchTask, _, fetchErr := client.Clickup.Tasks.GetTask(context.Background(), taskID, getOpts)
+		if fetchErr == nil && fetchTask.Space.ID != "" {
+			validated, valErr := cmdutil.ValidateStatus(client, fetchTask.Space.ID, opts.status, ios.ErrOut)
+			if valErr != nil {
+				return valErr
+			}
+			opts.status = validated
+		}
 		updateReq.Status = opts.status
 	}
 	if cmd.Flags().Changed("priority") {
@@ -229,15 +245,7 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 		updateReq.CustomItemId = opts.customItemID
 	}
 
-	var getOpts *clickup.GetTaskOptions
-	if isCustomID {
-		getOpts = &clickup.GetTaskOptions{
-			CustomTaskIDs: true,
-		}
-	}
-
-	ctx := context.Background()
-	task, _, err := client.Clickup.Tasks.UpdateTask(ctx, taskID, getOpts, updateReq)
+	task, _, err := client.Clickup.Tasks.UpdateTask(context.Background(), taskID, getOpts, updateReq)
 	if err != nil {
 		return fmt.Errorf("failed to update task %s: %w", taskID, err)
 	}
@@ -275,7 +283,7 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 				return err
 			}
 
-			_, err = client.Clickup.CustomFields.SetCustomFieldValue(ctx, task.ID, cf.ID, map[string]interface{}{"value": parsed}, nil)
+			_, err = client.Clickup.CustomFields.SetCustomFieldValue(context.Background(), task.ID, cf.ID, map[string]interface{}{"value": parsed}, nil)
 			if err != nil {
 				return fmt.Errorf("failed to set custom field %q: %w", fieldName, err)
 			}
@@ -289,7 +297,7 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 				return fmt.Errorf("custom field %q not found (available: %s)", fieldName, customFieldNames(task.CustomFields))
 			}
 
-			_, err = client.Clickup.CustomFields.RemoveCustomFieldValue(ctx, task.ID, cf.ID, nil)
+			_, err = client.Clickup.CustomFields.RemoveCustomFieldValue(context.Background(), task.ID, cf.ID, nil)
 			if err != nil {
 				return fmt.Errorf("failed to clear custom field %q: %w", fieldName, err)
 			}

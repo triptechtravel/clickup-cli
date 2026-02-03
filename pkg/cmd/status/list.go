@@ -19,6 +19,19 @@ type listOptions struct {
 	json    cmdutil.JSONFlags
 }
 
+// listSpaceResponse represents the response from GET /space/{id} for the list command.
+type listSpaceResponse struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Statuses []struct {
+		ID         string `json:"id"`
+		Status     string `json:"status"`
+		Color      string `json:"color"`
+		Type       string `json:"type"`
+		Orderindex int    `json:"orderindex"`
+	} `json:"statuses"`
+}
+
 // statusEntry represents a single status for JSON output.
 type statusEntry struct {
 	ID         string `json:"id"`
@@ -105,7 +118,7 @@ func listRun(opts *listOptions) error {
 		return fmt.Errorf("failed to fetch space (HTTP %d): %s", resp.StatusCode, string(body))
 	}
 
-	var spaceResp spaceStatusResponse
+	var spaceResp listSpaceResponse
 	if err := json.NewDecoder(resp.Body).Decode(&spaceResp); err != nil {
 		return fmt.Errorf("failed to parse space response: %w", err)
 	}

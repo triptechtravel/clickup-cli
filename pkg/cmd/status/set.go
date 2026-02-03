@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/lithammer/fuzzysearch/fuzzy"
 	"github.com/spf13/cobra"
 	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
@@ -58,19 +57,6 @@ If TASK is not provided, the task ID is auto-detected from the current git branc
 	return cmd
 }
 
-// spaceStatusResponse represents the response from GET /space/{id} containing statuses.
-type spaceStatusResponse struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Statuses []struct {
-		ID         string `json:"id"`
-		Status     string `json:"status"`
-		Color      string `json:"color"`
-		Type       string `json:"type"`
-		Orderindex int    `json:"orderindex"`
-	} `json:"statuses"`
-}
-
 func setRun(opts *setOptions) error {
 	ios := opts.factory.IOStreams
 	cs := ios.ColorScheme()
@@ -106,41 +92,17 @@ func setRun(opts *setOptions) error {
 
 	// Fetch statuses for the task's space.
 	spaceID := task.Space.ID
-	spaceURL := fmt.Sprintf("https://api.clickup.com/api/v2/space/%s", spaceID)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, spaceURL, nil)
+	statusNames, err := cmdutil.FetchSpaceStatuses(client, spaceID)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return err
 	}
 
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to fetch space statuses: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to fetch space statuses (HTTP %d): %s", resp.StatusCode, string(body))
-	}
-
-	var spaceResp spaceStatusResponse
-	if err := json.NewDecoder(resp.Body).Decode(&spaceResp); err != nil {
-		return fmt.Errorf("failed to parse space response: %w", err)
-	}
-
-	if len(spaceResp.Statuses) == 0 {
+	if len(statusNames) == 0 {
 		return fmt.Errorf("no statuses found for space %s", spaceID)
 	}
 
-	// Collect available status names.
-	statusNames := make([]string, len(spaceResp.Statuses))
-	for i, s := range spaceResp.Statuses {
-		statusNames[i] = s.Status
-	}
-
 	// Find the best matching status.
-	matched, err := matchStatus(opts.targetStatus, statusNames)
+	matched, err := cmdutil.MatchStatus(opts.targetStatus, statusNames)
 	if err != nil {
 		return err
 	}
@@ -190,66 +152,3 @@ func setRun(opts *setOptions) error {
 	return nil
 }
 
-// matchStatus finds the best matching status from available statuses using a tiered strategy:
-// 1. Exact match (case-insensitive)
-// 2. Contains match (case-insensitive)
-// 3. Fuzzy match using normalized fold ranking
-func matchStatus(target string, available []string) (string, error) {
-	targetLower := strings.ToLower(target)
-
-	// Tier 1: Exact match (case-insensitive).
-	for _, s := range available {
-		if strings.ToLower(s) == targetLower {
-			return s, nil
-		}
-	}
-
-	// Tier 2: Contains match (case-insensitive).
-	var containsMatches []string
-	for _, s := range available {
-		if strings.Contains(strings.ToLower(s), targetLower) {
-			containsMatches = append(containsMatches, s)
-		}
-	}
-	if len(containsMatches) == 1 {
-		return containsMatches[0], nil
-	}
-	if len(containsMatches) > 1 {
-		// If multiple contains matches, pick the shortest (most specific).
-		best := containsMatches[0]
-		for _, m := range containsMatches[1:] {
-			if len(m) < len(best) {
-				best = m
-			}
-		}
-		return best, nil
-	}
-
-	// Tier 3: Fuzzy match using RankMatchNormalizedFold.
-	type ranked struct {
-		name string
-		rank int
-	}
-	var fuzzyMatches []ranked
-	for _, s := range available {
-		rank := fuzzy.RankMatchNormalizedFold(target, s)
-		if rank >= 0 {
-			fuzzyMatches = append(fuzzyMatches, ranked{name: s, rank: rank})
-		}
-	}
-
-	if len(fuzzyMatches) > 0 {
-		// Pick the match with the best (lowest) rank.
-		best := fuzzyMatches[0]
-		for _, m := range fuzzyMatches[1:] {
-			if m.rank < best.rank {
-				best = m
-			}
-		}
-		return best.name, nil
-	}
-
-	// No match found.
-	return "", fmt.Errorf("no matching status found for %q\n\nAvailable statuses: %s",
-		target, strings.Join(available, ", "))
-}

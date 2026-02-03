@@ -164,6 +164,8 @@ func runCreate(f *cmdutil.Factory, opts *createOptions) error {
 		return err
 	}
 
+	ctx := context.Background()
+
 	taskReq := &clickup.TaskRequest{
 		Name:        opts.name,
 		Description: opts.description,
@@ -174,6 +176,15 @@ func runCreate(f *cmdutil.Factory, opts *createOptions) error {
 	}
 
 	if opts.status != "" {
+		// Validate status against the list's space statuses.
+		list, _, listErr := client.Clickup.Lists.GetList(ctx, opts.listID)
+		if listErr == nil && list.Space.ID != "" {
+			validated, valErr := cmdutil.ValidateStatus(client, list.Space.ID, opts.status, ios.ErrOut)
+			if valErr != nil {
+				return valErr
+			}
+			opts.status = validated
+		}
 		taskReq.Status = opts.status
 	}
 
@@ -232,7 +243,6 @@ func runCreate(f *cmdutil.Factory, opts *createOptions) error {
 		taskReq.CustomItemId = opts.customItemID
 	}
 
-	ctx := context.Background()
 	task, _, err := client.Clickup.Tasks.CreateTask(ctx, opts.listID, taskReq)
 	if err != nil {
 		return fmt.Errorf("failed to create task: %w", err)

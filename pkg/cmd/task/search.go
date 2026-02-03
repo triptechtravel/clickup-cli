@@ -27,6 +27,7 @@ type searchOptions struct {
 	folder    string
 	pick      bool
 	comments  bool
+	exact     bool
 	jsonFlags cmdutil.JSONFlags
 }
 
@@ -170,6 +171,7 @@ recently updated tasks and discover which folders/lists to search in.`,
 	cmd.Flags().StringVar(&opts.folder, "folder", "", "Limit search to a specific folder (name, substring match)")
 	cmd.Flags().BoolVar(&opts.pick, "pick", false, "Interactively select a task and print its ID")
 	cmd.Flags().BoolVar(&opts.comments, "comments", false, "Also search through task comments (slower)")
+	cmd.Flags().BoolVar(&opts.exact, "exact", false, "Only show exact substring matches (no fuzzy results)")
 	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 
 	return cmd
@@ -194,6 +196,17 @@ func runSearch(opts *searchOptions) error {
 
 	// Sort by relevance.
 	sortScoredTasks(scored)
+
+	// --exact: filter out fuzzy matches, keeping only substring and comment matches.
+	if opts.exact {
+		var exactOnly []scoredTask
+		for _, s := range scored {
+			if s.kind != matchFuzzy {
+				exactOnly = append(exactOnly, s)
+			}
+		}
+		scored = exactOnly
+	}
 
 	// Interactive: if too many results, offer to narrow down.
 	if interactive && len(scored) > 15 {
@@ -261,7 +274,31 @@ func runSearch(opts *searchOptions) error {
 			return noResultsPrompt(ios, opts)
 		}
 		fmt.Fprintf(ios.ErrOut, "\nTip: run 'clickup task recent' to see your recently updated tasks and discover active lists/folders.\n")
+		fmt.Fprintf(ios.ErrOut, "     run 'clickup sprint current' to see your current sprint.\n")
 		return nil
+	}
+
+	// When not using --exact, show a separator if there are no substring matches but fuzzy results exist.
+	hasFuzzyOnly := false
+	if !opts.exact {
+		hasExact := false
+		for _, mk := range matchKinds {
+			if mk == matchSubstring {
+				hasExact = true
+				break
+			}
+		}
+		if !hasExact {
+			for _, mk := range matchKinds {
+				if mk == matchFuzzy {
+					hasFuzzyOnly = true
+					break
+				}
+			}
+		}
+		if hasFuzzyOnly {
+			fmt.Fprintf(ios.ErrOut, "No exact matches. Showing fuzzy results (use --exact to suppress):\n")
+		}
 	}
 
 	// --pick mode: interactive selection.
@@ -321,6 +358,7 @@ func runSearch(opts *searchOptions) error {
 	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
 	fmt.Fprintf(ios.Out, "  %s  clickup task view <id>\n", cs.Gray("View:"))
 	fmt.Fprintf(ios.Out, "  %s  clickup task edit <id> --status <status>\n", cs.Gray("Edit:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup sprint current\n", cs.Gray("Sprint:"))
 	fmt.Fprintf(ios.Out, "  %s  clickup task search %q --json\n", cs.Gray("JSON:"), opts.query)
 
 	return nil
