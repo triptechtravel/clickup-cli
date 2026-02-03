@@ -203,7 +203,7 @@ The `task search` command also suggests `task recent` when no results are found,
 - Use `--json` output when you need the agent to parse task data programmatically
 - Use `clickup comment list` to give the agent context from team discussions
 - Use `clickup sprint current --json` to help the agent understand project priorities
-- All `link` commands are idempotent -- safe to run multiple times without duplicating data
+- All `link` commands are idempotent -- safe to run multiple times without duplicating data. Links render as rich text in ClickUp with clickable URLs and code formatting
 - Use `clickup task activity` to give the agent full historical context before starting work
 - Use `clickup task time log` to automatically track time spent by the agent
 - Use `clickup field list --list-id ID --json` to discover custom fields before setting them

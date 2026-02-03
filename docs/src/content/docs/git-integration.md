@@ -94,35 +94,35 @@ The following commands auto-detect the task ID from the branch when no explicit 
 
 ## GitHub linking strategy
 
-The `link` commands connect GitHub artifacts to ClickUp tasks idempotently. By default, links are stored in a managed section of the task description. Optionally, you can configure a `link_field` to store links in a custom field instead (see [Configuration](/clickup-cli/configuration/#github-link-storage)).
+The `link` commands connect GitHub artifacts to ClickUp tasks idempotently. Links are written via ClickUp's `markdown_description` API field, so they render as rich text with clickable links, bold formatting, and code blocks directly in the ClickUp UI.
 
-Each link type produces a different entry:
+By default, links are stored in a managed section of the task description. Optionally, you can configure a `link_field` to store links in a custom field instead (see [Configuration](/clickup-cli/configuration/#github-link-storage)).
+
+Each link type produces a different entry in the description:
 
 ### `link pr`
 
-Stores an entry like:
-
-```
-PR: owner/repo#42 - Fix authentication flow (https://github.com/owner/repo/pull/42)
+```markdown
+[owner/repo#42 — Fix authentication flow](https://github.com/owner/repo/pull/42)
 ```
 
-This command requires the [GitHub CLI](https://cli.github.com/) (`gh`) to be installed and authenticated, as it uses `gh pr view` to resolve PR details.
+Renders as a clickable link in ClickUp. Requires the [GitHub CLI](https://cli.github.com/) (`gh`) to be installed and authenticated.
 
 ### `link branch`
 
-Stores an entry like:
+```markdown
+Branch: `feature/CU-ae27de-add-auth` in owner/repo
+```
 
-```
-Branch: feature/CU-ae27de-add-auth in owner/repo
-```
+Branch names are rendered in code formatting.
 
 ### `link commit`
 
-Stores an entry like:
+```markdown
+[`a1b2c3d` — Implement login validation](https://github.com/owner/repo/commit/fullsha)
+```
 
-```
-Commit: a1b2c3d - Implement login validation (https://github.com/owner/repo/commit/fullsha)
-```
+Renders as a clickable link with the short SHA in code formatting.
 
 Re-running any link command updates the existing entry rather than creating a duplicate. Multiple PRs from different repos coexist as separate entries, which is useful for cross-cutting tasks that span multiple repositories.
 

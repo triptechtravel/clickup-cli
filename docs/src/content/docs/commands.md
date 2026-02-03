@@ -495,7 +495,7 @@ clickup status list --space 12345
 
 ## link
 
-Link GitHub artifacts to ClickUp tasks. All link commands update the task idempotently -- by default, links are stored in a managed section of the task description. Optionally, configure a `link_field` in your config to store links in a custom field instead (see [Configuration](/clickup-cli/configuration/)).
+Link GitHub artifacts to ClickUp tasks. All link commands update the task idempotently -- by default, links are stored in a managed section of the task description using ClickUp's `markdown_description` API field, so they render as rich text with clickable links, bold formatting, and code blocks directly in the ClickUp UI. Optionally, configure a `link_field` in your config to store links in a custom field instead (see [Configuration](/clickup-cli/configuration/)).
 
 ### `link pr [NUMBER]`
 

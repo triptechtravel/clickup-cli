@@ -2,7 +2,6 @@ package link
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -59,13 +58,6 @@ The task ID is auto-detected from the branch name, or specified with --task.`,
 	return cmd
 }
 
-type ghPRDetail struct {
-	Number int    `json:"number"`
-	Title  string `json:"title"`
-	Body   string `json:"body"`
-	URL    string `json:"url"`
-}
-
 func syncRun(opts *syncOptions) error {
 	ios := opts.factory.IOStreams
 	cs := ios.ColorScheme()
@@ -106,51 +98,43 @@ func syncRun(opts *syncOptions) error {
 	}
 
 	// Fetch the PR details.
-	var prDetail ghPRDetail
+	var pr *ghPR
 	if opts.prNumber > 0 {
-		detail, err := fetchPRDetail(opts.prNumber, opts.repo)
-		if err != nil {
-			return err
-		}
-		prDetail = *detail
+		pr, err = fetchPR(opts.prNumber, opts.repo)
 	} else {
-		detail, err := fetchCurrentPRDetail()
-		if err != nil {
-			return err
-		}
-		prDetail = *detail
+		pr, err = fetchCurrentPR()
+	}
+	if err != nil {
+		return err
 	}
 
 	// Build the ClickUp info block for the PR body.
 	clickupBlock := buildClickUpBlock(taskURL, taskName, taskStatus, priority, assigneeNames)
 
 	// Update the PR body.
-	newBody := upsertClickUpBlock(prDetail.Body, clickupBlock)
-	if newBody != prDetail.Body {
-		if err := updatePRBody(prDetail.Number, opts.repo, newBody); err != nil {
+	newBody := upsertClickUpBlock(pr.Body, clickupBlock)
+	if newBody != pr.Body {
+		if err := updatePRBody(pr.Number, opts.repo, newBody); err != nil {
 			return fmt.Errorf("failed to update PR body: %w", err)
 		}
 		fmt.Fprintf(ios.Out, "%s Updated PR #%d body with ClickUp task info\n",
-			cs.Green("!"), prDetail.Number)
+			cs.Green("!"), pr.Number)
 	} else {
-		fmt.Fprintf(ios.Out, "PR #%d body already up to date\n", prDetail.Number)
+		fmt.Fprintf(ios.Out, "PR #%d body already up to date\n", pr.Number)
 	}
 
 	// Upsert link on ClickUp task (description or custom field).
 	repoSlug := opts.repo
 	if repoSlug == "" {
-		repoSlug = inferRepoFromURL(prDetail.URL)
+		repoSlug = inferRepoFromURL(pr.URL)
 	}
 
-	entry := linkEntry{
-		Prefix: fmt.Sprintf("PR: %s#%d", repoSlug, prDetail.Number),
-		Line:   fmt.Sprintf("PR: %s#%d - %s (%s)", repoSlug, prDetail.Number, prDetail.Title, prDetail.URL),
-	}
+	entry := buildPREntry(repoSlug, pr.Number, pr.Title, pr.URL)
 	if err := upsertLink(opts.factory, taskID, entry); err != nil {
 		return err
 	}
 	fmt.Fprintf(ios.Out, "%s Linked PR #%d to task %s\n",
-		cs.Green("!"), prDetail.Number, cs.Bold(taskID))
+		cs.Green("!"), pr.Number, cs.Bold(taskID))
 
 	return nil
 }
@@ -182,50 +166,13 @@ func upsertClickUpBlock(body, block string) string {
 	endIdx := strings.Index(body, clickupBlockEnd)
 
 	if startIdx >= 0 && endIdx >= 0 {
-		// Replace existing block.
 		return body[:startIdx] + block + body[endIdx+len(clickupBlockEnd):]
 	}
 
-	// Prepend the block.
 	if body == "" {
 		return block
 	}
 	return block + "\n\n" + body
-}
-
-func fetchPRDetail(number int, repo string) (*ghPRDetail, error) {
-	args := []string{"pr", "view", strconv.Itoa(number), "--json", "number,title,body,url"}
-	if repo != "" {
-		args = append(args, "--repo", repo)
-	}
-	cmd := exec.Command("gh", args...)
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch PR #%d: %w", number, err)
-	}
-	var detail ghPRDetail
-	if err := json.Unmarshal(out, &detail); err != nil {
-		return nil, fmt.Errorf("failed to parse gh output: %w", err)
-	}
-	return &detail, nil
-}
-
-func fetchCurrentPRDetail() (*ghPRDetail, error) {
-	cmd := exec.Command("gh", "pr", "view", "--json", "number,title,body,url")
-	out, err := cmd.Output()
-	if err != nil {
-		if isGHNotInstalled(err) {
-			return nil, fmt.Errorf("the GitHub CLI (gh) is not installed or not in PATH\n\n" +
-				"Install it from https://cli.github.com/ and authenticate with 'gh auth login'")
-		}
-		return nil, fmt.Errorf("failed to detect current PR: %w\n\n"+
-			"Make sure you have an open PR for the current branch, or provide a PR number as an argument", err)
-	}
-	var detail ghPRDetail
-	if err := json.Unmarshal(out, &detail); err != nil {
-		return nil, fmt.Errorf("failed to parse gh output: %w", err)
-	}
-	return &detail, nil
 }
 
 func updatePRBody(number int, repo, body string) error {

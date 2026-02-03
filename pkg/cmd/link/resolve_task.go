@@ -14,6 +14,11 @@ import (
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
 
+const (
+	maxSearchPages  = 5  // Maximum API pages to scan during fuzzy search.
+	maxSearchResult = 20 // Stop scanning once we have enough matches.
+)
+
 // resolveTaskResult holds the resolved task ID along with the git context
 // (which may be nil if the task was resolved interactively or via --task flag
 // without a git repository).
@@ -236,7 +241,7 @@ func searchTasks(f *cmdutil.Factory, query string) ([]resolveSearchTask, error) 
 	defer cancel()
 
 	var allTasks []resolveSearchTask
-	for page := 0; page < 5; page++ {
+	for page := 0; page < maxSearchPages; page++ {
 		if ctx.Err() != nil {
 			fmt.Fprintf(ios.ErrOut, "Search timed out\n")
 			break
@@ -285,7 +290,7 @@ func searchTasks(f *cmdutil.Factory, query string) ([]resolveSearchTask, error) 
 		fmt.Fprintf(ios.ErrOut, "  scanned page %d (%d tasks)...\n", page+1, len(result.Tasks))
 
 		// Stop early if we have enough results for interactive selection.
-		if len(allTasks) >= 20 {
+		if len(allTasks) >= maxSearchResult {
 			break
 		}
 	}

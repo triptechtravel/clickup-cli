@@ -114,7 +114,7 @@ func upsertTextFieldEntry(existing string, entry linkEntry) string {
 		if trimmed == "" {
 			continue
 		}
-		if strings.HasPrefix(trimmed, entry.Prefix) {
+		if strings.Contains(trimmed, entry.Prefix) {
 			result = append(result, entry.Line)
 			found = true
 		} else {
@@ -128,9 +128,23 @@ func upsertTextFieldEntry(existing string, entry linkEntry) string {
 	return strings.Join(result, "\n")
 }
 
-// extractURL extracts a URL from a line, looking for the last (url) pattern.
+// extractURL extracts a URL from a line.
+// Handles both markdown link format [text](url) and plain (url) format.
 func extractURL(line string) string {
-	// Look for (https://...) pattern at the end.
+	// Look for markdown link format: ](https://...)
+	mdIdx := strings.LastIndex(line, "](https://")
+	if mdIdx < 0 {
+		mdIdx = strings.LastIndex(line, "](http://")
+	}
+	if mdIdx >= 0 {
+		urlStart := mdIdx + 2 // skip "]("
+		lastClose := strings.LastIndex(line, ")")
+		if lastClose > urlStart {
+			return line[urlStart:lastClose]
+		}
+	}
+
+	// Fall back to plain (https://...) format.
 	lastOpen := strings.LastIndex(line, "(https://")
 	if lastOpen < 0 {
 		lastOpen = strings.LastIndex(line, "(http://")

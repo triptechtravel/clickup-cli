@@ -72,27 +72,28 @@ aliases:
 
 ## GitHub link storage
 
-The `link pr`, `link branch`, `link commit`, and `link sync` commands store GitHub links on ClickUp tasks. There are two storage approaches:
+The `link pr`, `link branch`, `link commit`, and `link sync` commands store GitHub links on ClickUp tasks. Links are written via ClickUp's `markdown_description` API field, so they render as rich text with **bold headers**, clickable links, and `code` formatting directly in the ClickUp UI.
 
-### Description section (default)
+### Description section (default, recommended)
 
 When `link_field` is **not configured**, links are stored in a managed block within the task description:
 
-```
---- GitHub Links (clickup-cli) ---
-PR: owner/repo#42 - Fix login bug (https://github.com/owner/repo/pull/42)
-Branch: feat/fix-login in owner/repo
---- /GitHub Links ---
+```markdown
+**GitHub** _(clickup-cli)_
+- [owner/repo#42 — Fix login bug](https://github.com/owner/repo/pull/42)
+- Branch: `feat/fix-login` in owner/repo
 ```
 
-Each link entry is deduplicated by a prefix key (e.g., `PR: owner/repo#42`), so re-running the same command updates the existing line rather than adding a duplicate. Multiple PRs from different repos coexist as separate entries.
+In ClickUp this renders as a bold header with clickable PR links and code-formatted branch names. Each entry is deduplicated by a unique key (e.g., `owner/repo#42`), so re-running the same command updates the existing entry. Multiple PRs from different repos coexist as separate entries — ideal for cross-cutting tasks.
+
+This approach requires no setup and works for all link types (PRs, branches, commits).
 
 ### Custom field (optional)
 
 When `link_field` is configured, links are stored in the named custom field instead. This works with two ClickUp field types:
 
-- **URL/Website fields**: The field is set to the latest link URL. Best for tasks with a single PR.
-- **Text fields**: Link entries are appended as separate lines with deduplication. Best for cross-cutting tasks with multiple PRs across repos.
+- **URL/Website fields**: The field is set to the latest link URL. Best for tasks with a single PR. Branch links (which have no URL) fall back to the description approach automatically.
+- **Text fields**: Link entries are appended as separate lines with deduplication.
 
 To set up custom field linking:
 

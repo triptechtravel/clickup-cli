@@ -117,11 +117,11 @@ func commitRun(opts *commitOptions) error {
 		shortSHA = shortSHA[:7]
 	}
 
-	// Build link entry.
+	// Build link entry (markdown format for ClickUp rich rendering).
 	commitURL := fmt.Sprintf("https://github.com/%s/commit/%s", repoSlug, fullSHA)
 	entry := linkEntry{
-		Prefix: fmt.Sprintf("Commit: %s", shortSHA),
-		Line:   fmt.Sprintf("Commit: %s - %s (%s)", shortSHA, commitMessage, commitURL),
+		Prefix: fmt.Sprintf("`%s`", shortSHA),
+		Line:   fmt.Sprintf("[`%s` — %s](%s)", shortSHA, commitMessage, commitURL),
 	}
 
 	if err := upsertLink(opts.factory, taskID, entry); err != nil {

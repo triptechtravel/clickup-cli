@@ -62,11 +62,11 @@ func branchRun(opts *branchOptions) error {
 	}
 	gitCtx := resolved.GitCtx
 
-	// Build link entry.
+	// Build link entry (markdown format for ClickUp rich rendering).
 	repoSlug := fmt.Sprintf("%s/%s", gitCtx.RepoOwner, gitCtx.RepoName)
 	entry := linkEntry{
-		Prefix: fmt.Sprintf("Branch: %s in %s", gitCtx.Branch, repoSlug),
-		Line:   fmt.Sprintf("Branch: %s in %s", gitCtx.Branch, repoSlug),
+		Prefix: fmt.Sprintf("`%s` in %s", gitCtx.Branch, repoSlug),
+		Line:   fmt.Sprintf("Branch: `%s` in %s", gitCtx.Branch, repoSlug),
 	}
 
 	if err := upsertLink(opts.factory, taskID, entry); err != nil {

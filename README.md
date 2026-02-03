@@ -16,7 +16,7 @@ A command-line tool for working with ClickUp tasks, comments, and sprints -- des
 - **Custom fields** -- list, set, and clear custom field values on tasks (text, number, dropdown, labels, date, checkbox, URL, and more)
 - **Dependencies & checklists** -- add/remove task dependencies and manage checklists with items
 - **Git integration** -- auto-detects task IDs from branch names (`CU-abc123` or `PROJ-42`)
-- **GitHub linking** -- links PRs, branches, and commits to ClickUp tasks via a managed description section (or optional custom field)
+- **GitHub linking** -- links PRs, branches, and commits to ClickUp tasks via a managed description section rendered as rich text (or optional custom field)
 - **Bidirectional sync** -- `link sync` pushes ClickUp task info into GitHub PR descriptions and vice versa
 - **Sprint dashboard** -- shows current sprint tasks grouped by status with assignees and priorities
 - **Inbox** -- surfaces recent @mentions across your workspace
