@@ -25,6 +25,9 @@ go vet ./...
 
 # Install locally
 go install ./cmd/clickup
+
+# Regenerate CLI reference docs (Starlight markdown)
+make docs
 ```
 
 Requires Go 1.25 or later.
@@ -33,6 +36,7 @@ Requires Go 1.25 or later.
 
 ```
 cmd/clickup/          Entry point
+cmd/gen-docs/         Auto-generates CLI reference markdown (make docs)
 internal/             Internal packages (not importable)
   api/                HTTP client, rate limiting, error handling
   app/                Bootstrap and root command wiring
@@ -46,12 +50,13 @@ internal/             Internal packages (not importable)
   browser/            Cross-platform browser opening
   text/               String helpers (truncate, pluralize, relative time)
 pkg/
-  cmdutil/            Dependency injection, JSON flags, auth middleware
+  cmdutil/            Dependency injection, JSON flags, auth middleware,
+                      recent tasks helper
   cmd/                Command implementations
     auth/             login, logout, status
-    task/             view, list, create, edit, search, activity, time,
-                      dependency, checklist, custom fields
-    comment/          add, list, edit
+    task/             view, list, create, edit, search, recent, activity,
+                      time, dependency, checklist, custom fields
+    comment/          add, list, edit, delete
     status/           set, list
     link/             pr, branch, commit, sync, description upsert,
                       custom field linking
