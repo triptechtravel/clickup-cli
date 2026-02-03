@@ -74,8 +74,8 @@ func upsertCustomFieldLink(f *cmdutil.Factory, taskID string, fieldName string, 
 		// URL fields: extract URL from the entry line (last parenthesized URL).
 		url := extractURL(entry.Line)
 		if url == "" {
-			// Fall back to using the whole line.
-			url = entry.Line
+			// No URL in entry (e.g., branch links). Fall back to description approach.
+			return upsertDescriptionLinks(f, taskID, entry)
 		}
 		value = map[string]interface{}{"value": url}
 
