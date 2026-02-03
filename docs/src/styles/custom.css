@@ -36,3 +36,10 @@
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+
+/* Give terminal mockup more room on desktop */
+@media (min-width: 50rem) {
+  [data-page-type='splash'] .hero > .hero-html {
+    min-width: 28rem;
+  }
+}

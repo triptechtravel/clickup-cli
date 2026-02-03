@@ -3,7 +3,26 @@ title: clickup CLI
 description: A command-line tool for working with ClickUp tasks, comments, and sprints -- designed for developers who live in the terminal and use GitHub.
 template: splash
 hero:
-  tagline: A command-line tool for working with ClickUp tasks, comments, and sprints -- designed for developers who live in the terminal and use GitHub.
+  tagline: ClickUp from your terminal.
+  image:
+    html: |
+      <div style="background:#1a1b26;border-radius:10px;overflow:hidden;font-family:'SF Mono',SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;font-size:13px;line-height:1.6;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+        <div style="background:#24283b;padding:8px 12px;display:flex;align-items:center;gap:6px;">
+          <span style="width:12px;height:12px;border-radius:50%;background:#ff5f57;display:inline-block;"></span>
+          <span style="width:12px;height:12px;border-radius:50%;background:#febc2e;display:inline-block;"></span>
+          <span style="width:12px;height:12px;border-radius:50%;background:#28c840;display:inline-block;"></span>
+        </div>
+        <div style="padding:16px 18px;color:#a9b1d6;">
+          <div><span style="color:#7B68EE;">$</span> clickup task view</div>
+          <div style="margin:8px 0;padding:8px 12px;border:1px solid #3b4261;border-radius:6px;">
+            <div style="color:#7aa2f7;font-weight:600;">CU-abc123</div>
+            <div style="color:#c0caf5;">Add user authentication</div>
+            <div style="margin-top:4px;"><span style="background:#28c840;color:#1a1b26;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:600;">IN PROGRESS</span> <span style="color:#565f89;">isaac</span></div>
+          </div>
+          <div style="margin-top:10px;"><span style="color:#7B68EE;">$</span> clickup link pr</div>
+          <div style="margin-top:4px;"><span style="color:#28c840;">&#10004;</span> Linked PR <span style="color:#7B68EE;">#42</span> to task CU-abc123</div>
+        </div>
+      </div>
   actions:
     - text: Get Started
       link: /clickup-cli/installation/
@@ -15,6 +34,12 @@ hero:
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:2rem;">
+  <a href="https://github.com/triptechtravel/clickup-cli/releases/latest"><img src="https://img.shields.io/github/v/release/triptechtravel/clickup-cli?style=flat&color=7B68EE" alt="Release" /></a>
+  <a href="https://github.com/triptechtravel/clickup-cli/stargazers"><img src="https://img.shields.io/github/stars/triptechtravel/clickup-cli?style=social" alt="GitHub Stars" /></a>
+  <a href="https://github.com/triptechtravel/clickup-cli/blob/main/LICENSE"><img src="https://img.shields.io/github/license/triptechtravel/clickup-cli?style=flat" alt="License" /></a>
+</div>
 
 ## Features
 
