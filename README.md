@@ -27,7 +27,7 @@ A command-line tool for working with ClickUp tasks, comments, and sprints -- des
 - **GitHub Actions ready** -- automate status changes, PR linking, and task updates on PR events
 - **JSON output** -- all list/view commands support `--json` and `--jq` for scripting
 - **Shell completions** -- bash, zsh, fish, and PowerShell
-- **Secure credentials** -- tokens stored in the system keyring
+- **Secure credentials** -- tokens stored in the system keyring with automatic expiration detection
 
 ## Installation
 

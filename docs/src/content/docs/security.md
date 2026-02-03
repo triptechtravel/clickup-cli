@@ -17,6 +17,20 @@ If the system keyring is unavailable, the CLI falls back to an encrypted file at
 
 Tokens are never stored in the config file (`config.yml`) or logged to stdout.
 
+## Token expiration handling
+
+If your API token expires, is revoked, or becomes invalid, the CLI detects the `401 Unauthorized` response and displays a clear message:
+
+```
+authentication expired or revoked. Run 'clickup auth login' to re-authenticate
+```
+
+The CLI exits with code **4** for authentication errors, making it easy to detect in scripts and CI pipelines. To fix, simply re-authenticate:
+
+```sh
+clickup auth login
+```
+
 ## Best practices
 
 1. **Use the system keyring**: The default storage method. Avoid overriding it unless necessary.
@@ -57,4 +71,6 @@ We will credit reporters in release notes unless you prefer anonymity. We ask th
 
 | Version | Supported |
 |---------|-----------|
-| 0.1.x   | Yes       |
+| 0.5.x   | Yes       |
+| 0.4.x   | Yes       |
+| < 0.4   | No        |
