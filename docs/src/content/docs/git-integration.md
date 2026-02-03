@@ -82,43 +82,49 @@ The following commands auto-detect the task ID from the branch when no explicit 
 
 - `task view`
 - `task edit`
+- `task activity`
+- `task time log`
+- `task time list`
 - `comment add`
 - `status set`
 - `link pr`
+- `link sync`
 - `link branch`
 - `link commit`
 
 ## GitHub linking strategy
 
-The `link` commands connect GitHub artifacts to ClickUp tasks by posting formatted comments on the task. Each link type produces a different comment:
+The `link` commands connect GitHub artifacts to ClickUp tasks idempotently. By default, links are stored in a managed section of the task description. Optionally, you can configure a `link_field` to store links in a custom field instead (see [Configuration](/clickup-cli/configuration/#github-link-storage)).
+
+Each link type produces a different entry:
 
 ### `link pr`
 
-Posts a comment like:
+Stores an entry like:
 
 ```
-GitHub PR linked: owner/repo#42 - Fix authentication flow
+PR: owner/repo#42 - Fix authentication flow (https://github.com/owner/repo/pull/42)
 ```
 
-The comment includes a clickable link to the pull request on GitHub. This command requires the [GitHub CLI](https://cli.github.com/) (`gh`) to be installed and authenticated, as it uses `gh pr view` to resolve PR details.
+This command requires the [GitHub CLI](https://cli.github.com/) (`gh`) to be installed and authenticated, as it uses `gh pr view` to resolve PR details.
 
 ### `link branch`
 
-Posts a comment like:
+Stores an entry like:
 
 ```
-Branch linked: feature/CU-ae27de-add-auth in owner/repo
+Branch: feature/CU-ae27de-add-auth in owner/repo
 ```
 
 ### `link commit`
 
-Posts a comment like:
+Stores an entry like:
 
 ```
-Commit linked: a1b2c3d - Implement login validation
+Commit: a1b2c3d - Implement login validation (https://github.com/owner/repo/commit/fullsha)
 ```
 
-The comment includes a link to the commit on GitHub, constructed from the repository owner, name, and full commit SHA.
+Re-running any link command updates the existing entry rather than creating a duplicate. Multiple PRs from different repos coexist as separate entries, which is useful for cross-cutting tasks that span multiple repositories.
 
 ## Tips
 

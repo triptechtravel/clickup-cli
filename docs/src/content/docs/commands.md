@@ -182,7 +182,7 @@ clickup task edit CU-abc123 --type 1
 | `--markdown-description TEXT` | New task description in markdown |
 | `--status STATUS` | New task status |
 | `--priority N` | New priority: 1=Urgent, 2=High, 3=Normal, 4=Low |
-| `--assignee ID` | Assignee user ID(s) to set (repeatable) |
+| `--assignee ID` | Assignee user ID(s) to add (repeatable) |
 | `--remove-assignee ID` | Assignee user ID(s) to remove (repeatable) |
 | `--tags TAG` | Set tags (replaces existing, repeatable) |
 | `--due-date DATE` | Due date (YYYY-MM-DD, "none" to clear) |
@@ -212,9 +212,9 @@ clickup task search "login bug" --json
 
 | Flag | Description |
 |------|-------------|
-| `--space ID` | Limit search to a specific space (defaults to configured space) |
-| `--folder ID` | Limit search to a specific folder |
-| `--pick` | Interactively pick from results and view the selected task |
+| `--space NAME_OR_ID` | Limit search to a specific space (name or ID) |
+| `--folder NAME` | Limit search to a specific folder (name, substring match) |
+| `--pick` | Interactively pick from results and print its task ID |
 | `--comments` | Also search within task comment bodies |
 | `--json` | Output as JSON |
 | `--jq EXPR` | Filter JSON output with a jq expression |
@@ -502,13 +502,12 @@ Link the current git branch to a ClickUp task. Stores the branch name and reposi
 clickup link branch
 
 # Link to a specific task
-clickup link branch --task CU-abc123 --repo owner/repo
+clickup link branch --task CU-abc123
 ```
 
 | Flag | Description |
 |------|-------------|
 | `--task ID` | Target task ID (overrides auto-detection from branch) |
-| `--repo OWNER/REPO` | Target GitHub repository (overrides auto-detection) |
 
 ### `link commit [SHA]`
 

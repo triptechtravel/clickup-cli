@@ -9,7 +9,7 @@ There are three ways to install the `clickup` CLI.
 
 ## Go
 
-If you have Go 1.21 or later installed, use `go install`:
+If you have Go 1.25 or later installed, use `go install`:
 
 ```sh
 go install github.com/triptechtravel/clickup-cli/cmd/clickup@latest

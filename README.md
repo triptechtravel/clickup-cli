@@ -164,6 +164,7 @@ directory_defaults:
 | `space` | Default space ID |
 | `sprint_folder` | Folder ID containing sprint lists |
 | `editor` | Editor for interactive descriptions |
+| `prompt` | Controls interactive prompts (`"enabled"` by default) |
 | `link_field` | Custom field name for storing GitHub links (optional; defaults to description section) |
 | `aliases` | Custom command aliases |
 | `directory_defaults` | Per-directory space and link_field overrides |

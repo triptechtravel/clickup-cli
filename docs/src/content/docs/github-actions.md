@@ -19,7 +19,7 @@ Add your ClickUp API token as a repository secret named `CLICKUP_TOKEN`:
 
 ## Sync task info on PR open
 
-Updates the GitHub PR description with a table showing the ClickUp task name, status, priority, and assignees. Also posts a link comment on the ClickUp task.
+Updates the GitHub PR description with a table showing the ClickUp task name, status, priority, and assignees. Also stores a link back to the PR on the ClickUp task (in the task description or a configured custom field).
 
 The update is idempotent -- running multiple times replaces the existing block rather than duplicating it.
 

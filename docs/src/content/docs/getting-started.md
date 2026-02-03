@@ -70,7 +70,7 @@ Or specify a task ID directly:
 clickup task view CU-abc123
 ```
 
-The output includes the task name, status, priority, assignees, tags, dates, URL, and description.
+The output includes the task name, status, priority, assignees, watchers, tags, dates, points, time tracking, location, dependencies, checklists, custom fields, URL, and description.
 
 ## Step 4: Change a status
 
