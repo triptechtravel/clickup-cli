@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
 
@@ -72,19 +71,11 @@ func syncRun(opts *syncOptions) error {
 	cs := ios.ColorScheme()
 
 	// Resolve task ID.
-	var taskID string
-	if opts.taskID != "" {
-		taskID = opts.taskID
-	} else {
-		gitCtx, err := opts.factory.GitContext()
-		if err != nil {
-			return fmt.Errorf("could not detect git context: %w\n\nTip: use --task to specify the task ID explicitly", err)
-		}
-		if gitCtx.TaskID == nil {
-			return fmt.Errorf("%s\n\nTip: use --task to specify the task ID explicitly", git.BranchNamingSuggestion(gitCtx.Branch))
-		}
-		taskID = gitCtx.TaskID.ID
+	resolved, err := resolveTask(opts.factory, opts.taskID)
+	if err != nil {
+		return err
 	}
+	taskID := resolved.TaskID
 
 	fmt.Fprintf(ios.ErrOut, "Syncing task %s with GitHub PR...\n", cs.Bold(taskID))
 

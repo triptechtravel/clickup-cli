@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
 
@@ -50,22 +49,16 @@ func commitRun(opts *commitOptions) error {
 	cs := ios.ColorScheme()
 
 	// Resolve task ID.
-	var taskID string
-	gitCtx, err := opts.factory.GitContext()
-	if err != nil && opts.taskID == "" {
-		return fmt.Errorf("could not detect git context: %w\n\nTip: use --task to specify the task ID explicitly", err)
+	resolved, err := resolveTask(opts.factory, opts.taskID)
+	if err != nil {
+		return err
 	}
+	taskID := resolved.TaskID
 
-	if opts.taskID != "" {
-		taskID = opts.taskID
-		fmt.Fprintf(ios.ErrOut, "Using task %s\n", cs.Bold(taskID))
-	} else {
-		if gitCtx.TaskID == nil {
-			return fmt.Errorf("%s\n\nTip: use --task to specify the task ID explicitly", git.BranchNamingSuggestion(gitCtx.Branch))
-		}
-		taskID = gitCtx.TaskID.ID
-		fmt.Fprintf(ios.ErrOut, "Detected task %s from branch %s\n", cs.Bold(taskID), cs.Cyan(gitCtx.Branch))
+	if resolved.GitCtx == nil {
+		return fmt.Errorf("could not detect git context: not inside a git repository")
 	}
+	gitCtx := resolved.GitCtx
 
 	// Resolve commit SHA and message.
 	gitClient := opts.factory.GitClient()
