@@ -144,18 +144,4 @@ jobs:
           clickup comment add "" "CI ${CONCLUSION}: ${BRANCH} (${SHA:0:7})"
 ```
 
-## Using with AI agents
-
-The CLI works well with AI coding agents. An agent can read task context from ClickUp, write code, and update ClickUp without leaving the terminal:
-
-```sh
-# Agent reads the task requirements
-clickup task view --json
-
-# Agent works on the code, then updates ClickUp
-clickup status set "code review"
-clickup comment add "" "Implemented the feature, PR is up"
-clickup link sync
-```
-
-The `--json` flag on all commands provides structured output that agents can parse. The `--task` and `--repo` flags allow targeting any task or repository explicitly.
+See also: [Using with AI agents](ai-agents) for integrating the CLI with AI coding tools.
