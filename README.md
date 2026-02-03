@@ -107,6 +107,7 @@ clickup link pr
 | `clickup comment add [task-id]` | Add a comment to a task |
 | `clickup comment list [task-id]` | List comments on a task |
 | `clickup comment edit` | Edit an existing comment |
+| `clickup comment delete` | Delete a comment |
 | `clickup status set STATUS [task-id]` | Change task status with fuzzy matching |
 | `clickup status list` | List available statuses for a space |
 | `clickup field list --list-id ID` | List available custom fields for a list |

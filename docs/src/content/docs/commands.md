@@ -433,6 +433,22 @@ clickup comment edit 12345 --editor
 |------|-------------|
 | `-e`, `--editor` | Open editor to compose comment body |
 
+### `comment delete <COMMENT_ID>`
+
+Delete a comment from a ClickUp task. Find comment IDs with `comment list TASK_ID --json`.
+
+```sh
+# Delete a comment (with confirmation prompt)
+clickup comment delete 90160162431205
+
+# Delete without confirmation
+clickup comment delete 90160162431205 --yes
+```
+
+| Flag | Description |
+|------|-------------|
+| `-y`, `--yes` | Skip confirmation prompt |
+
 ---
 
 ## status
