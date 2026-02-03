@@ -10,6 +10,7 @@ import (
 
 type branchOptions struct {
 	factory *cmdutil.Factory
+	taskID  string
 }
 
 // NewCmdLinkBranch returns the "link branch" command.
@@ -23,13 +24,16 @@ func NewCmdLinkBranch(f *cmdutil.Factory) *cobra.Command {
 		Short: "Link the current git branch to a ClickUp task",
 		Long: `Link the current git branch to a ClickUp task by posting a comment.
 
-The ClickUp task ID is auto-detected from the current git branch name.`,
+The ClickUp task ID is auto-detected from the current git branch name,
+or can be specified explicitly with --task.`,
 		Args:              cobra.NoArgs,
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return branchRun(opts)
 		},
 	}
+
+	cmd.Flags().StringVar(&opts.taskID, "task", "", "ClickUp task ID (auto-detected from branch if not set)")
 
 	return cmd
 }
@@ -38,17 +42,23 @@ func branchRun(opts *branchOptions) error {
 	ios := opts.factory.IOStreams
 	cs := ios.ColorScheme()
 
-	// Resolve task ID from git branch.
+	// Resolve task ID.
+	var taskID string
 	gitCtx, err := opts.factory.GitContext()
-	if err != nil {
-		return fmt.Errorf("could not detect git context: %w\n\n%s", err,
-			"Tip: run this command from inside a git repository")
+	if err != nil && opts.taskID == "" {
+		return fmt.Errorf("could not detect git context: %w\n\nTip: use --task to specify the task ID explicitly", err)
 	}
-	if gitCtx.TaskID == nil {
-		return fmt.Errorf("%s", git.BranchNamingSuggestion(gitCtx.Branch))
+
+	if opts.taskID != "" {
+		taskID = opts.taskID
+		fmt.Fprintf(ios.ErrOut, "Using task %s\n", cs.Bold(taskID))
+	} else {
+		if gitCtx.TaskID == nil {
+			return fmt.Errorf("%s\n\nTip: use --task to specify the task ID explicitly", git.BranchNamingSuggestion(gitCtx.Branch))
+		}
+		taskID = gitCtx.TaskID.ID
+		fmt.Fprintf(ios.ErrOut, "Detected task %s from branch %s\n", cs.Bold(taskID), cs.Cyan(gitCtx.Branch))
 	}
-	taskID := gitCtx.TaskID.ID
-	fmt.Fprintf(ios.ErrOut, "Detected task %s from branch %s\n", cs.Bold(taskID), cs.Cyan(gitCtx.Branch))
 
 	// Build the comment text.
 	repoSlug := fmt.Sprintf("%s/%s", gitCtx.RepoOwner, gitCtx.RepoName)

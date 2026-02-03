@@ -13,6 +13,7 @@ import (
 type commitOptions struct {
 	factory *cmdutil.Factory
 	sha     string
+	taskID  string
 }
 
 // NewCmdLinkCommit returns the "link commit" command.
@@ -27,7 +28,8 @@ func NewCmdLinkCommit(f *cmdutil.Factory) *cobra.Command {
 		Long: `Link a git commit to a ClickUp task by posting a comment.
 
 If SHA is not provided, the HEAD commit is used.
-The ClickUp task ID is auto-detected from the current git branch name.`,
+The ClickUp task ID is auto-detected from the current git branch name,
+or can be specified explicitly with --task.`,
 		Args:              cobra.MaximumNArgs(1),
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -38,6 +40,8 @@ The ClickUp task ID is auto-detected from the current git branch name.`,
 		},
 	}
 
+	cmd.Flags().StringVar(&opts.taskID, "task", "", "ClickUp task ID (auto-detected from branch if not set)")
+
 	return cmd
 }
 
@@ -45,17 +49,23 @@ func commitRun(opts *commitOptions) error {
 	ios := opts.factory.IOStreams
 	cs := ios.ColorScheme()
 
-	// Resolve task ID from git branch.
+	// Resolve task ID.
+	var taskID string
 	gitCtx, err := opts.factory.GitContext()
-	if err != nil {
-		return fmt.Errorf("could not detect git context: %w\n\n%s", err,
-			"Tip: run this command from inside a git repository")
+	if err != nil && opts.taskID == "" {
+		return fmt.Errorf("could not detect git context: %w\n\nTip: use --task to specify the task ID explicitly", err)
 	}
-	if gitCtx.TaskID == nil {
-		return fmt.Errorf("%s", git.BranchNamingSuggestion(gitCtx.Branch))
+
+	if opts.taskID != "" {
+		taskID = opts.taskID
+		fmt.Fprintf(ios.ErrOut, "Using task %s\n", cs.Bold(taskID))
+	} else {
+		if gitCtx.TaskID == nil {
+			return fmt.Errorf("%s\n\nTip: use --task to specify the task ID explicitly", git.BranchNamingSuggestion(gitCtx.Branch))
+		}
+		taskID = gitCtx.TaskID.ID
+		fmt.Fprintf(ios.ErrOut, "Detected task %s from branch %s\n", cs.Bold(taskID), cs.Cyan(gitCtx.Branch))
 	}
-	taskID := gitCtx.TaskID.ID
-	fmt.Fprintf(ios.ErrOut, "Detected task %s from branch %s\n", cs.Bold(taskID), cs.Cyan(gitCtx.Branch))
 
 	// Resolve commit SHA and message.
 	gitClient := opts.factory.GitClient()

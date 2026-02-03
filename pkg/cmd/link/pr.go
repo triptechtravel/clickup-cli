@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os/exec"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/triptechtravel/clickup-cli/internal/git"
@@ -17,6 +18,8 @@ import (
 type prOptions struct {
 	factory  *cmdutil.Factory
 	prNumber int
+	taskID   string
+	repo     string
 }
 
 // ghPRInfo holds the JSON output from `gh pr view`.
@@ -38,12 +41,16 @@ func NewCmdLinkPR(f *cmdutil.Factory) *cobra.Command {
 		Long: `Link a GitHub pull request to a ClickUp task by posting a comment.
 
 If NUMBER is not provided, the current PR is detected using the GitHub CLI (gh).
-The ClickUp task ID is auto-detected from the current git branch name.`,
+The ClickUp task ID is auto-detected from the current git branch name,
+or can be specified explicitly with --task.`,
 		Example: `  # Link the current branch's PR to the detected task
   clickup link pr
 
   # Link a specific PR by number
-  clickup link pr 42`,
+  clickup link pr 42
+
+  # Link a PR from another repo to a specific task
+  clickup link pr 1109 --repo owner/repo --task 86d1rn980`,
 		Args:              cobra.MaximumNArgs(1),
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -58,6 +65,9 @@ The ClickUp task ID is auto-detected from the current git branch name.`,
 		},
 	}
 
+	cmd.Flags().StringVar(&opts.taskID, "task", "", "ClickUp task ID (auto-detected from branch if not set)")
+	cmd.Flags().StringVar(&opts.repo, "repo", "", "GitHub repository (owner/repo) for the PR")
+
 	return cmd
 }
 
@@ -65,29 +75,41 @@ func prRun(opts *prOptions) error {
 	ios := opts.factory.IOStreams
 	cs := ios.ColorScheme()
 
-	// Resolve task ID from git branch.
-	gitCtx, err := opts.factory.GitContext()
-	if err != nil {
-		return fmt.Errorf("could not detect git context: %w\n\n%s", err,
-			"Tip: provide the task ID by running this command from a branch with a ClickUp task ID")
+	// Resolve task ID.
+	var taskID string
+	var repoSlug string
+
+	if opts.taskID != "" {
+		taskID = opts.taskID
+		fmt.Fprintf(ios.ErrOut, "Using task %s\n", cs.Bold(taskID))
+	} else {
+		gitCtx, err := opts.factory.GitContext()
+		if err != nil {
+			return fmt.Errorf("could not detect git context: %w\n\nTip: use --task to specify the task ID explicitly", err)
+		}
+		if gitCtx.TaskID == nil {
+			return fmt.Errorf("%s\n\nTip: use --task to specify the task ID explicitly", git.BranchNamingSuggestion(gitCtx.Branch))
+		}
+		taskID = gitCtx.TaskID.ID
+		fmt.Fprintf(ios.ErrOut, "Detected task %s from branch %s\n", cs.Bold(taskID), cs.Cyan(gitCtx.Branch))
+		if repoSlug == "" {
+			repoSlug = fmt.Sprintf("%s/%s", gitCtx.RepoOwner, gitCtx.RepoName)
+		}
 	}
-	if gitCtx.TaskID == nil {
-		return fmt.Errorf("%s", git.BranchNamingSuggestion(gitCtx.Branch))
+
+	if opts.repo != "" {
+		repoSlug = opts.repo
 	}
-	taskID := gitCtx.TaskID.ID
-	fmt.Fprintf(ios.ErrOut, "Detected task %s from branch %s\n", cs.Bold(taskID), cs.Cyan(gitCtx.Branch))
 
 	// Resolve PR info.
 	var prInfo ghPRInfo
 	if opts.prNumber > 0 {
-		// Fetch specific PR by number.
-		info, err := fetchPRByNumber(opts.prNumber)
+		info, err := fetchPRByNumber(opts.prNumber, opts.repo)
 		if err != nil {
 			return err
 		}
 		prInfo = *info
 	} else {
-		// Detect current PR from the checked-out branch.
 		info, err := fetchCurrentPR()
 		if err != nil {
 			return err
@@ -95,8 +117,12 @@ func prRun(opts *prOptions) error {
 		prInfo = *info
 	}
 
+	// Infer repo slug from PR URL if we don't have it yet.
+	if repoSlug == "" {
+		repoSlug = inferRepoFromURL(prInfo.URL)
+	}
+
 	// Build the comment text.
-	repoSlug := fmt.Sprintf("%s/%s", gitCtx.RepoOwner, gitCtx.RepoName)
 	commentText := fmt.Sprintf(
 		"\xf0\x9f\x94\x97 **GitHub PR linked**: [%s#%d - %s](%s)",
 		repoSlug, prInfo.Number, prInfo.Title, prInfo.URL,
@@ -133,8 +159,12 @@ func fetchCurrentPR() (*ghPRInfo, error) {
 }
 
 // fetchPRByNumber uses `gh pr view NUMBER` to get a specific PR.
-func fetchPRByNumber(number int) (*ghPRInfo, error) {
-	cmd := exec.Command("gh", "pr", "view", strconv.Itoa(number), "--json", "number,title,url")
+func fetchPRByNumber(number int, repo string) (*ghPRInfo, error) {
+	args := []string{"pr", "view", strconv.Itoa(number), "--json", "number,title,url"}
+	if repo != "" {
+		args = append(args, "--repo", repo)
+	}
+	cmd := exec.Command("gh", args...)
 	out, err := cmd.Output()
 	if err != nil {
 		if isGHNotInstalled(err) {
@@ -149,6 +179,17 @@ func fetchPRByNumber(number int) (*ghPRInfo, error) {
 		return nil, fmt.Errorf("failed to parse gh output: %w", err)
 	}
 	return &info, nil
+}
+
+// inferRepoFromURL extracts "owner/repo" from a GitHub PR URL.
+func inferRepoFromURL(prURL string) string {
+	// URL format: https://github.com/owner/repo/pull/123
+	prURL = strings.TrimPrefix(prURL, "https://github.com/")
+	parts := strings.Split(prURL, "/")
+	if len(parts) >= 2 {
+		return parts[0] + "/" + parts[1]
+	}
+	return ""
 }
 
 // isGHNotInstalled checks if the error indicates the gh CLI is not found.
