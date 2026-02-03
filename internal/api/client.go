@@ -48,6 +48,11 @@ func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		t.rl.Update(resp)
 	}
 
+	if resp.StatusCode == 401 {
+		resp.Body.Close()
+		return nil, &AuthExpiredError{}
+	}
+
 	return resp, nil
 }
 

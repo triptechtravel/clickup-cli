@@ -21,6 +21,13 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("ClickUp API error (HTTP %d): %s", e.StatusCode, e.Err)
 }
 
+// AuthExpiredError indicates the API token is invalid, expired, or revoked.
+type AuthExpiredError struct{}
+
+func (e *AuthExpiredError) Error() string {
+	return "authentication expired or revoked. Run 'clickup auth login' to re-authenticate"
+}
+
 // HandleErrorResponse checks an HTTP response for errors and returns a user-friendly error.
 func HandleErrorResponse(resp *http.Response) error {
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {

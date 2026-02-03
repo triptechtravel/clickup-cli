@@ -1,8 +1,10 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 
+	"github.com/triptechtravel/clickup-cli/internal/api"
 	"github.com/triptechtravel/clickup-cli/internal/iostreams"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/root"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
@@ -18,6 +20,11 @@ func Run() int {
 	if err := rootCmd.Execute(); err != nil {
 		if cmdutil.IsSilentError(err) {
 			return 1
+		}
+		var authExpired *api.AuthExpiredError
+		if errors.As(err, &authExpired) {
+			fmt.Fprintln(ios.ErrOut, authExpired.Error())
+			return 4
 		}
 		if cmdutil.IsAuthError(err) {
 			fmt.Fprintln(ios.ErrOut, err.Error())
