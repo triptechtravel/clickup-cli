@@ -14,21 +14,25 @@ AI agents work best when they have full context about what they're building. Ins
 ## Typical AI workflow
 
 ```sh
-# 1. Agent reads the task to understand requirements
+# 1. Agent discovers where work is happening (if task ID is unknown)
+clickup task recent --json
+# Returns tasks with folder/list context so the agent knows where to search
+
+# 2. Agent reads the task to understand requirements
 clickup task view CU-abc123 --json
 
-# 2. Agent reads comments for additional context
+# 3. Agent reads comments for additional context
 clickup comment list CU-abc123
 
-# 3. Agent writes code...
+# 4. Agent writes code...
 
-# 4. Agent updates the task status
+# 5. Agent updates the task status
 clickup status set "code review" CU-abc123
 
-# 5. Agent adds a comment summarizing what was done
+# 6. Agent adds a comment summarizing what was done
 clickup comment add CU-abc123 "Implemented auth flow with JWT tokens. PR #42 is up."
 
-# 6. Agent syncs the ClickUp task info into the PR description
+# 7. Agent syncs the ClickUp task info into the PR description
 clickup link sync 42 --task CU-abc123
 ```
 
@@ -175,8 +179,27 @@ clickup task activity CU-abc123 --json
 
 These commands combine naturally with the existing workflow. For example, an agent might read the task, check its activity for context, implement the feature, then set points, log time, and update the status -- all in a single automated session.
 
+## Discovering tasks and locations
+
+When the agent doesn't know which task to work on, or search isn't finding results, `task recent` provides a quick way to discover the user's active work and its location in ClickUp:
+
+```sh
+# Get recent tasks with folder/list context (2 API calls)
+clickup task recent --json
+
+# Output includes list_name and folder_name for each task:
+# [{"id":"abc123","name":"Fix login bug","status":"in progress",
+#   "list_name":"Sprint 84","folder_name":"Engineering Sprint"}]
+
+# Use the discovered folder to narrow a search
+clickup task search "auth" --folder "Engineering Sprint"
+```
+
+The `task search` command also suggests `task recent` when no results are found, both in interactive mode (as a menu option) and non-interactive mode (as a tip message).
+
 ## Tips
 
+- Use `clickup task recent --json` to discover active lists/folders before searching
 - Use `--json` output when you need the agent to parse task data programmatically
 - Use `clickup comment list` to give the agent context from team discussions
 - Use `clickup sprint current --json` to help the agent understand project priorities
@@ -185,3 +208,4 @@ These commands combine naturally with the existing workflow. For example, an age
 - Use `clickup task time log` to automatically track time spent by the agent
 - Use `clickup field list --list-id ID --json` to discover custom fields before setting them
 - Use `clickup task dependency add` to express task relationships programmatically
+- When search returns no results, check `clickup task recent` to find the right folder/list

@@ -69,9 +69,9 @@ func resolveTask(f *cmdutil.Factory, flagTaskID string) (*resolveTaskResult, err
 
 	// Non-interactive: return a helpful error.
 	if gitErr != nil {
-		return nil, fmt.Errorf("could not detect git context: %w\n\nTip: use --task to specify the task ID explicitly", gitErr)
+		return nil, fmt.Errorf("could not detect git context: %w\n\nTip: use --task to specify the task ID, or run 'clickup task recent' to find your tasks", gitErr)
 	}
-	return nil, fmt.Errorf("%s\n\nTip: use --task to specify the task ID explicitly",
+	return nil, fmt.Errorf("%s\n\nTip: use --task to specify the task ID, or run 'clickup task recent' to find your tasks",
 		git.BranchNamingSuggestion(gitCtx.Branch))
 }
 
@@ -83,6 +83,7 @@ func promptForTask(f *cmdutil.Factory) (string, error) {
 
 	idx, err := p.Select("How would you like to specify the task?", []string{
 		"Search for a task by name",
+		"Show my recent tasks",
 		"Enter a task ID manually",
 		"Cancel",
 	})
@@ -94,6 +95,8 @@ func promptForTask(f *cmdutil.Factory) (string, error) {
 	case 0:
 		return promptSearchTask(f, p)
 	case 1:
+		return promptRecentTasks(f, p)
+	case 2:
 		return promptManualTaskID(p)
 	default:
 		return "", fmt.Errorf("cancelled")
@@ -123,8 +126,9 @@ func promptSearchTask(f *cmdutil.Factory, p *prompter.Prompter) (string, error) 
 
 	if len(tasks) == 0 {
 		fmt.Fprintf(ios.ErrOut, "No tasks found matching %q\n", query)
-		// Offer to try again or enter manually.
+		// Offer recent tasks, retry, or manual entry.
 		retryIdx, err := p.Select("What would you like to do?", []string{
+			"Show my recent tasks",
 			"Try a different search",
 			"Enter a task ID manually",
 			"Cancel",
@@ -134,8 +138,10 @@ func promptSearchTask(f *cmdutil.Factory, p *prompter.Prompter) (string, error) 
 		}
 		switch retryIdx {
 		case 0:
-			return promptSearchTask(f, p)
+			return promptRecentTasks(f, p)
 		case 1:
+			return promptSearchTask(f, p)
+		case 2:
 			return promptManualTaskID(p)
 		default:
 			return "", fmt.Errorf("cancelled")
@@ -285,4 +291,50 @@ func searchTasks(f *cmdutil.Factory, query string) ([]resolveSearchTask, error) 
 	}
 
 	return allTasks, nil
+}
+
+// promptRecentTasks fetches the user's recent tasks and lets them pick one.
+func promptRecentTasks(f *cmdutil.Factory, p *prompter.Prompter) (string, error) {
+	ios := f.IOStreams
+	cs := ios.ColorScheme()
+
+	fmt.Fprintln(ios.ErrOut, "Fetching your recent tasks...")
+	tasks, err := cmdutil.FetchRecentTasks(f, 15)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch recent tasks: %w", err)
+	}
+
+	if len(tasks) == 0 {
+		fmt.Fprintln(ios.ErrOut, "No recent tasks found.")
+		return promptManualTaskID(p)
+	}
+
+	// Show location context.
+	locations := cmdutil.LocationSummary(tasks)
+	if len(locations) > 0 {
+		fmt.Fprintf(ios.ErrOut, "Your active locations: %s\n", strings.Join(locations, ", "))
+	}
+
+	// Build selection options.
+	options := make([]string, len(tasks))
+	for i, t := range tasks {
+		options[i] = cmdutil.FormatRecentTaskOption(t)
+	}
+	options = append(options, "Enter task ID manually", "Cancel")
+
+	selected, err := p.Select("Select a task:", options)
+	if err != nil {
+		return "", err
+	}
+
+	if selected == len(options)-1 { // Cancel
+		return "", fmt.Errorf("cancelled")
+	}
+	if selected == len(options)-2 { // Manual entry
+		return promptManualTaskID(p)
+	}
+
+	t := tasks[selected]
+	fmt.Fprintf(ios.ErrOut, "Selected task %s\n", cs.Bold(t.ID))
+	return t.ID, nil
 }

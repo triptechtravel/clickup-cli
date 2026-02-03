@@ -202,9 +202,14 @@ clickup task edit CU-abc123 --type 1
 
 Search tasks by name with fuzzy matching and optional comment search. The `<query>` argument matches against task names as a case-insensitive substring. To search by task ID, pass the full ID (e.g., `CU-abc123`).
 
+If no results are found, the CLI suggests running `clickup task recent` to discover active folders and lists. In interactive mode, "Show my recent tasks" is offered as a menu option.
+
 ```sh
 # Search by name substring
 clickup task search "geozone" --comments --pick
+
+# Search within a specific folder (use 'task recent' to discover folders)
+clickup task search "geozone" --folder "Engineering Sprint"
 
 # Search and output as JSON
 clickup task search "login bug" --json
@@ -216,6 +221,30 @@ clickup task search "login bug" --json
 | `--folder NAME` | Limit search to a specific folder (name, substring match) |
 | `--pick` | Interactively pick from results and print its task ID |
 | `--comments` | Also search within task comment bodies |
+| `--json` | Output as JSON |
+| `--jq EXPR` | Filter JSON output with a jq expression |
+
+### `task recent`
+
+Show recently updated tasks with folder and list context. By default shows tasks assigned to you. Use `--all` for all team activity.
+
+This command is particularly useful for discovering which folders and lists contain active work, so you can narrow searches with `--folder` or `--space`.
+
+```sh
+# Show your recent tasks with location context
+clickup task recent
+
+# Show all team activity
+clickup task recent --all
+
+# JSON output for scripting or AI agents
+clickup task recent --json --limit 10
+```
+
+| Flag | Description |
+|------|-------------|
+| `--limit N` | Maximum number of tasks to show (default 20) |
+| `--all` | Show all team tasks, not just yours |
 | `--json` | Output as JSON |
 | `--jq EXPR` | Filter JSON output with a jq expression |
 

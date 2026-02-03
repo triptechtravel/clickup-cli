@@ -98,6 +98,7 @@ clickup link pr
 | `clickup task create --list-id ID` | Create a new task (interactive or flags) |
 | `clickup task edit [task-id]` | Edit task fields (name, status, priority, dates, tags, points, custom fields, etc.) |
 | `clickup task search <query>` | Search tasks with fuzzy matching |
+| `clickup task recent` | Show your recently updated tasks with folder/list context |
 | `clickup task activity [task-id]` | View task details and comment history |
 | `clickup task time log [task-id]` | Log time to a task |
 | `clickup task time list [task-id]` | View time entries for a task |
@@ -233,8 +234,14 @@ clickup sprint current --json --jq '.[].name'
 The CLI is designed to work well with AI agents like Claude Code, GitHub Copilot, and Cursor. An AI agent can read task context from ClickUp, make code changes, and update ClickUp -- all without leaving the terminal.
 
 ```sh
+# AI agent discovers where work is happening
+clickup task recent --json
+
 # AI agent reads the task to understand requirements
 clickup task view CU-abc123 --json
+
+# Search within a specific folder/list discovered from recent tasks
+clickup task search "migration" --folder "Engineering Sprint"
 
 # After making changes, the agent updates ClickUp
 clickup status set "code review" CU-abc123
@@ -243,6 +250,8 @@ clickup link sync --task CU-abc123
 ```
 
 The `--json` flag on all commands outputs structured data that agents can parse. The `--task` and `--repo` flags on link commands allow targeting any task/repo without needing to be on the right branch.
+
+When search returns no results, the CLI suggests `clickup task recent` to help discover active lists and folders. The `task recent` command shows each task's folder and list, so agents can quickly identify where to narrow their search.
 
 ## GitHub Actions
 

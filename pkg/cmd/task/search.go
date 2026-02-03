@@ -133,7 +133,10 @@ whether to refine the search. Use --pick to interactively select a single
 task and print only its ID.
 
 When no exact match is found, the search automatically tries individual
-words from the query and shows potentially related tasks.`,
+words from the query and shows potentially related tasks.
+
+If search returns no results, use 'clickup task recent' to see your
+recently updated tasks and discover which folders/lists to search in.`,
 		Example: `  # Search for tasks mentioning "payload"
   clickup task search payload
 
@@ -148,6 +151,10 @@ words from the query and shows potentially related tasks.`,
 
   # Interactively pick a task (prints selected task ID)
   clickup task search geozone --pick
+
+  # If search returns no results, find your active folders first
+  clickup task recent
+  clickup task search geozone --folder "Engineering Sprint"
 
   # JSON output
   clickup task search geozone --json`,
@@ -253,6 +260,7 @@ func runSearch(opts *searchOptions) error {
 		if interactive {
 			return noResultsPrompt(ios, opts)
 		}
+		fmt.Fprintf(ios.ErrOut, "\nTip: run 'clickup task recent' to see your recently updated tasks and discover active lists/folders.\n")
 		return nil
 	}
 
@@ -517,22 +525,16 @@ func dedup(tasks []searchTask) []searchTask {
 func noResultsPrompt(ios *iostreams.IOStreams, opts *searchOptions) error {
 	p := prompter.New(ios)
 	idx, err := p.Select("What would you like to do?", []string{
-		"Enter a task ID manually",
+		"Show my recent tasks",
 		"Try a different search",
+		"Enter a task ID manually",
 		"Cancel",
 	})
-	if err != nil || idx == 2 {
+	if err != nil || idx == 3 {
 		return nil
 	}
 	if idx == 0 {
-		taskID, err := p.Input("Task ID:", "")
-		if err != nil {
-			return err
-		}
-		if taskID != "" {
-			fmt.Fprintln(ios.Out, taskID)
-		}
-		return nil
+		return showRecentTasksInteractive(ios, opts)
 	}
 	if idx == 1 {
 		newQuery, err := p.Input("Search query:", "")
@@ -544,7 +546,79 @@ func noResultsPrompt(ios *iostreams.IOStreams, opts *searchOptions) error {
 			return runSearch(opts)
 		}
 	}
+	if idx == 2 {
+		taskID, err := p.Input("Task ID:", "")
+		if err != nil {
+			return err
+		}
+		if taskID != "" {
+			fmt.Fprintln(ios.Out, taskID)
+		}
+		return nil
+	}
 	return nil
+}
+
+func showRecentTasksInteractive(ios *iostreams.IOStreams, opts *searchOptions) error {
+	cs := ios.ColorScheme()
+
+	fmt.Fprintln(ios.ErrOut, "Fetching your recent tasks...")
+	tasks, err := cmdutil.FetchRecentTasks(opts.factory, 15)
+	if err != nil {
+		return fmt.Errorf("failed to fetch recent tasks: %w", err)
+	}
+
+	if len(tasks) == 0 {
+		fmt.Fprintln(ios.ErrOut, "No recent tasks found.")
+		return nil
+	}
+
+	// Show location context.
+	locations := cmdutil.LocationSummary(tasks)
+	if len(locations) > 0 {
+		fmt.Fprintf(ios.ErrOut, "Your active locations: %s\n", strings.Join(locations, ", "))
+		fmt.Fprintf(ios.ErrOut, "Tip: use %s to search within a specific folder.\n\n",
+			cs.Bold("--folder \"name\""))
+	}
+
+	if opts.pick {
+		// In pick mode, let user select a task.
+		p := prompter.New(ios)
+		options := make([]string, len(tasks))
+		for i, t := range tasks {
+			options[i] = cmdutil.FormatRecentTaskOption(t)
+		}
+		options = append(options, "Cancel")
+
+		selected, err := p.Select("Select a task:", options)
+		if err != nil || selected == len(options)-1 {
+			return nil
+		}
+		fmt.Fprintln(ios.Out, tasks[selected].ID)
+		return nil
+	}
+
+	// Display as table.
+	tp := tableprinter.New(ios)
+	tp.AddField(cs.Bold("ID"))
+	tp.AddField(cs.Bold("NAME"))
+	tp.AddField(cs.Bold("STATUS"))
+	tp.AddField(cs.Bold("FOLDER"))
+	tp.AddField(cs.Bold("LIST"))
+	tp.EndRow()
+	tp.SetTruncateColumn(1)
+
+	for _, t := range tasks {
+		tp.AddField(t.ID)
+		tp.AddField(t.Name)
+		statusFn := cs.StatusColor(strings.ToLower(t.Status))
+		tp.AddField(statusFn(t.Status))
+		tp.AddField(t.FolderName)
+		tp.AddField(t.ListName)
+		tp.EndRow()
+	}
+
+	return tp.Render()
 }
 
 func pickTask(ios *iostreams.IOStreams, allTasks []searchTask) error {
