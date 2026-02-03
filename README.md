@@ -13,10 +13,13 @@ A command-line tool for working with ClickUp tasks, comments, and sprints -- des
 
 - **Task management** -- view, list, create, and edit ClickUp tasks from the terminal
 - **Git integration** -- auto-detects task IDs from branch names (`CU-abc123` or `PROJ-42`)
-- **GitHub linking** -- links PRs, branches, and commits to ClickUp tasks via comments
+- **GitHub linking** -- links PRs, branches, and commits to ClickUp tasks via rich text comments
+- **Bidirectional sync** -- `link sync` pushes ClickUp task info into GitHub PR descriptions and vice versa
 - **Sprint dashboard** -- shows current sprint tasks grouped by status with assignees and priorities
 - **Inbox** -- surfaces recent @mentions across your workspace
 - **Fuzzy status matching** -- change task status with partial or fuzzy input
+- **AI-friendly** -- structured `--json` output and explicit `--task`/`--repo` flags make it easy for AI coding agents (Claude Code, Copilot, Cursor) to read ClickUp context and update tasks as part of a development workflow
+- **GitHub Actions ready** -- automate status changes, PR linking, and task updates on PR events
 - **JSON output** -- all list/view commands support `--json` and `--jq` for scripting
 - **Shell completions** -- bash, zsh, fish, and PowerShell
 - **Secure credentials** -- tokens stored in the system keyring
@@ -100,6 +103,7 @@ clickup link pr
 | Command | Description |
 |---------|-------------|
 | `clickup link pr [NUMBER]` | Link a GitHub PR to a ClickUp task |
+| `clickup link sync [NUMBER]` | Sync ClickUp task info into a GitHub PR body (and link back) |
 | `clickup link branch` | Link the current git branch to a task |
 | `clickup link commit [SHA]` | Link a git commit to a task |
 | `clickup sprint current` | Show tasks in the active sprint |
@@ -206,6 +210,103 @@ All list and view commands support `--json` for machine-readable output, and `--
 ```sh
 clickup task view CU-abc123 --json
 clickup sprint current --json --jq '.[].name'
+```
+
+## Using with AI coding agents
+
+The CLI is designed to work well with AI agents like Claude Code, GitHub Copilot, and Cursor. An AI agent can read task context from ClickUp, make code changes, and update ClickUp -- all without leaving the terminal.
+
+```sh
+# AI agent reads the task to understand requirements
+clickup task view CU-abc123 --json
+
+# After making changes, the agent updates ClickUp
+clickup status set "code review" CU-abc123
+clickup comment add CU-abc123 "Implemented the feature, PR is up for review"
+clickup link sync --task CU-abc123
+```
+
+The `--json` flag on all commands outputs structured data that agents can parse. The `--task` and `--repo` flags on link commands allow targeting any task/repo without needing to be on the right branch.
+
+## GitHub Actions
+
+Automate ClickUp updates on PR events by adding workflow files to your repository. Copy these from the [`examples/`](https://github.com/triptechtravel/clickup-cli/tree/main/examples) directory or use them as a starting point.
+
+### Sync task info on PR open
+
+```yaml
+# .github/workflows/clickup-sync.yml
+name: ClickUp Sync
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clickup CLI
+        run: |
+          curl -sL https://github.com/triptechtravel/clickup-cli/releases/latest/download/clickup_linux_amd64.tar.gz | tar xz
+          sudo mv clickup /usr/local/bin/
+      - name: Authenticate
+        run: echo "${{ secrets.CLICKUP_TOKEN }}" | clickup auth login --with-token
+      - name: Sync PR with ClickUp task
+        run: clickup link sync ${{ github.event.pull_request.number }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+### Set status to "done" on merge
+
+```yaml
+# .github/workflows/clickup-done.yml
+name: ClickUp Done
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  done:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clickup CLI
+        run: |
+          curl -sL https://github.com/triptechtravel/clickup-cli/releases/latest/download/clickup_linux_amd64.tar.gz | tar xz
+          sudo mv clickup /usr/local/bin/
+      - name: Authenticate
+        run: echo "${{ secrets.CLICKUP_TOKEN }}" | clickup auth login --with-token
+      - name: Set task to done
+        run: clickup status set "done"
+```
+
+### Comment CI results on task
+
+```yaml
+# .github/workflows/clickup-ci.yml
+name: ClickUp CI Status
+on:
+  check_suite:
+    types: [completed]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clickup CLI
+        run: |
+          curl -sL https://github.com/triptechtravel/clickup-cli/releases/latest/download/clickup_linux_amd64.tar.gz | tar xz
+          sudo mv clickup /usr/local/bin/
+      - name: Authenticate
+        run: echo "${{ secrets.CLICKUP_TOKEN }}" | clickup auth login --with-token
+      - name: Post CI result
+        run: |
+          STATUS="${{ github.event.check_suite.conclusion }}"
+          clickup comment add "" "CI ${STATUS}: ${{ github.event.check_suite.head_branch }} (${{ github.sha }})"
 ```
 
 ## Documentation

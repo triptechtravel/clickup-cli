@@ -1,0 +1,34 @@
+# Automatically set the ClickUp task status to "done" when a PR is merged.
+#
+# Requires:
+#   - CLICKUP_TOKEN secret in your repository settings
+#
+# The workflow detects the ClickUp task ID from the merged PR's branch name.
+# Only runs when a PR is merged (not just closed).
+
+name: ClickUp Done
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  done:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 1
+
+      - name: Install clickup CLI
+        run: |
+          curl -sL https://github.com/triptechtravel/clickup-cli/releases/latest/download/clickup_linux_amd64.tar.gz | tar xz
+          sudo mv clickup /usr/local/bin/
+
+      - name: Authenticate with ClickUp
+        run: echo "${{ secrets.CLICKUP_TOKEN }}" | clickup auth login --with-token
+
+      - name: Set task to done
+        run: clickup status set "done"

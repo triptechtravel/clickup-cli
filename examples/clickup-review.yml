@@ -1,0 +1,40 @@
+# Update ClickUp task status based on PR review decisions.
+#
+# Requires:
+#   - CLICKUP_TOKEN secret in your repository settings
+#
+# When a PR review is submitted:
+#   - "approved" sets the task to "awaiting testing" (or your equivalent)
+#   - "changes_requested" sets the task back to "in progress"
+#
+# Adjust the status names to match your ClickUp workflow.
+
+name: ClickUp Review Status
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  update-status:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clickup CLI
+        run: |
+          curl -sL https://github.com/triptechtravel/clickup-cli/releases/latest/download/clickup_linux_amd64.tar.gz | tar xz
+          sudo mv clickup /usr/local/bin/
+
+      - name: Authenticate with ClickUp
+        run: echo "${{ secrets.CLICKUP_TOKEN }}" | clickup auth login --with-token
+
+      - name: Update task status on approval
+        if: github.event.review.state == 'approved'
+        run: clickup status set "awaiting testing"
+
+      - name: Update task status on changes requested
+        if: github.event.review.state == 'changes_requested'
+        run: |
+          clickup status set "in progress"
+          clickup comment add "" "Changes requested by ${{ github.event.review.user.login }} on PR #${{ github.event.pull_request.number }}"

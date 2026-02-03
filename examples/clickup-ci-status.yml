@@ -1,0 +1,47 @@
+# Post CI check results as a comment on the linked ClickUp task.
+#
+# Requires:
+#   - CLICKUP_TOKEN secret in your repository settings
+#
+# Posts a comment on the ClickUp task when CI checks complete, including
+# the result (success/failure), branch name, and commit SHA.
+
+name: ClickUp CI Status
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+          fetch-depth: 1
+
+      - name: Install clickup CLI
+        run: |
+          curl -sL https://github.com/triptechtravel/clickup-cli/releases/latest/download/clickup_linux_amd64.tar.gz | tar xz
+          sudo mv clickup /usr/local/bin/
+
+      - name: Authenticate with ClickUp
+        run: echo "${{ secrets.CLICKUP_TOKEN }}" | clickup auth login --with-token
+
+      - name: Post CI result to ClickUp
+        run: |
+          CONCLUSION="${{ github.event.workflow_run.conclusion }}"
+          BRANCH="${{ github.event.workflow_run.head_branch }}"
+          SHA="${{ github.event.workflow_run.head_sha }}"
+          SHORT_SHA="${SHA:0:7}"
+          RUN_URL="${{ github.event.workflow_run.html_url }}"
+
+          if [ "$CONCLUSION" = "success" ]; then
+            ICON="✅"
+          else
+            ICON="❌"
+          fi
+
+          clickup comment add "" "${ICON} CI ${CONCLUSION}: ${BRANCH} (${SHORT_SHA}) — ${RUN_URL}"

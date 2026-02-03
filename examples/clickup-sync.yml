@@ -1,0 +1,38 @@
+# Sync ClickUp task info into GitHub PR descriptions when PRs are opened or updated.
+#
+# Requires:
+#   - CLICKUP_TOKEN secret in your repository settings
+#
+# The workflow detects the ClickUp task ID from the PR branch name (e.g. CU-abc123
+# or PROJ-42) and updates the PR body with a table showing the task name, status,
+# priority, and assignees. It also posts a rich text link comment on the ClickUp task.
+#
+# The PR body update is idempotent -- running multiple times updates the existing
+# block rather than duplicating it.
+
+name: ClickUp Sync
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clickup CLI
+        run: |
+          curl -sL https://github.com/triptechtravel/clickup-cli/releases/latest/download/clickup_linux_amd64.tar.gz | tar xz
+          sudo mv clickup /usr/local/bin/
+
+      - name: Authenticate with ClickUp
+        run: echo "${{ secrets.CLICKUP_TOKEN }}" | clickup auth login --with-token
+
+      - name: Sync PR with ClickUp task
+        run: clickup link sync ${{ github.event.pull_request.number }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
