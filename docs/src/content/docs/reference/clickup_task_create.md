@@ -54,6 +54,8 @@ clickup task create [flags]
       --due-date-time                 Include time component in due date
       --field stringArray             Set a custom field value ("Name=value", repeatable)
   -h, --help                          help for create
+      --jq string                     Filter JSON output using a jq expression
+      --json                          Output JSON
       --links-to string               Link to another task by ID
       --list-id string                ClickUp list ID (required)
       --markdown-description string   Task description in markdown
@@ -66,6 +68,7 @@ clickup task create [flags]
       --start-date-time               Include time component in start date
       --status string                 Task status
       --tags strings                  Tags to add to the task
+      --template string               Format JSON output using a Go template
       --time-estimate string          Time estimate (e.g. 2h, 30m, 1h30m)
       --type int                      Task type (0=task, 1=milestone, or custom type ID) (default -1)
 ```

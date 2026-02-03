@@ -125,5 +125,14 @@ func addRun(opts *addOptions) error {
 	}
 
 	fmt.Fprintf(ios.Out, "%s Comment added to task %s\n", cs.Green("!"), cs.Bold(taskID))
+
+	// Quick actions footer
+	fmt.Fprintln(ios.Out)
+	fmt.Fprintln(ios.Out, cs.Gray("---"))
+	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup comment list %s\n", cs.Gray("List:"), taskID)
+	fmt.Fprintf(ios.Out, "  %s  clickup task view %s\n", cs.Gray("View:"), taskID)
+	fmt.Fprintf(ios.Out, "  %s  clickup task activity %s\n", cs.Gray("Activity:"), taskID)
+
 	return nil
 }

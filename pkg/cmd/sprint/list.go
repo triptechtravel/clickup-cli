@@ -179,7 +179,18 @@ func runSprintList(f *cmdutil.Factory, folderID string, jsonFlags *cmdutil.JSONF
 		tp.EndRow()
 	}
 
-	return tp.Render()
+	if err := tp.Render(); err != nil {
+		return err
+	}
+
+	// Quick actions footer
+	fmt.Fprintln(ios.Out)
+	fmt.Fprintln(ios.Out, cs.Gray("---"))
+	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup sprint current\n", cs.Gray("Current:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup sprint list --json\n", cs.Gray("JSON:"))
+
+	return nil
 }
 
 func classifySprint(start, due, now time.Time) string {

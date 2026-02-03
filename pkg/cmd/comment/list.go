@@ -127,7 +127,19 @@ func listRun(opts *listOptions) error {
 		tp.EndRow()
 	}
 
-	return tp.Render()
+	if err := tp.Render(); err != nil {
+		return err
+	}
+
+	// Quick actions footer
+	fmt.Fprintln(ios.Out)
+	fmt.Fprintln(ios.Out, cs.Gray("---"))
+	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup comment add %s \"text\"\n", cs.Gray("Reply:"), taskID)
+	fmt.Fprintf(ios.Out, "  %s  clickup task view %s\n", cs.Gray("View:"), taskID)
+	fmt.Fprintf(ios.Out, "  %s  clickup comment list %s --json\n", cs.Gray("JSON:"), taskID)
+
+	return nil
 }
 
 // formatCommentDate converts a unix timestamp in milliseconds (as string) to a relative time.

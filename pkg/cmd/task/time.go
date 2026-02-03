@@ -178,6 +178,14 @@ func runTimeLog(f *cmdutil.Factory, opts *timeLogOptions) error {
 		cs.Bold(taskID),
 	)
 
+	// Quick actions footer
+	fmt.Fprintln(ios.Out)
+	fmt.Fprintln(ios.Out, cs.Gray("---"))
+	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup task time list %s\n", cs.Gray("Entries:"), taskID)
+	fmt.Fprintf(ios.Out, "  %s  clickup task view %s\n", cs.Gray("View:"), taskID)
+	fmt.Fprintf(ios.Out, "  %s  clickup task time list %s --json\n", cs.Gray("JSON:"), taskID)
+
 	return nil
 }
 
@@ -306,10 +314,10 @@ func runTimeList(f *cmdutil.Factory, opts *timeListOptions) error {
 		return nil
 	}
 
-	return printTimeEntryTable(f, result.Data)
+	return printTimeEntryTable(f, result.Data, taskID)
 }
 
-func printTimeEntryTable(f *cmdutil.Factory, entries []timeEntry) error {
+func printTimeEntryTable(f *cmdutil.Factory, entries []timeEntry, taskID string) error {
 	ios := f.IOStreams
 	cs := ios.ColorScheme()
 	tp := tableprinter.New(ios)
@@ -345,7 +353,19 @@ func printTimeEntryTable(f *cmdutil.Factory, entries []timeEntry) error {
 		tp.EndRow()
 	}
 
-	return tp.Render()
+	if err := tp.Render(); err != nil {
+		return err
+	}
+
+	// Quick actions footer
+	fmt.Fprintln(ios.Out)
+	fmt.Fprintln(ios.Out, cs.Gray("---"))
+	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup task time log %s --duration <dur>\n", cs.Gray("Log:"), taskID)
+	fmt.Fprintf(ios.Out, "  %s  clickup task view %s\n", cs.Gray("View:"), taskID)
+	fmt.Fprintf(ios.Out, "  %s  clickup task time list %s --json\n", cs.Gray("JSON:"), taskID)
+
+	return nil
 }
 
 // formatDuration converts a duration in milliseconds (as a string) to a human-readable format.

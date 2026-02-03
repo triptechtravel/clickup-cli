@@ -283,6 +283,13 @@ func runSprintCurrent(f *cmdutil.Factory, folderID string, jsonFlags *cmdutil.JS
 		fmt.Fprintln(ios.Out)
 	}
 
+	// Quick actions footer
+	fmt.Fprintln(ios.Out, cs.Gray("---"))
+	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup task view <id>\n", cs.Gray("View:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup task edit <id> --status <status>\n", cs.Gray("Edit:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup sprint current --json\n", cs.Gray("JSON:"))
+
 	return nil
 }
 

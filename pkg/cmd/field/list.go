@@ -88,6 +88,14 @@ func runFieldList(f *cmdutil.Factory, opts *listOptions) error {
 
 	fmt.Fprintf(ios.Out, "%s\n", cs.Gray(fmt.Sprintf("Total: %d fields", len(fields))))
 
+	// Quick actions footer
+	fmt.Fprintln(ios.Out)
+	fmt.Fprintln(ios.Out, cs.Gray("---"))
+	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup task edit <id> --field \"Name=value\"\n", cs.Gray("Set:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup task create --list-id %s --field \"Name=value\"\n", cs.Gray("Create:"), opts.listID)
+	fmt.Fprintf(ios.Out, "  %s  clickup field list --list-id %s --json\n", cs.Gray("JSON:"), opts.listID)
+
 	return nil
 }
 

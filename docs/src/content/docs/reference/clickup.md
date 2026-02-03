@@ -28,6 +28,7 @@ Links GitHub PRs, branches, and commits to ClickUp tasks.
 * [clickup field](/clickup-cli/reference/clickup_field/)	 - Manage custom fields
 * [clickup inbox](/clickup-cli/reference/clickup_inbox/)	 - Show recent @mentions
 * [clickup link](/clickup-cli/reference/clickup_link/)	 - Link GitHub objects to ClickUp tasks
+* [clickup member](/clickup-cli/reference/clickup_member/)	 - Manage workspace members
 * [clickup space](/clickup-cli/reference/clickup_space/)	 - Manage spaces
 * [clickup sprint](/clickup-cli/reference/clickup_sprint/)	 - Manage sprints
 * [clickup status](/clickup-cli/reference/clickup_status/)	 - Manage task statuses

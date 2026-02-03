@@ -108,5 +108,18 @@ func runRecent(opts *recentOptions) error {
 		tp.EndRow()
 	}
 
-	return tp.Render()
+	if err := tp.Render(); err != nil {
+		return err
+	}
+
+	// Quick actions footer
+	fmt.Fprintln(ios.Out)
+	fmt.Fprintln(ios.Out, cs.Gray("---"))
+	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup task view <id>\n", cs.Gray("View:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup task search <query>\n", cs.Gray("Search:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup task edit <id> --status <status>\n", cs.Gray("Edit:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup task recent --json\n", cs.Gray("JSON:"))
+
+	return nil
 }

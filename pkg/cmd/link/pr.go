@@ -104,5 +104,14 @@ func prRun(opts *prOptions) error {
 
 	fmt.Fprintf(ios.Out, "%s Linked PR #%d to task %s\n",
 		cs.Green("!"), pr.Number, cs.Bold(taskID))
+
+	// Quick actions footer
+	fmt.Fprintln(ios.Out)
+	fmt.Fprintln(ios.Out, cs.Gray("---"))
+	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup task view %s\n", cs.Gray("View:"), taskID)
+	fmt.Fprintf(ios.Out, "  %s  clickup link sync\n", cs.Gray("Sync:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup status set <status> %s\n", cs.Gray("Status:"), taskID)
+
 	return nil
 }

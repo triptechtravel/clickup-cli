@@ -98,7 +98,21 @@ func runList(f *cmdutil.Factory, opts *listOptions) error {
 		return opts.jsonFlags.OutputJSON(ios.Out, tasks)
 	}
 
-	return printTaskTable(f, tasks)
+	if err := printTaskTable(f, tasks); err != nil {
+		return err
+	}
+
+	// Quick actions footer
+	cs := ios.ColorScheme()
+	fmt.Fprintln(ios.Out)
+	fmt.Fprintln(ios.Out, cs.Gray("---"))
+	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup task view <id>\n", cs.Gray("View:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup task edit <id> --status <status>\n", cs.Gray("Edit:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup status set <status> <id>\n", cs.Gray("Status:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup task list --list-id %s --json\n", cs.Gray("JSON:"), opts.listID)
+
+	return nil
 }
 
 func printTaskTable(f *cmdutil.Factory, tasks []clickup.Task) error {

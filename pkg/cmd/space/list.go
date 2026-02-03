@@ -61,7 +61,19 @@ func NewCmdSpaceList(f *cmdutil.Factory) *cobra.Command {
 				tp.EndRow()
 			}
 
-			return tp.Render()
+			if err := tp.Render(); err != nil {
+				return err
+			}
+
+			// Quick actions footer
+			fmt.Fprintln(f.IOStreams.Out)
+			fmt.Fprintln(f.IOStreams.Out, cs.Gray("---"))
+			fmt.Fprintln(f.IOStreams.Out, cs.Gray("Quick actions:"))
+			fmt.Fprintf(f.IOStreams.Out, "  %s  clickup space select\n", cs.Gray("Select:"))
+			fmt.Fprintf(f.IOStreams.Out, "  %s  clickup task recent\n", cs.Gray("Recent:"))
+			fmt.Fprintf(f.IOStreams.Out, "  %s  clickup space list --json\n", cs.Gray("JSON:"))
+
+			return nil
 		},
 	}
 

@@ -33,6 +33,7 @@ type createOptions struct {
 	notifyAll           bool
 	customItemID        int
 	fields              []string
+	jsonFlags           cmdutil.JSONFlags
 }
 
 // NewCmdCreate returns a command to create a new ClickUp task.
@@ -98,6 +99,8 @@ Additional properties can be set with flags:
 	cmd.Flags().StringArrayVar(&opts.fields, "field", nil, `Set a custom field value ("Name=value", repeatable)`)
 
 	_ = cmd.MarkFlagRequired("list-id")
+
+	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 
 	return cmd
 }
@@ -279,10 +282,23 @@ func runCreate(f *cmdutil.Factory, opts *createOptions) error {
 		id = task.CustomID
 	}
 
+	if opts.jsonFlags.WantsJSON() {
+		return opts.jsonFlags.OutputJSON(ios.Out, task)
+	}
+
 	fmt.Fprintf(ios.Out, "%s Created task %s %s\n", cs.Green("!"), cs.Bold(task.Name), cs.Gray("#"+id))
 	if task.URL != "" {
 		fmt.Fprintf(ios.Out, "%s\n", cs.Cyan(task.URL))
 	}
+
+	// Quick actions footer
+	fmt.Fprintln(ios.Out)
+	fmt.Fprintln(ios.Out, cs.Gray("---"))
+	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup task view %s\n", cs.Gray("View:"), id)
+	fmt.Fprintf(ios.Out, "  %s  clickup task edit %s --status <status>\n", cs.Gray("Edit:"), id)
+	fmt.Fprintf(ios.Out, "  %s  clickup link pr --task %s\n", cs.Gray("Link PR:"), id)
+	fmt.Fprintf(ios.Out, "  %s  clickup comment add %s \"text\"\n", cs.Gray("Comment:"), id)
 
 	return nil
 }

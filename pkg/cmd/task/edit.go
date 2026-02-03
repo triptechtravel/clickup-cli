@@ -33,6 +33,7 @@ type editOptions struct {
 	customItemID        int
 	fields              []string
 	clearFields         []string
+	jsonFlags           cmdutil.JSONFlags
 }
 
 // NewCmdEdit returns a command to edit an existing ClickUp task.
@@ -91,6 +92,8 @@ available custom fields and their types.`,
 	cmd.Flags().IntVar(&opts.customItemID, "type", -1, "Task type (0=task, 1=milestone, or custom type ID)")
 	cmd.Flags().StringArrayVar(&opts.fields, "field", nil, `Set a custom field value ("Name=value", repeatable)`)
 	cmd.Flags().StringArrayVar(&opts.clearFields, "clear-field", nil, `Clear a custom field value ("Name", repeatable)`)
+
+	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 
 	return cmd
 }
@@ -298,10 +301,22 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 		id = task.CustomID
 	}
 
+	if opts.jsonFlags.WantsJSON() {
+		return opts.jsonFlags.OutputJSON(ios.Out, task)
+	}
+
 	fmt.Fprintf(ios.Out, "%s Updated task %s %s\n", cs.Green("!"), cs.Bold(task.Name), cs.Gray("#"+id))
 	if task.URL != "" {
 		fmt.Fprintf(ios.Out, "%s\n", cs.Cyan(task.URL))
 	}
+
+	// Quick actions footer
+	fmt.Fprintln(ios.Out)
+	fmt.Fprintln(ios.Out, cs.Gray("---"))
+	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup task view %s\n", cs.Gray("View:"), id)
+	fmt.Fprintf(ios.Out, "  %s  clickup status set <status> %s\n", cs.Gray("Status:"), id)
+	fmt.Fprintf(ios.Out, "  %s  clickup comment add %s \"text\"\n", cs.Gray("Comment:"), id)
 
 	return nil
 }

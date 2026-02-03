@@ -144,6 +144,15 @@ func loginRun(opts *loginOptions) error {
 		fmt.Fprintln(ios.ErrOut, "You can set it later with 'clickup config set workspace <id>'")
 	}
 
+	// Quick actions footer
+	fmt.Fprintln(ios.Out)
+	fmt.Fprintln(ios.Out, cs.Gray("---"))
+	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup space select\n", cs.Gray("Space:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup task recent\n", cs.Gray("Recent:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup inbox\n", cs.Gray("Inbox:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup auth status\n", cs.Gray("Status:"))
+
 	return nil
 }
 

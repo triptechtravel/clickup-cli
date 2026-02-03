@@ -143,5 +143,16 @@ func listRun(opts *listOptions) error {
 	}
 
 	fmt.Fprintf(ios.Out, "Showing %d statuses for space %s\n\n", len(spaceResp.Statuses), cs.Bold(spaceResp.Name))
-	return tp.Render()
+	if err := tp.Render(); err != nil {
+		return err
+	}
+
+	// Quick actions footer
+	fmt.Fprintln(ios.Out)
+	fmt.Fprintln(ios.Out, cs.Gray("---"))
+	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup status set <status> <task-id>\n", cs.Gray("Set:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup status list --json\n", cs.Gray("JSON:"))
+
+	return nil
 }

@@ -7,6 +7,8 @@ description: Complete reference for all clickup CLI commands and flags.
 
 All commands are invoked as subcommands of `clickup`. Run `clickup --help` for a summary, or `clickup <command> --help` for details on any command.
 
+Every command that produces output supports `--json` for machine-readable output and `--jq` for inline filtering. After successful operations, the CLI prints a quick-actions footer suggesting contextual next steps — use `--json` to suppress these footers for scripting.
+
 ---
 
 ## auth
@@ -141,6 +143,8 @@ clickup task create --list-id 12345 --name "v2.0 Release" --type 1
 | `--type N` | Task type (0=task, 1=milestone, or custom type ID) |
 | `--notify-all` | Notify all assignees and watchers |
 | `--field "Name=value"` | Set a custom field value (repeatable) |
+| `--json` | Output created task as JSON |
+| `--jq EXPR` | Filter JSON output with a jq expression |
 
 ### `task edit [TASK-ID]`
 
@@ -197,6 +201,8 @@ clickup task edit CU-abc123 --type 1
 | `--notify-all` | Notify all assignees and watchers |
 | `--field "Name=value"` | Set a custom field value (repeatable) |
 | `--clear-field "Name"` | Clear a custom field value (repeatable) |
+| `--json` | Output updated task as JSON |
+| `--jq EXPR` | Filter JSON output with a jq expression |
 
 ### `task search <query>`
 

@@ -124,5 +124,13 @@ func runMemberList(f *cmdutil.Factory, jsonFlags *cmdutil.JSONFlags) error {
 
 	fmt.Fprintf(ios.Out, "\n%s\n", cs.Gray(fmt.Sprintf("%d members", len(entries))))
 
+	// Quick actions footer
+	fmt.Fprintln(ios.Out)
+	fmt.Fprintln(ios.Out, cs.Gray("---"))
+	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup task edit <id> --assignee <user-id>\n", cs.Gray("Assign:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup member list --json\n", cs.Gray("JSON:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup member list --json --jq '.[].username'\n", cs.Gray("Names:"))
+
 	return nil
 }
