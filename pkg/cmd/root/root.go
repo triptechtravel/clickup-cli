@@ -5,6 +5,7 @@ import (
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/auth"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/comment"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/completion"
+	"github.com/triptechtravel/clickup-cli/pkg/cmd/field"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/inbox"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/link"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/space"
@@ -38,6 +39,7 @@ Links GitHub PRs, branches, and commits to ClickUp tasks.`,
 	cmd.AddCommand(link.NewCmdLink(f))
 	cmd.AddCommand(sprint.NewCmdSprint(f))
 	cmd.AddCommand(space.NewCmdSpace(f))
+	cmd.AddCommand(field.NewCmdField(f))
 
 	// Inbox
 	cmd.AddCommand(inbox.NewCmdInbox(f))

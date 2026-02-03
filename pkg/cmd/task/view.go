@@ -104,12 +104,40 @@ func printTaskView(f *cmdutil.Factory, task *clickup.Task) error {
 	cs := ios.ColorScheme()
 	out := ios.Out
 
-	// Title
+	// Title with type badge
 	id := task.ID
 	if task.CustomID != "" {
 		id = task.CustomID
 	}
-	fmt.Fprintf(out, "%s %s\n", cs.Bold(task.Name), cs.Gray("#"+id))
+	typeBadge := ""
+	if task.CustomItemId == 1 {
+		typeBadge = cs.Yellow(" [Milestone]")
+	} else if task.CustomItemId > 1 {
+		typeBadge = cs.Gray(fmt.Sprintf(" [Type:%d]", task.CustomItemId))
+	}
+	fmt.Fprintf(out, "%s %s%s\n", cs.Bold(task.Name), cs.Gray("#"+id), typeBadge)
+
+	// Location: Space > Folder > List
+	if task.Space.ID != "" || task.Folder.Name != "" || task.List.Name != "" {
+		var parts []string
+		if task.Space.ID != "" {
+			parts = append(parts, fmt.Sprintf("Space:%s", task.Space.ID))
+		}
+		if task.Folder.Name != "" && !task.Folder.Hidden {
+			parts = append(parts, task.Folder.Name)
+		}
+		if task.List.Name != "" {
+			parts = append(parts, task.List.Name)
+		}
+		if len(parts) > 0 {
+			fmt.Fprintf(out, "%s %s\n", cs.Bold("Location:"), strings.Join(parts, " > "))
+		}
+	}
+
+	// Parent task
+	if task.Parent != "" {
+		fmt.Fprintf(out, "%s %s\n", cs.Bold("Parent:"), task.Parent)
+	}
 
 	// Status
 	statusText := task.Status.Status
@@ -128,6 +156,15 @@ func printTaskView(f *cmdutil.Factory, task *clickup.Task) error {
 			names = append(names, a.Username)
 		}
 		fmt.Fprintf(out, "%s %s\n", cs.Bold("Assignees:"), strings.Join(names, ", "))
+	}
+
+	// Watchers
+	if len(task.Watchers) > 0 {
+		names := make([]string, 0, len(task.Watchers))
+		for _, w := range task.Watchers {
+			names = append(names, w.Username)
+		}
+		fmt.Fprintf(out, "%s %s\n", cs.Bold("Watchers:"), strings.Join(names, ", "))
 	}
 
 	// Tags
@@ -173,10 +210,86 @@ func printTaskView(f *cmdutil.Factory, task *clickup.Task) error {
 			fmt.Fprintf(out, "%s %s (%s)\n", cs.Bold("Due:"), dt.Format("2006-01-02 15:04"), text.RelativeTime(*dt))
 		}
 	}
+	if task.DateClosed != "" {
+		if t, err := parseUnixMillis(task.DateClosed); err == nil {
+			fmt.Fprintf(out, "%s %s (%s)\n", cs.Bold("Closed:"), t.Format("2006-01-02 15:04"), text.RelativeTime(t))
+		}
+	}
 
 	// URL
 	if task.URL != "" {
 		fmt.Fprintf(out, "%s %s\n", cs.Bold("URL:"), cs.Cyan(task.URL))
+	}
+
+	// Dependencies
+	if len(task.Dependencies) > 0 {
+		fmt.Fprintf(out, "\n%s\n", cs.Bold("Dependencies:"))
+		for _, dep := range task.Dependencies {
+			if dep.DependsOn != "" {
+				fmt.Fprintf(out, "  Waiting on: %s\n", dep.DependsOn)
+			} else if dep.TaskID != "" {
+				fmt.Fprintf(out, "  Blocking: %s\n", dep.TaskID)
+			}
+		}
+	}
+
+	// Linked Tasks
+	if len(task.LinkedTasks) > 0 {
+		fmt.Fprintf(out, "\n%s\n", cs.Bold("Linked Tasks:"))
+		for _, lt := range task.LinkedTasks {
+			fmt.Fprintf(out, "  %s\n", lt.TaskID)
+		}
+	}
+
+	// Checklists
+	if len(task.Checklists) > 0 {
+		fmt.Fprintf(out, "\n%s\n", cs.Bold("Checklists:"))
+		for _, cl := range task.Checklists {
+			total := cl.Resolved + cl.Unresolved
+			fmt.Fprintf(out, "  %s (%d/%d)\n", cs.Bold(cl.Name), cl.Resolved, total)
+			for _, item := range cl.Items {
+				marker := "[ ]"
+				if item.Resolved {
+					marker = "[x]"
+				}
+				fmt.Fprintf(out, "    %s %s\n", marker, item.Name)
+			}
+		}
+	}
+
+	// Attachments
+	if len(task.Attachments) > 0 {
+		fmt.Fprintf(out, "\n%s\n", cs.Bold("Attachments:"))
+		for _, att := range task.Attachments {
+			if att.Title != "" {
+				fmt.Fprintf(out, "  %s", att.Title)
+			} else {
+				fmt.Fprintf(out, "  (attachment)")
+			}
+			if att.Url != "" {
+				fmt.Fprintf(out, " %s", cs.Cyan(att.Url))
+			}
+			fmt.Fprintln(out)
+		}
+	}
+
+	// Custom Fields
+	if len(task.CustomFields) > 0 {
+		var hasValues bool
+		for _, cf := range task.CustomFields {
+			if v := formatCustomFieldValue(cf); v != "" {
+				hasValues = true
+				break
+			}
+		}
+		if hasValues {
+			fmt.Fprintf(out, "\n%s\n", cs.Bold("Custom Fields:"))
+			for _, cf := range task.CustomFields {
+				if v := formatCustomFieldValue(cf); v != "" {
+					fmt.Fprintf(out, "  %s: %s\n", cf.Name, v)
+				}
+			}
+		}
 	}
 
 	// Description

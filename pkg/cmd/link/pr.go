@@ -1,11 +1,8 @@
 package link
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -37,7 +34,11 @@ func NewCmdLinkPR(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pr [NUMBER]",
 		Short: "Link a GitHub PR to a ClickUp task",
-		Long: `Link a GitHub pull request to a ClickUp task by posting a comment.
+		Long: `Link a GitHub pull request to a ClickUp task.
+
+Updates the task description (or a configured custom field) with a link to
+the PR. Running the command again updates the existing entry rather than
+creating duplicates.
 
 If NUMBER is not provided, the current PR is detected using the GitHub CLI (gh).
 The ClickUp task ID is auto-detected from the current git branch name,
@@ -110,18 +111,13 @@ func prRun(opts *prOptions) error {
 		repoSlug = inferRepoFromURL(prInfo.URL)
 	}
 
-	// Build rich text comment blocks.
-	linkText := fmt.Sprintf("%s#%d - %s", repoSlug, prInfo.Number, prInfo.Title)
-	blocks := []commentBlock{
-		{Text: "\xf0\x9f\x94\x97 "},
-		{Text: "GitHub PR linked", Attributes: map[string]interface{}{"bold": true}},
-		{Text: ": "},
-		{Text: linkText, Attributes: map[string]interface{}{"link": prInfo.URL}},
-		{Text: "\n"},
+	// Build link entry.
+	entry := linkEntry{
+		Prefix: fmt.Sprintf("PR: %s#%d", repoSlug, prInfo.Number),
+		Line:   fmt.Sprintf("PR: %s#%d - %s (%s)", repoSlug, prInfo.Number, prInfo.Title, prInfo.URL),
 	}
 
-	// Post the comment.
-	if err := postRichComment(opts.factory, taskID, blocks); err != nil {
+	if err := upsertLink(opts.factory, taskID, entry); err != nil {
 		return err
 	}
 
@@ -201,48 +197,4 @@ func isExecError(err error, target **exec.Error) bool {
 	default:
 		return false
 	}
-}
-
-// commentBlock represents a rich text block in a ClickUp comment.
-type commentBlock struct {
-	Text       string                 `json:"text"`
-	Attributes map[string]interface{} `json:"attributes,omitempty"`
-}
-
-// richCommentPayload is the request body for posting a rich text comment.
-type richCommentPayload struct {
-	Comment []commentBlock `json:"comment"`
-}
-
-// postRichComment posts a rich text comment to a ClickUp task.
-func postRichComment(f *cmdutil.Factory, taskID string, blocks []commentBlock) error {
-	client, err := f.ApiClient()
-	if err != nil {
-		return err
-	}
-
-	url := fmt.Sprintf("https://api.clickup.com/api/v2/task/%s/comment", taskID)
-	payload, err := json.Marshal(richCommentPayload{Comment: blocks})
-	if err != nil {
-		return fmt.Errorf("failed to marshal request body: %w", err)
-	}
-
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(payload))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.DoRequest(req)
-	if err != nil {
-		return fmt.Errorf("API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(respBody))
-	}
-
-	return nil
 }

@@ -10,7 +10,17 @@ func NewCmdLink(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "link <command>",
 		Short: "Link GitHub objects to ClickUp tasks",
-		Long:  "Link pull requests, branches, and commits to ClickUp tasks by posting a comment on the task.",
+		Long: `Link pull requests, branches, and commits to ClickUp tasks.
+
+By default, links are stored in a dedicated section of the task description.
+If a custom field is configured via 'link_field' in the config, links are
+stored in that field instead. Either way, running the same command again
+updates the existing entry rather than creating duplicates.
+
+Configure a custom field:
+  Set 'link_field' in ~/.config/clickup/config.yml to the name of a
+  URL or text custom field in your workspace (e.g., link_field: "link_url").
+  Per-directory overrides are also supported in directory_defaults.`,
 	}
 
 	cmd.AddCommand(NewCmdLinkPR(f))

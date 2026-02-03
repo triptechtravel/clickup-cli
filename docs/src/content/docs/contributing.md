@@ -49,10 +49,13 @@ pkg/
   cmdutil/            Dependency injection, JSON flags, auth middleware
   cmd/                Command implementations
     auth/             login, logout, status
-    task/             view, list, create, edit
+    task/             view, list, create, edit, search, activity, time,
+                      dependency, checklist, custom fields
     comment/          add, list, edit
     status/           set, list
-    link/             pr, branch, commit
+    link/             pr, branch, commit, sync, description upsert,
+                      custom field linking
+    field/            list (custom field discovery)
     sprint/           list, current
     space/            list, select
     inbox/            inbox (@mentions)

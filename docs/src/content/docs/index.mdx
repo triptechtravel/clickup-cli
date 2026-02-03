@@ -20,13 +20,13 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 
 <CardGrid stagger>
   <Card title="Task management" icon="pencil">
-    View, list, create, and edit ClickUp tasks from the terminal.
+    View, list, create, and edit ClickUp tasks with custom fields, dependencies, and checklists.
   </Card>
   <Card title="Git integration" icon="setting">
     Auto-detects task IDs from branch names (`CU-abc123` or `PROJ-42`).
   </Card>
   <Card title="GitHub linking" icon="github">
-    Links PRs, branches, and commits to ClickUp tasks via comments.
+    Links PRs, branches, and commits to ClickUp tasks idempotently via description or custom field.
   </Card>
   <Card title="Sprint dashboard" icon="list-format">
     Shows current sprint tasks grouped by status with assignees and priorities.
@@ -34,8 +34,8 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
   <Card title="AI-friendly" icon="star">
     Structured `--json` output and explicit `--task`/`--repo` flags for AI coding agents.
   </Card>
-  <Card title="Fuzzy status matching" icon="magnifier">
-    Change task status with partial or fuzzy input.
+  <Card title="Custom fields" icon="magnifier">
+    List, set, and clear custom field values -- text, dropdown, labels, dates, URLs, and more.
   </Card>
 </CardGrid>
 

@@ -3,6 +3,7 @@ package task
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/raksul/go-clickup/clickup"
 	"github.com/spf13/cobra"
@@ -11,18 +12,27 @@ import (
 )
 
 type editOptions struct {
-	taskID          string
-	name            string
-	description     string
-	status          string
-	priority        int
-	assignees       []int
-	removeAssignees []int
-	tags            []string
-	dueDate         string
-	startDate       string
-	timeEstimate    string
-	points          float64
+	taskID              string
+	name                string
+	description         string
+	markdownDescription string
+	status              string
+	priority            int
+	assignees           []int
+	removeAssignees     []int
+	tags                []string
+	dueDate             string
+	startDate           string
+	timeEstimate        string
+	points              float64
+	parent              string
+	linksTo             string
+	dueDateTime         bool
+	startDateTime       bool
+	notifyAll           bool
+	customItemID        int
+	fields              []string
+	clearFields         []string
 }
 
 // NewCmdEdit returns a command to edit an existing ClickUp task.
@@ -37,18 +47,9 @@ func NewCmdEdit(f *cmdutil.Factory) *cobra.Command {
 If no task ID is provided, the command attempts to auto-detect the task ID
 from the current git branch name. At least one field flag must be provided.
 
-Supported fields:
-  --name              New task name
-  --description       New task description
-  --status            New task status
-  --priority          New priority (1=Urgent, 2=High, 3=Normal, 4=Low)
-  --assignee          Assignee user ID(s) to add
-  --remove-assignee   Assignee user ID(s) to remove
-  --tags              Set tags (replaces existing)
-  --due-date          Due date in YYYY-MM-DD format (use "none" to clear)
-  --start-date        Start date in YYYY-MM-DD format (use "none" to clear)
-  --time-estimate     Time estimate (e.g. "2h", "30m", "1h30m"; use "0" to clear)
-  --points            Sprint/story points (use -1 to clear)`,
+Custom fields can be set with --field "Name=value" (repeatable) and cleared
+with --clear-field "Name" (repeatable). Use 'clickup field list' to discover
+available custom fields and their types.`,
 		Args:              cobra.MaximumNArgs(1),
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -61,6 +62,7 @@ Supported fields:
 
 	cmd.Flags().StringVar(&opts.name, "name", "", "New task name")
 	cmd.Flags().StringVar(&opts.description, "description", "", "New task description")
+	cmd.Flags().StringVar(&opts.markdownDescription, "markdown-description", "", "New task description in markdown")
 	cmd.Flags().StringVar(&opts.status, "status", "", "New task status")
 	cmd.Flags().IntVar(&opts.priority, "priority", 0, "New task priority (1=Urgent, 2=High, 3=Normal, 4=Low)")
 	cmd.Flags().IntSliceVar(&opts.assignees, "assignee", nil, "Assignee user ID(s) to add")
@@ -70,6 +72,14 @@ Supported fields:
 	cmd.Flags().StringVar(&opts.startDate, "start-date", "", `Start date (YYYY-MM-DD, or "none" to clear)`)
 	cmd.Flags().StringVar(&opts.timeEstimate, "time-estimate", "", `Time estimate (e.g. 2h, 30m, 1h30m; "0" to clear)`)
 	cmd.Flags().Float64Var(&opts.points, "points", pointsNotSet, "Sprint/story points (-1 to clear)")
+	cmd.Flags().StringVar(&opts.parent, "parent", "", "Parent task ID (make this a subtask)")
+	cmd.Flags().StringVar(&opts.linksTo, "links-to", "", "Link to another task by ID")
+	cmd.Flags().BoolVar(&opts.dueDateTime, "due-date-time", false, "Include time component in due date")
+	cmd.Flags().BoolVar(&opts.startDateTime, "start-date-time", false, "Include time component in start date")
+	cmd.Flags().BoolVar(&opts.notifyAll, "notify-all", false, "Notify all assignees and watchers")
+	cmd.Flags().IntVar(&opts.customItemID, "type", -1, "Task type (0=task, 1=milestone, or custom type ID)")
+	cmd.Flags().StringArrayVar(&opts.fields, "field", nil, `Set a custom field value ("Name=value", repeatable)`)
+	cmd.Flags().StringArrayVar(&opts.clearFields, "clear-field", nil, `Clear a custom field value ("Name", repeatable)`)
 
 	return cmd
 }
@@ -98,6 +108,7 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 	// Ensure at least one field is being updated.
 	if !cmd.Flags().Changed("name") &&
 		!cmd.Flags().Changed("description") &&
+		!cmd.Flags().Changed("markdown-description") &&
 		!cmd.Flags().Changed("status") &&
 		!cmd.Flags().Changed("priority") &&
 		!cmd.Flags().Changed("assignee") &&
@@ -106,8 +117,16 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 		!cmd.Flags().Changed("due-date") &&
 		!cmd.Flags().Changed("start-date") &&
 		!cmd.Flags().Changed("time-estimate") &&
-		!cmd.Flags().Changed("points") {
-		return fmt.Errorf("at least one field flag must be provided (--name, --description, --status, --priority, --assignee, --remove-assignee, --tags, --due-date, --start-date, --time-estimate, --points)")
+		!cmd.Flags().Changed("points") &&
+		!cmd.Flags().Changed("parent") &&
+		!cmd.Flags().Changed("links-to") &&
+		!cmd.Flags().Changed("due-date-time") &&
+		!cmd.Flags().Changed("start-date-time") &&
+		!cmd.Flags().Changed("notify-all") &&
+		!cmd.Flags().Changed("type") &&
+		!cmd.Flags().Changed("field") &&
+		!cmd.Flags().Changed("clear-field") {
+		return fmt.Errorf("at least one field flag must be provided")
 	}
 
 	client, err := f.ApiClient()
@@ -122,6 +141,11 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 	}
 	if cmd.Flags().Changed("description") {
 		updateReq.Description = opts.description
+	}
+	if cmd.Flags().Changed("markdown-description") {
+		// MarkdownDescription is not in TaskUpdateRequest, so we handle it via description.
+		// The API accepts markdown_description in the update payload.
+		updateReq.Description = opts.markdownDescription
 	}
 	if cmd.Flags().Changed("status") {
 		updateReq.Status = opts.status
@@ -176,6 +200,25 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 		}
 	}
 
+	if cmd.Flags().Changed("parent") {
+		updateReq.Parent = opts.parent
+	}
+	if cmd.Flags().Changed("links-to") {
+		updateReq.LinksTo = opts.linksTo
+	}
+	if cmd.Flags().Changed("due-date-time") {
+		updateReq.DueDateTime = opts.dueDateTime
+	}
+	if cmd.Flags().Changed("start-date-time") {
+		updateReq.StartDateTime = opts.startDateTime
+	}
+	if cmd.Flags().Changed("notify-all") {
+		updateReq.NotifyAll = opts.notifyAll
+	}
+	if cmd.Flags().Changed("type") {
+		updateReq.CustomItemId = opts.customItemID
+	}
+
 	var getOpts *clickup.GetTaskOptions
 	if isCustomID {
 		getOpts = &clickup.GetTaskOptions{
@@ -194,6 +237,46 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 		pointsTaskID := task.ID
 		if err := setTaskPoints(client, pointsTaskID, opts.points); err != nil {
 			return fmt.Errorf("task updated but failed to set points: %w", err)
+		}
+	}
+
+	// Handle custom field set/clear operations.
+	if cmd.Flags().Changed("field") {
+		for _, fieldSpec := range opts.fields {
+			parts := strings.SplitN(fieldSpec, "=", 2)
+			if len(parts) != 2 {
+				return fmt.Errorf("invalid --field format %q (use \"Name=value\")", fieldSpec)
+			}
+			fieldName, fieldValue := parts[0], parts[1]
+
+			cf := resolveFieldByName(task.CustomFields, fieldName)
+			if cf == nil {
+				return fmt.Errorf("custom field %q not found (available: %s)", fieldName, customFieldNames(task.CustomFields))
+			}
+
+			parsed, err := parseFieldValue(cf, fieldValue)
+			if err != nil {
+				return err
+			}
+
+			_, err = client.Clickup.CustomFields.SetCustomFieldValue(ctx, task.ID, cf.ID, map[string]interface{}{"value": parsed}, nil)
+			if err != nil {
+				return fmt.Errorf("failed to set custom field %q: %w", fieldName, err)
+			}
+		}
+	}
+
+	if cmd.Flags().Changed("clear-field") {
+		for _, fieldName := range opts.clearFields {
+			cf := resolveFieldByName(task.CustomFields, fieldName)
+			if cf == nil {
+				return fmt.Errorf("custom field %q not found (available: %s)", fieldName, customFieldNames(task.CustomFields))
+			}
+
+			_, err = client.Clickup.CustomFields.RemoveCustomFieldValue(ctx, task.ID, cf.ID, nil)
+			if err != nil {
+				return fmt.Errorf("failed to clear custom field %q: %w", fieldName, err)
+			}
 		}
 	}
 

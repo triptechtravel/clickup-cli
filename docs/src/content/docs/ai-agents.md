@@ -117,11 +117,42 @@ AI agents can set detailed task properties after planning or completing work. Th
 
 ### Setting task properties
 
-After analyzing a task and planning the implementation, an agent can set story points, time estimates, and due dates:
+After analyzing a task and planning the implementation, an agent can set story points, time estimates, due dates, and custom fields:
 
 ```sh
 # AI agent sets task details after planning
 clickup task edit CU-abc123 --points 3 --time-estimate 4h --due-date 2025-03-01
+
+# Set custom fields
+clickup task edit CU-abc123 --field "Environment=production" --field "Component=auth"
+```
+
+### Managing dependencies and checklists
+
+An agent can structure work by managing task relationships and checklists:
+
+```sh
+# Add a dependency between tasks
+clickup task dependency add CU-abc123 --depends-on CU-def456
+
+# Create a checklist for the implementation
+clickup task checklist add CU-abc123 "Implementation Steps"
+
+# Add items to the checklist
+clickup task checklist item add CHECKLIST_ID "Write unit tests"
+clickup task checklist item add CHECKLIST_ID "Update documentation"
+
+# Mark items as done
+clickup task checklist item resolve CHECKLIST_ID ITEM_ID
+```
+
+### Discovering custom fields
+
+An agent can discover available custom fields for a list to know what metadata can be set:
+
+```sh
+# List available custom fields
+clickup field list --list-id 12345 --json
 ```
 
 ### Logging time
@@ -149,6 +180,8 @@ These commands combine naturally with the existing workflow. For example, an age
 - Use `--json` output when you need the agent to parse task data programmatically
 - Use `clickup comment list` to give the agent context from team discussions
 - Use `clickup sprint current --json` to help the agent understand project priorities
-- The `link sync` command is idempotent -- safe to run multiple times without duplicating data
+- All `link` commands are idempotent -- safe to run multiple times without duplicating data
 - Use `clickup task activity` to give the agent full historical context before starting work
 - Use `clickup task time log` to automatically track time spent by the agent
+- Use `clickup field list --list-id ID --json` to discover custom fields before setting them
+- Use `clickup task dependency add` to express task relationships programmatically

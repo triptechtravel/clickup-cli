@@ -30,8 +30,8 @@ func NewCmdLinkSync(f *cmdutil.Factory) *cobra.Command {
 		Short: "Sync ClickUp task info to a GitHub PR",
 		Long: `Update a GitHub pull request with information from the linked ClickUp task.
 
-Adds the ClickUp task URL and status to the PR body, and posts a link
-comment on the ClickUp task if one doesn't already exist.
+Adds the ClickUp task URL and status to the PR body, and updates the task
+description (or configured custom field) with a link to the PR.
 
 The task ID is auto-detected from the branch name, or specified with --task.`,
 		Example: `  # Sync current branch's PR with the detected task
@@ -136,21 +136,17 @@ func syncRun(opts *syncOptions) error {
 		fmt.Fprintf(ios.Out, "PR #%d body already up to date\n", prDetail.Number)
 	}
 
-	// Post link comment on ClickUp task.
+	// Upsert link on ClickUp task (description or custom field).
 	repoSlug := opts.repo
 	if repoSlug == "" {
 		repoSlug = inferRepoFromURL(prDetail.URL)
 	}
 
-	linkText := fmt.Sprintf("%s#%d - %s", repoSlug, prDetail.Number, prDetail.Title)
-	blocks := []commentBlock{
-		{Text: "\xf0\x9f\x94\x97 "},
-		{Text: "GitHub PR linked", Attributes: map[string]interface{}{"bold": true}},
-		{Text: ": "},
-		{Text: linkText, Attributes: map[string]interface{}{"link": prDetail.URL}},
-		{Text: "\n"},
+	entry := linkEntry{
+		Prefix: fmt.Sprintf("PR: %s#%d", repoSlug, prDetail.Number),
+		Line:   fmt.Sprintf("PR: %s#%d - %s (%s)", repoSlug, prDetail.Number, prDetail.Title, prDetail.URL),
 	}
-	if err := postRichComment(opts.factory, taskID, blocks); err != nil {
+	if err := upsertLink(opts.factory, taskID, entry); err != nil {
 		return err
 	}
 	fmt.Fprintf(ios.Out, "%s Linked PR #%d to task %s\n",

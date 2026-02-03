@@ -57,7 +57,7 @@ View, list, create, and edit ClickUp tasks.
 
 ### `task view [TASK-ID]`
 
-Display detailed information about a single task, including name, status, priority, assignees, tags, dates, points, time estimate, time spent, start date, URL, and description.
+Display detailed information about a single task, including name, status, priority, assignees, watchers, tags, dates, points, time estimate, time spent, URL, description, custom fields, dependencies, linked tasks, checklists, and attachments.
 
 If no task ID is provided, the CLI auto-detects it from the current git branch name.
 
@@ -101,7 +101,7 @@ clickup task list --list-id 12345 --assignee me --status "in progress"
 
 ### `task create`
 
-Create a new task in a ClickUp list. If `--name` is not provided, the command enters interactive mode and prompts for the task name, description, status, and priority. Supports setting tags, due dates, start dates, time estimates, and sprint points at creation time.
+Create a new task in a ClickUp list. If `--name` is not provided, the command enters interactive mode and prompts for the task name, description, status, and priority. Supports setting tags, due dates, start dates, time estimates, sprint points, custom fields, parent tasks, and task types at creation time.
 
 ```sh
 # Create with flags
@@ -110,8 +110,14 @@ clickup task create --list-id 12345 --name "Fix login bug" --priority 2
 # Interactive mode
 clickup task create --list-id 12345
 
-# Create with due date and points
-clickup task create --list-id 12345 --name "Fix auth" --priority 2 --due-date 2025-02-14 --points 3
+# Create with due date, points, and custom field
+clickup task create --list-id 12345 --name "Fix auth" --priority 2 --due-date 2025-02-14 --points 3 --field "Environment=production"
+
+# Create a subtask
+clickup task create --list-id 12345 --name "Subtask" --parent 86abc123
+
+# Create a milestone
+clickup task create --list-id 12345 --name "v2.0 Release" --type 1
 ```
 
 | Flag | Description |
@@ -119,14 +125,22 @@ clickup task create --list-id 12345 --name "Fix auth" --priority 2 --due-date 20
 | `--list-id ID` | ClickUp list ID (required) |
 | `--name TEXT` | Task name |
 | `--description TEXT` | Task description |
+| `--markdown-description TEXT` | Task description in markdown |
 | `--status STATUS` | Task status |
 | `--priority N` | Priority: 1=Urgent, 2=High, 3=Normal, 4=Low |
 | `--assignee ID` | Assignee user ID(s) (repeatable) |
 | `--tags TAG` | Tags to add (repeatable) |
 | `--due-date DATE` | Due date (YYYY-MM-DD) |
 | `--start-date DATE` | Start date (YYYY-MM-DD) |
+| `--due-date-time` | Include time component in due date |
+| `--start-date-time` | Include time component in start date |
 | `--time-estimate DUR` | Time estimate (e.g. "2h", "30m", "1h30m") |
 | `--points N` | Sprint/story points |
+| `--parent ID` | Parent task ID (create as subtask) |
+| `--links-to ID` | Link to another task by ID |
+| `--type N` | Task type (0=task, 1=milestone, or custom type ID) |
+| `--notify-all` | Notify all assignees and watchers |
+| `--field "Name=value"` | Set a custom field value (repeatable) |
 
 ### `task edit [TASK-ID]`
 
@@ -147,12 +161,25 @@ clickup task edit CU-abc123 --remove-assignee 12345
 
 # Set sprint points
 clickup task edit --points 5
+
+# Set a custom field
+clickup task edit CU-abc123 --field "Environment=production"
+
+# Clear a custom field
+clickup task edit CU-abc123 --clear-field "Environment"
+
+# Reparent a task (make it a subtask)
+clickup task edit CU-abc123 --parent 86def456
+
+# Change task type to milestone
+clickup task edit CU-abc123 --type 1
 ```
 
 | Flag | Description |
 |------|-------------|
 | `--name TEXT` | New task name |
 | `--description TEXT` | New task description |
+| `--markdown-description TEXT` | New task description in markdown |
 | `--status STATUS` | New task status |
 | `--priority N` | New priority: 1=Urgent, 2=High, 3=Normal, 4=Low |
 | `--assignee ID` | Assignee user ID(s) to set (repeatable) |
@@ -160,8 +187,16 @@ clickup task edit --points 5
 | `--tags TAG` | Set tags (replaces existing, repeatable) |
 | `--due-date DATE` | Due date (YYYY-MM-DD, "none" to clear) |
 | `--start-date DATE` | Start date (YYYY-MM-DD, "none" to clear) |
+| `--due-date-time` | Include time component in due date |
+| `--start-date-time` | Include time component in start date |
 | `--time-estimate DUR` | Time estimate (e.g. "2h", "30m"; "0" to clear) |
 | `--points N` | Sprint/story points (-1 to clear) |
+| `--parent ID` | Parent task ID (reparent task) |
+| `--links-to ID` | Link to another task by ID |
+| `--type N` | Task type (0=task, 1=milestone, or custom type ID) |
+| `--notify-all` | Notify all assignees and watchers |
+| `--field "Name=value"` | Set a custom field value (repeatable) |
+| `--clear-field "Name"` | Clear a custom field value (repeatable) |
 
 ### `task search <query>`
 
@@ -222,6 +257,101 @@ clickup task time list 86a3xrwkp
 
 | Flag | Description |
 |------|-------------|
+| `--json` | Output as JSON |
+| `--jq EXPR` | Filter JSON output with a jq expression |
+
+### `task dependency add <TASK-ID>`
+
+Add a dependency relationship between two tasks. Use `--depends-on` to indicate a task waits on another, or `--blocks` to indicate a task blocks another.
+
+```sh
+# This task depends on (waits for) another task
+clickup task dependency add 86abc123 --depends-on 86def456
+
+# This task blocks another task
+clickup task dependency add 86abc123 --blocks 86def456
+```
+
+| Flag | Description |
+|------|-------------|
+| `--depends-on ID` | Task ID that this task depends on (waits for) |
+| `--blocks ID` | Task ID that this task blocks |
+
+### `task dependency remove <TASK-ID>`
+
+Remove a dependency relationship between two tasks.
+
+```sh
+clickup task dependency remove 86abc123 --depends-on 86def456
+clickup task dependency remove 86abc123 --blocks 86def456
+```
+
+| Flag | Description |
+|------|-------------|
+| `--depends-on ID` | Task ID to remove depends-on relationship with |
+| `--blocks ID` | Task ID to remove blocks relationship with |
+
+### `task checklist add <TASK-ID> <NAME>`
+
+Create a checklist on a task.
+
+```sh
+clickup task checklist add 86abc123 "Deploy Steps"
+```
+
+### `task checklist remove <CHECKLIST-ID>`
+
+Delete a checklist.
+
+```sh
+clickup task checklist remove b955c4dc-b8ee-4488-b0c1-example
+```
+
+### `task checklist item add <CHECKLIST-ID> <NAME>`
+
+Add an item to a checklist.
+
+```sh
+clickup task checklist item add b955c4dc-example "Run migrations"
+```
+
+### `task checklist item resolve <CHECKLIST-ID> <ITEM-ID>`
+
+Mark a checklist item as resolved.
+
+```sh
+clickup task checklist item resolve b955c4dc-example 21e08dc8-example
+```
+
+### `task checklist item remove <CHECKLIST-ID> <ITEM-ID>`
+
+Remove an item from a checklist.
+
+```sh
+clickup task checklist item remove b955c4dc-example 21e08dc8-example
+```
+
+---
+
+## field
+
+Discover custom fields available in your workspace.
+
+### `field list`
+
+List all accessible custom fields for a ClickUp list, showing field name, type, ID, and options (for dropdown/label fields).
+
+```sh
+# List fields for a list
+clickup field list --list-id 12345
+
+# JSON output
+clickup field list --list-id 12345 --json
+```
+
+| Flag | Description |
+|------|-------------|
+| `--list-id ID` | ClickUp list ID (required) |
 | `--json` | Output as JSON |
 | `--jq EXPR` | Filter JSON output with a jq expression |
 
@@ -320,11 +450,11 @@ clickup status list --space 12345
 
 ## link
 
-Link GitHub artifacts to ClickUp tasks. All link commands post a comment on the ClickUp task with a formatted link.
+Link GitHub artifacts to ClickUp tasks. All link commands update the task idempotently -- by default, links are stored in a managed section of the task description. Optionally, configure a `link_field` in your config to store links in a custom field instead (see [Configuration](/clickup-cli/configuration/)).
 
 ### `link pr [NUMBER]`
 
-Link a GitHub pull request to a ClickUp task. If `NUMBER` is not provided, the current PR is detected using the GitHub CLI (`gh`). The ClickUp task ID is auto-detected from the current git branch.
+Link a GitHub pull request to a ClickUp task. If `NUMBER` is not provided, the current PR is detected using the GitHub CLI (`gh`). The ClickUp task ID is auto-detected from the current git branch. The link is stored idempotently -- running the command again updates the existing entry rather than creating a duplicate.
 
 Requires the [GitHub CLI](https://cli.github.com/) to be installed and authenticated.
 
@@ -366,7 +496,7 @@ clickup link sync 42 --repo owner/repo --task CU-abc123
 
 ### `link branch`
 
-Link the current git branch to a ClickUp task by posting a comment with the branch name and repository.
+Link the current git branch to a ClickUp task. Stores the branch name and repository as a link entry on the task.
 
 ```sh
 clickup link branch
@@ -382,7 +512,7 @@ clickup link branch --task CU-abc123 --repo owner/repo
 
 ### `link commit [SHA]`
 
-Link a git commit to a ClickUp task by posting a comment with the commit SHA, message, and a link to the commit on GitHub. If `SHA` is not provided, the HEAD commit is used.
+Link a git commit to a ClickUp task. Stores the commit SHA, message, and GitHub URL as a link entry on the task. If `SHA` is not provided, the HEAD commit is used.
 
 ```sh
 # Link the latest commit

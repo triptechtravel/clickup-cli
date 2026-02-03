@@ -21,7 +21,11 @@ func NewCmdLinkBranch(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "branch",
 		Short: "Link the current git branch to a ClickUp task",
-		Long: `Link the current git branch to a ClickUp task by posting a comment.
+		Long: `Link the current git branch to a ClickUp task.
+
+Updates the task description (or a configured custom field) with a reference
+to the branch. Running the command again updates the existing entry rather
+than creating duplicates.
 
 The ClickUp task ID is auto-detected from the current git branch name,
 or can be specified explicitly with --task.`,
@@ -53,19 +57,14 @@ func branchRun(opts *branchOptions) error {
 	}
 	gitCtx := resolved.GitCtx
 
-	// Build rich text comment blocks.
+	// Build link entry.
 	repoSlug := fmt.Sprintf("%s/%s", gitCtx.RepoOwner, gitCtx.RepoName)
-	blocks := []commentBlock{
-		{Text: "\xf0\x9f\x94\x97 "},
-		{Text: "Branch linked", Attributes: map[string]interface{}{"bold": true}},
-		{Text: ": "},
-		{Text: gitCtx.Branch, Attributes: map[string]interface{}{"code": true}},
-		{Text: " in " + repoSlug},
-		{Text: "\n"},
+	entry := linkEntry{
+		Prefix: fmt.Sprintf("Branch: %s in %s", gitCtx.Branch, repoSlug),
+		Line:   fmt.Sprintf("Branch: %s in %s", gitCtx.Branch, repoSlug),
 	}
 
-	// Post the comment.
-	if err := postRichComment(opts.factory, taskID, blocks); err != nil {
+	if err := upsertLink(opts.factory, taskID, entry); err != nil {
 		return err
 	}
 

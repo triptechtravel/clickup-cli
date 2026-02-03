@@ -3,6 +3,7 @@ package task
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/raksul/go-clickup/clickup"
 	"github.com/spf13/cobra"
@@ -13,17 +14,25 @@ import (
 const pointsNotSet = -999.0
 
 type createOptions struct {
-	listID       string
-	name         string
-	description  string
-	status       string
-	priority     int
-	assignees    []int
-	tags         []string
-	dueDate      string
-	startDate    string
-	timeEstimate string
-	points       float64
+	listID              string
+	name                string
+	description         string
+	markdownDescription string
+	status              string
+	priority            int
+	assignees           []int
+	tags                []string
+	dueDate             string
+	startDate           string
+	timeEstimate        string
+	points              float64
+	parent              string
+	linksTo             string
+	dueDateTime         bool
+	startDateTime       bool
+	notifyAll           bool
+	customItemID        int
+	fields              []string
 }
 
 // NewCmdCreate returns a command to create a new ClickUp task.
@@ -57,6 +66,7 @@ Additional properties can be set with flags:
 	cmd.Flags().StringVar(&opts.listID, "list-id", "", "ClickUp list ID (required)")
 	cmd.Flags().StringVar(&opts.name, "name", "", "Task name")
 	cmd.Flags().StringVar(&opts.description, "description", "", "Task description")
+	cmd.Flags().StringVar(&opts.markdownDescription, "markdown-description", "", "Task description in markdown")
 	cmd.Flags().StringVar(&opts.status, "status", "", "Task status")
 	cmd.Flags().IntVar(&opts.priority, "priority", 0, "Task priority (1=Urgent, 2=High, 3=Normal, 4=Low)")
 	cmd.Flags().IntSliceVar(&opts.assignees, "assignee", nil, "Assignee user ID(s)")
@@ -65,6 +75,13 @@ Additional properties can be set with flags:
 	cmd.Flags().StringVar(&opts.startDate, "start-date", "", "Start date (YYYY-MM-DD)")
 	cmd.Flags().StringVar(&opts.timeEstimate, "time-estimate", "", "Time estimate (e.g. 2h, 30m, 1h30m)")
 	cmd.Flags().Float64Var(&opts.points, "points", pointsNotSet, "Sprint/story points")
+	cmd.Flags().StringVar(&opts.parent, "parent", "", "Parent task ID (create as subtask)")
+	cmd.Flags().StringVar(&opts.linksTo, "links-to", "", "Link to another task by ID")
+	cmd.Flags().BoolVar(&opts.dueDateTime, "due-date-time", false, "Include time component in due date")
+	cmd.Flags().BoolVar(&opts.startDateTime, "start-date-time", false, "Include time component in start date")
+	cmd.Flags().BoolVar(&opts.notifyAll, "notify-all", false, "Notify all assignees and watchers")
+	cmd.Flags().IntVar(&opts.customItemID, "type", -1, "Task type (0=task, 1=milestone, or custom type ID)")
+	cmd.Flags().StringArrayVar(&opts.fields, "field", nil, `Set a custom field value ("Name=value", repeatable)`)
 
 	_ = cmd.MarkFlagRequired("list-id")
 
@@ -135,6 +152,10 @@ func runCreate(f *cmdutil.Factory, opts *createOptions) error {
 		Description: opts.description,
 	}
 
+	if opts.markdownDescription != "" {
+		taskReq.MarkdownDescription = opts.markdownDescription
+	}
+
 	if opts.status != "" {
 		taskReq.Status = opts.status
 	}
@@ -175,6 +196,25 @@ func runCreate(f *cmdutil.Factory, opts *createOptions) error {
 		taskReq.TimeEstimate = ms
 	}
 
+	if opts.parent != "" {
+		taskReq.Parent = opts.parent
+	}
+	if opts.linksTo != "" {
+		taskReq.LinksTo = opts.linksTo
+	}
+	if opts.dueDateTime {
+		taskReq.DueDateTime = true
+	}
+	if opts.startDateTime {
+		taskReq.StartDateTime = true
+	}
+	if opts.notifyAll {
+		taskReq.NotifyAll = true
+	}
+	if opts.customItemID >= 0 {
+		taskReq.CustomItemId = opts.customItemID
+	}
+
 	ctx := context.Background()
 	task, _, err := client.Clickup.Tasks.CreateTask(ctx, opts.listID, taskReq)
 	if err != nil {
@@ -185,6 +225,37 @@ func runCreate(f *cmdutil.Factory, opts *createOptions) error {
 	if opts.points != pointsNotSet {
 		if err := setTaskPoints(client, task.ID, opts.points); err != nil {
 			return fmt.Errorf("task created but failed to set points: %w", err)
+		}
+	}
+
+	// Handle custom field set operations.
+	if len(opts.fields) > 0 {
+		// Fetch accessible custom fields for the list to resolve names to IDs.
+		listFields, _, err := client.Clickup.CustomFields.GetAccessibleCustomFields(ctx, opts.listID)
+		if err != nil {
+			return fmt.Errorf("task created but failed to fetch custom fields: %w", err)
+		}
+		for _, fieldSpec := range opts.fields {
+			parts := strings.SplitN(fieldSpec, "=", 2)
+			if len(parts) != 2 {
+				return fmt.Errorf("invalid --field format %q (use \"Name=value\")", fieldSpec)
+			}
+			fieldName, fieldValue := parts[0], parts[1]
+
+			cf := resolveFieldByName(listFields, fieldName)
+			if cf == nil {
+				return fmt.Errorf("custom field %q not found (available: %s)", fieldName, customFieldNames(listFields))
+			}
+
+			parsed, err := parseFieldValue(cf, fieldValue)
+			if err != nil {
+				return err
+			}
+
+			_, err = client.Clickup.CustomFields.SetCustomFieldValue(ctx, task.ID, cf.ID, map[string]interface{}{"value": parsed}, nil)
+			if err != nil {
+				return fmt.Errorf("task created but failed to set custom field %q: %w", fieldName, err)
+			}
 		}
 	}
 

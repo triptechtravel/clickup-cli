@@ -25,7 +25,11 @@ func NewCmdLinkCommit(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "commit [SHA]",
 		Short: "Link a git commit to a ClickUp task",
-		Long: `Link a git commit to a ClickUp task by posting a comment.
+		Long: `Link a git commit to a ClickUp task.
+
+Updates the task description (or a configured custom field) with a link to
+the commit. Running the command again updates the existing entry rather than
+creating duplicates.
 
 If SHA is not provided, the HEAD commit is used.
 The ClickUp task ID is auto-detected from the current git branch name,
@@ -105,19 +109,14 @@ func commitRun(opts *commitOptions) error {
 		shortSHA = shortSHA[:7]
 	}
 
-	// Build rich text comment blocks.
+	// Build link entry.
 	commitURL := fmt.Sprintf("https://github.com/%s/commit/%s", repoSlug, fullSHA)
-	blocks := []commentBlock{
-		{Text: "\xf0\x9f\x94\x97 "},
-		{Text: "Commit linked", Attributes: map[string]interface{}{"bold": true}},
-		{Text: ": "},
-		{Text: shortSHA, Attributes: map[string]interface{}{"code": true, "link": commitURL}},
-		{Text: " - " + commitMessage},
-		{Text: "\n"},
+	entry := linkEntry{
+		Prefix: fmt.Sprintf("Commit: %s", shortSHA),
+		Line:   fmt.Sprintf("Commit: %s - %s (%s)", shortSHA, commitMessage, commitURL),
 	}
 
-	// Post the comment.
-	if err := postRichComment(opts.factory, taskID, blocks); err != nil {
+	if err := upsertLink(opts.factory, taskID, entry); err != nil {
 		return err
 	}
 

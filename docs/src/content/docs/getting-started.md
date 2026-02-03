@@ -94,7 +94,9 @@ After opening a GitHub PR on a branch that contains a task ID, link it to the Cl
 clickup link pr
 ```
 
-This posts a comment on the ClickUp task with a link to the GitHub PR. It requires the [GitHub CLI](https://cli.github.com/) (`gh`) to be installed and authenticated.
+This stores a link to the GitHub PR on the ClickUp task. By default, links are stored in a managed section of the task description. You can optionally configure a custom field for link storage (see [Configuration](/clickup-cli/configuration/#github-link-storage)).
+
+Requires the [GitHub CLI](https://cli.github.com/) (`gh`) to be installed and authenticated.
 
 ## Next steps
 

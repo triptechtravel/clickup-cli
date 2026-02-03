@@ -12,6 +12,7 @@ type Config struct {
 	Workspace         string                       `yaml:"workspace,omitempty"`
 	Space             string                       `yaml:"space,omitempty"`
 	SprintFolder      string                       `yaml:"sprint_folder,omitempty"`
+	LinkField         string                       `yaml:"link_field,omitempty"`
 	Editor            string                       `yaml:"editor,omitempty"`
 	Prompt            string                       `yaml:"prompt,omitempty"`
 	Aliases           map[string]string            `yaml:"aliases,omitempty"`
@@ -20,7 +21,8 @@ type Config struct {
 
 // DirectoryConfig holds per-directory overrides.
 type DirectoryConfig struct {
-	Space string `yaml:"space,omitempty"`
+	Space     string `yaml:"space,omitempty"`
+	LinkField string `yaml:"link_field,omitempty"`
 }
 
 // ConfigDir returns the path to the config directory (~/.config/clickup).
@@ -81,6 +83,17 @@ func (c *Config) SpaceForDir(dir string) string {
 		}
 	}
 	return c.Space
+}
+
+// LinkFieldForDir returns the link field name override for a specific directory,
+// falling back to the global default.
+func (c *Config) LinkFieldForDir(dir string) string {
+	if c.DirectoryDefaults != nil {
+		if dc, ok := c.DirectoryDefaults[dir]; ok && dc.LinkField != "" {
+			return dc.LinkField
+		}
+	}
+	return c.LinkField
 }
 
 // SetDirectoryDefault sets a per-directory config override.
