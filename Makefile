@@ -26,6 +26,10 @@ lint:
 clean:
 	rm -rf bin/ dist/
 
+.PHONY: docs
+docs:
+	go run ./cmd/gen-docs
+
 .PHONY: snapshot
 snapshot:
 	goreleaser --snapshot --clean

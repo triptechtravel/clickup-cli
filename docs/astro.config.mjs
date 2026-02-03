@@ -52,6 +52,11 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Reference',
+          collapsed: true,
+          autogenerate: { directory: 'reference' },
+        },
+        {
           label: 'Project',
           items: [
             { label: 'Contributing', slug: 'contributing' },
