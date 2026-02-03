@@ -130,9 +130,10 @@ clickup link pr
 |---------|-------------|
 | `clickup auth login` | Authenticate (token prompt, `--oauth`, or `--with-token` for CI) |
 | `clickup auth logout` | Remove stored credentials |
-| `clickup auth status` | Show current authentication state |
+| `clickup auth status` | Show current authentication state (includes user ID) |
 | `clickup space list` | List spaces in your workspace |
 | `clickup space select` | Interactively select a default space |
+| `clickup member list` | List workspace members with IDs, usernames, emails, and roles |
 
 ### Utility commands
 

@@ -92,6 +92,15 @@ func runView(f *cmdutil.Factory, opts *viewOptions) error {
 		return fmt.Errorf("failed to fetch task %s: %w", taskID, err)
 	}
 
+	// Fetch the markdown description (the standard GetTask doesn't include it).
+	var mdTask clickup.Task
+	mdReq, err := client.Clickup.NewRequest("GET", fmt.Sprintf("task/%s/?include_markdown_description=true", task.ID), nil)
+	if err == nil {
+		if _, err := client.Clickup.Do(ctx, mdReq, &mdTask); err == nil && mdTask.MarkdownDescription != "" {
+			task.MarkdownDescription = mdTask.MarkdownDescription
+		}
+	}
+
 	if opts.jsonFlags.WantsJSON() {
 		return opts.jsonFlags.OutputJSON(ios.Out, task)
 	}
@@ -292,10 +301,14 @@ func printTaskView(f *cmdutil.Factory, task *clickup.Task) error {
 		}
 	}
 
-	// Description
-	if task.Description != "" {
+	// Description (prefer markdown for richer content including URLs)
+	desc := task.MarkdownDescription
+	if desc == "" {
+		desc = task.Description
+	}
+	if desc != "" {
 		fmt.Fprintf(out, "\n%s\n", cs.Bold("Description:"))
-		fmt.Fprintf(out, "%s\n", text.IndentLines(task.Description, "  "))
+		fmt.Fprintf(out, "%s\n", text.IndentLines(desc, "  "))
 	}
 
 	return nil

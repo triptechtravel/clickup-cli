@@ -362,6 +362,32 @@ clickup task checklist item remove b955c4dc-example 21e08dc8-example
 
 ---
 
+## member
+
+Manage workspace members.
+
+### `member list`
+
+List all members in the configured ClickUp workspace. Displays each member's ID, username, email, and role. Member IDs are useful for assigning tasks, adding watchers, and tagging users.
+
+```sh
+# List workspace members
+clickup member list
+
+# JSON output for scripting
+clickup member list --json
+
+# Get a specific member's ID
+clickup member list --json --jq '.[] | select(.username == "Isaac") | .id'
+```
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output as JSON |
+| `--jq EXPR` | Filter JSON output with a jq expression |
+
+---
+
 ## field
 
 Discover custom fields available in your workspace.

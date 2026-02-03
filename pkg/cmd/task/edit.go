@@ -153,11 +153,7 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 	if cmd.Flags().Changed("description") {
 		updateReq.Description = opts.description
 	}
-	if cmd.Flags().Changed("markdown-description") {
-		// MarkdownDescription is not in TaskUpdateRequest, so we handle it via description.
-		// The API accepts markdown_description in the update payload.
-		updateReq.Description = opts.markdownDescription
-	}
+	// markdown-description is handled via raw API after the main update call.
 	if cmd.Flags().Changed("status") {
 		updateReq.Status = opts.status
 	}
@@ -245,9 +241,15 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 
 	// Set points via raw API call if specified (not supported by go-clickup library).
 	if cmd.Flags().Changed("points") {
-		pointsTaskID := task.ID
-		if err := setTaskPoints(client, pointsTaskID, opts.points); err != nil {
+		if err := setTaskPoints(client, task.ID, opts.points); err != nil {
 			return fmt.Errorf("task updated but failed to set points: %w", err)
+		}
+	}
+
+	// Set markdown description via raw API call (not supported by go-clickup library).
+	if cmd.Flags().Changed("markdown-description") {
+		if err := setMarkdownDescription(client, task.ID, opts.markdownDescription); err != nil {
+			return fmt.Errorf("task updated but failed to set markdown description: %w", err)
 		}
 	}
 

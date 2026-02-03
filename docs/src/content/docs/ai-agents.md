@@ -24,15 +24,18 @@ clickup task view CU-abc123 --json
 # 3. Agent reads comments for additional context
 clickup comment list CU-abc123
 
-# 4. Agent writes code...
+# 4. Agent looks up workspace members for assignment
+clickup member list --json
 
-# 5. Agent updates the task status
+# 5. Agent writes code...
+
+# 6. Agent updates the task status
 clickup status set "code review" CU-abc123
 
-# 6. Agent adds a comment summarizing what was done
+# 7. Agent adds a comment summarizing what was done
 clickup comment add CU-abc123 "Implemented auth flow with JWT tokens. PR #42 is up."
 
-# 7. Agent syncs the ClickUp task info into the PR description
+# 8. Agent syncs the ClickUp task info into the PR description
 clickup link sync 42 --task CU-abc123
 ```
 
@@ -208,4 +211,5 @@ The `task search` command also suggests `task recent` when no results are found,
 - Use `clickup task time log` to automatically track time spent by the agent
 - Use `clickup field list --list-id ID --json` to discover custom fields before setting them
 - Use `clickup task dependency add` to express task relationships programmatically
+- Use `clickup member list --json` to look up user IDs for assigning tasks or adding watchers
 - When search returns no results, check `clickup task recent` to find the right folder/list

@@ -1,6 +1,7 @@
 package task
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -46,6 +47,30 @@ func setTaskPoints(client *api.Client, taskID string, points float64) error {
 	resp.Body.Close()
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("failed to set points: status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// setMarkdownDescription sets the markdown_description field on a task
+// via a raw HTTP PUT request. The go-clickup library's TaskUpdateRequest
+// does not support this field.
+func setMarkdownDescription(client *api.Client, taskID string, md string) error {
+	payload, err := json.Marshal(map[string]string{"markdown_description": md})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest("PUT", fmt.Sprintf("https://api.clickup.com/api/v2/task/%s", taskID), strings.NewReader(string(payload)))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.DoRequest(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("failed to set markdown description: status %d", resp.StatusCode)
 	}
 	return nil
 }

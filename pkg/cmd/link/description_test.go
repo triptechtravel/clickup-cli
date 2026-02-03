@@ -24,7 +24,7 @@ func TestParseLinksBlock_EmptyDescription(t *testing.T) {
 func TestParseLinksBlock_WithBlock(t *testing.T) {
 	desc := `**GitHub** _(clickup-cli)_
 - [owner/repo#42 — Fix bug](https://github.com/owner/repo/pull/42)
-- Branch: ` + "`feat/thing`" + ` in owner/repo
+- Branch: [` + "`feat/thing`" + `](https://github.com/owner/repo/tree/feat/thing) in owner/repo
 
 Some task description here.`
 
@@ -32,7 +32,7 @@ Some task description here.`
 
 	assert.Equal(t, []string{
 		"[owner/repo#42 — Fix bug](https://github.com/owner/repo/pull/42)",
-		"Branch: `feat/thing` in owner/repo",
+		"Branch: [`feat/thing`](https://github.com/owner/repo/tree/feat/thing) in owner/repo",
 	}, entries)
 	assert.Equal(t, "Some task description here.", rest)
 }
@@ -68,14 +68,14 @@ After content.`
 func TestBuildLinksSection(t *testing.T) {
 	entries := []string{
 		"[owner/repo#42 — Fix bug](https://github.com/owner/repo/pull/42)",
-		"Branch: `feat/thing` in owner/repo",
+		"Branch: [`feat/thing`](https://github.com/owner/repo/tree/feat/thing) in owner/repo",
 	}
 
 	result := buildLinksSection(entries)
 
 	expected := "**GitHub** _(clickup-cli)_\n" +
 		"- [owner/repo#42 — Fix bug](https://github.com/owner/repo/pull/42)\n" +
-		"- Branch: `feat/thing` in owner/repo"
+		"- Branch: [`feat/thing`](https://github.com/owner/repo/tree/feat/thing) in owner/repo"
 
 	assert.Equal(t, expected, result)
 }
@@ -127,14 +127,14 @@ func TestUpdateLinksBlock_AppendToExistingBlock(t *testing.T) {
 
 	entry := linkEntry{
 		Prefix: "`feat/thing` in owner/repo",
-		Line:   "Branch: `feat/thing` in owner/repo",
+		Line:   "Branch: [`feat/thing`](https://github.com/owner/repo/tree/feat/thing) in owner/repo",
 	}
 
 	result := updateLinksBlock(desc, entry)
 
 	expected := "**GitHub** _(clickup-cli)_\n" +
 		"- [owner/repo#42 — Fix bug](https://github.com/owner/repo/pull/42)\n" +
-		"- Branch: `feat/thing` in owner/repo\n\n" +
+		"- Branch: [`feat/thing`](https://github.com/owner/repo/tree/feat/thing) in owner/repo\n\n" +
 		"Task description."
 
 	assert.Equal(t, expected, result)
@@ -143,7 +143,7 @@ func TestUpdateLinksBlock_AppendToExistingBlock(t *testing.T) {
 func TestUpdateLinksBlock_DeduplicateByPrefix(t *testing.T) {
 	desc := "**GitHub** _(clickup-cli)_\n" +
 		"- [owner/repo#42 — Old title](https://github.com/owner/repo/pull/42)\n" +
-		"- Branch: `feat/thing` in owner/repo\n\n" +
+		"- Branch: [`feat/thing`](https://github.com/owner/repo/tree/feat/thing) in owner/repo\n\n" +
 		"Task description."
 
 	entry := linkEntry{
@@ -155,7 +155,7 @@ func TestUpdateLinksBlock_DeduplicateByPrefix(t *testing.T) {
 
 	expected := "**GitHub** _(clickup-cli)_\n" +
 		"- [owner/repo#42 — Updated title](https://github.com/owner/repo/pull/42)\n" +
-		"- Branch: `feat/thing` in owner/repo\n\n" +
+		"- Branch: [`feat/thing`](https://github.com/owner/repo/tree/feat/thing) in owner/repo\n\n" +
 		"Task description."
 
 	assert.Equal(t, expected, result)
@@ -174,7 +174,7 @@ func TestUpdateLinksBlock_CrossCuttingCard(t *testing.T) {
 	// Step 2: Branch from repo B.
 	entry2 := linkEntry{
 		Prefix: "`feat/CU-86d1rn980-geozone-v2` in triptechtravel/cloudflare-worker-functions",
-		Line:   "Branch: `feat/CU-86d1rn980-geozone-v2` in triptechtravel/cloudflare-worker-functions",
+		Line:   "Branch: [`feat/CU-86d1rn980-geozone-v2`](https://github.com/triptechtravel/cloudflare-worker-functions/tree/feat/CU-86d1rn980-geozone-v2) in triptechtravel/cloudflare-worker-functions",
 	}
 	desc = updateLinksBlock(desc, entry2)
 

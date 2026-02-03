@@ -58,6 +58,8 @@ type sprintTaskEntry struct {
 	Points       string `json:"points,omitempty"`
 	TimeEstimate string `json:"time_estimate,omitempty"`
 	TimeSpent    string `json:"time_spent,omitempty"`
+	ListID       string `json:"list_id"`
+	SprintName   string `json:"sprint_name"`
 }
 
 func runSprintCurrent(f *cmdutil.Factory, folderID string, jsonFlags *cmdutil.JSONFlags) error {
@@ -234,6 +236,8 @@ func runSprintCurrent(f *cmdutil.Factory, folderID string, jsonFlags *cmdutil.JS
 			Points:       pts,
 			TimeEstimate: formatSprintDuration(t.TimeEstimate),
 			TimeSpent:    formatSprintDuration(t.TimeSpent),
+			ListID:       currentList.ID,
+			SprintName:   currentList.Name,
 		})
 	}
 

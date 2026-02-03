@@ -64,9 +64,10 @@ func branchRun(opts *branchOptions) error {
 
 	// Build link entry (markdown format for ClickUp rich rendering).
 	repoSlug := fmt.Sprintf("%s/%s", gitCtx.RepoOwner, gitCtx.RepoName)
+	branchURL := fmt.Sprintf("https://github.com/%s/tree/%s", repoSlug, gitCtx.Branch)
 	entry := linkEntry{
 		Prefix: fmt.Sprintf("`%s` in %s", gitCtx.Branch, repoSlug),
-		Line:   fmt.Sprintf("Branch: `%s` in %s", gitCtx.Branch, repoSlug),
+		Line:   fmt.Sprintf("Branch: [`%s`](%s) in %s", gitCtx.Branch, branchURL, repoSlug),
 	}
 
 	if err := upsertLink(opts.factory, taskID, entry); err != nil {

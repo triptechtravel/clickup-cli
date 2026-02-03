@@ -52,6 +52,7 @@ func statusRun(f *cmdutil.Factory) error {
 
 	fmt.Fprintf(ios.Out, "%s Logged in to ClickUp\n", cs.Green("!"))
 	fmt.Fprintf(ios.Out, "  %-16s %s\n", cs.Bold("Username:"), user.Username)
+	fmt.Fprintf(ios.Out, "  %-16s %d\n", cs.Bold("User ID:"), user.ID)
 	fmt.Fprintf(ios.Out, "  %-16s %s\n", cs.Bold("Email:"), user.Email)
 	fmt.Fprintf(ios.Out, "  %-16s %s\n", cs.Bold("Auth method:"), method)
 	fmt.Fprintf(ios.Out, "  %-16s %s\n", cs.Bold("Workspace:"), workspace)

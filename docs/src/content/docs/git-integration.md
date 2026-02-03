@@ -111,10 +111,10 @@ Renders as a clickable link in ClickUp. Requires the [GitHub CLI](https://cli.gi
 ### `link branch`
 
 ```markdown
-Branch: `feature/CU-ae27de-add-auth` in owner/repo
+Branch: [`feature/CU-ae27de-add-auth`](https://github.com/owner/repo/tree/feature/CU-ae27de-add-auth) in owner/repo
 ```
 
-Branch names are rendered in code formatting.
+Renders as a clickable link to the GitHub branch with the branch name in code formatting.
 
 ### `link commit`
 
