@@ -1,7 +1,6 @@
 ---
 title: AI agents
-layout: default
-nav_order: 5.8
+description: Using the clickup CLI with AI coding agents like Claude Code, GitHub Copilot, and Cursor.
 ---
 
 # Using with AI agents

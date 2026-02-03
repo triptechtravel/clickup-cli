@@ -1,7 +1,6 @@
 ---
 title: CI usage
-layout: default
-nav_order: 5.5
+description: Using the clickup CLI in CI/CD pipelines with JSON output and non-interactive auth.
 ---
 
 # CI usage

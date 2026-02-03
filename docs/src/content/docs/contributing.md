@@ -1,7 +1,6 @@
 ---
 title: Contributing
-layout: default
-nav_order: 7
+description: Development setup, project structure, and contribution guidelines.
 ---
 
 # Contributing

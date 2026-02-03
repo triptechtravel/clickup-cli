@@ -1,0 +1,75 @@
+---
+title: clickup CLI
+description: A command-line tool for working with ClickUp tasks, comments, and sprints -- designed for developers who live in the terminal and use GitHub.
+template: splash
+hero:
+  tagline: A command-line tool for working with ClickUp tasks, comments, and sprints -- designed for developers who live in the terminal and use GitHub.
+  actions:
+    - text: Get Started
+      link: /clickup-cli/installation/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/triptechtravel/clickup-cli
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Features
+
+<CardGrid stagger>
+  <Card title="Task management" icon="pencil">
+    View, list, create, and edit ClickUp tasks from the terminal.
+  </Card>
+  <Card title="Git integration" icon="setting">
+    Auto-detects task IDs from branch names (`CU-abc123` or `PROJ-42`).
+  </Card>
+  <Card title="GitHub linking" icon="github">
+    Links PRs, branches, and commits to ClickUp tasks via comments.
+  </Card>
+  <Card title="Sprint dashboard" icon="list-format">
+    Shows current sprint tasks grouped by status with assignees and priorities.
+  </Card>
+  <Card title="AI-friendly" icon="star">
+    Structured `--json` output and explicit `--task`/`--repo` flags for AI coding agents.
+  </Card>
+  <Card title="Fuzzy status matching" icon="magnifier">
+    Change task status with partial or fuzzy input.
+  </Card>
+</CardGrid>
+
+## Quick install
+
+```sh
+go install github.com/triptechtravel/clickup-cli/cmd/clickup@latest
+```
+
+Or via Homebrew:
+
+```sh
+brew install triptechtravel/tap/clickup
+```
+
+See the [Installation](/clickup-cli/installation/) page for all options.
+
+## Quick start
+
+```sh
+# Authenticate with ClickUp
+clickup auth login
+
+# Select a default space
+clickup space select
+
+# View the task for your current git branch
+clickup task view
+
+# Set a task's status
+clickup status set "in progress"
+
+# Link your GitHub PR to the task
+clickup link pr
+```
+
+See the [Getting started](/clickup-cli/getting-started/) guide for a full walkthrough.

@@ -1,7 +1,6 @@
 ---
 title: Git integration
-layout: default
-nav_order: 6
+description: How the CLI auto-detects ClickUp task IDs from git branch names.
 ---
 
 # Git integration

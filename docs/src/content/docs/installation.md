@@ -1,7 +1,6 @@
 ---
 title: Installation
-layout: default
-nav_order: 2
+description: Install the clickup CLI via Go, Homebrew, or binary release.
 ---
 
 # Installation

@@ -1,0 +1,38 @@
+/* ClickUp brand colors */
+:root {
+  --clickup-purple: #7B68EE;
+  --clickup-purple-dark: #6352d6;
+  --clickup-purple-light: #a65ee2;
+  --clickup-violet: #e886f9;
+  --clickup-pink: #FD71AF;
+  --clickup-blue: #49CCF9;
+  --clickup-yellow: #FFC800;
+}
+
+/* Starlight dark theme overrides */
+:root[data-theme='dark'] {
+  --sl-color-accent-low: #291f4d;
+  --sl-color-accent: #7B68EE;
+  --sl-color-accent-high: #c4b5fd;
+  --sl-color-text-accent: #c4b5fd;
+}
+
+:root[data-theme='light'] {
+  --sl-color-accent-low: #e8e0ff;
+  --sl-color-accent: #6352d6;
+  --sl-color-accent-high: #3b2f80;
+  --sl-color-text-accent: #3b2f80;
+}
+
+/* Selection highlight */
+::selection {
+  background-color: rgba(123, 104, 238, 0.3);
+}
+
+/* Hero gradient for the landing page title */
+[data-page-type='splash'] .hero h1 {
+  background: linear-gradient(135deg, var(--clickup-purple), var(--clickup-violet), var(--clickup-pink));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}

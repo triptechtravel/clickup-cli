@@ -1,7 +1,6 @@
 ---
 title: GitHub Actions
-layout: default
-nav_order: 5.7
+description: Pre-built GitHub Actions workflows for automating ClickUp task updates on PR events.
 ---
 
 # GitHub Actions
@@ -144,4 +143,4 @@ jobs:
           clickup comment add "" "CI ${CONCLUSION}: ${BRANCH} (${SHA:0:7})"
 ```
 
-See also: [Using with AI agents](ai-agents) for integrating the CLI with AI coding tools.
+See also: [Using with AI agents](/clickup-cli/ai-agents/) for integrating the CLI with AI coding tools.

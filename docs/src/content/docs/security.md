@@ -1,7 +1,6 @@
 ---
 title: Security
-layout: default
-nav_order: 8
+description: Credential storage, security best practices, and vulnerability reporting.
 ---
 
 # Security

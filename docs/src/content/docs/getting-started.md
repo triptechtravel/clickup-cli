@@ -1,7 +1,6 @@
 ---
 title: Getting started
-layout: default
-nav_order: 3
+description: Initial setup walkthrough for the clickup CLI.
 ---
 
 # Getting started
@@ -99,6 +98,6 @@ This posts a comment on the ClickUp task with a link to the GitHub PR. It requir
 
 ## Next steps
 
-- See the full [Command reference](commands) for all available commands and flags.
-- Read about [Configuration](configuration) to customize the CLI for your workflow.
-- Learn how [Git integration](git-integration) detects task IDs from branch names.
+- See the full [Command reference](/clickup-cli/commands/) for all available commands and flags.
+- Read about [Configuration](/clickup-cli/configuration/) to customize the CLI for your workflow.
+- Learn how [Git integration](/clickup-cli/git-integration/) detects task IDs from branch names.

@@ -1,7 +1,6 @@
 ---
 title: Configuration
-layout: default
-nav_order: 5
+description: Config file reference, per-directory defaults, aliases, and environment variables.
 ---
 
 # Configuration

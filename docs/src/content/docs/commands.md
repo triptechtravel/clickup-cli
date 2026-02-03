@@ -1,7 +1,6 @@
 ---
 title: Command reference
-layout: default
-nav_order: 4
+description: Complete reference for all clickup CLI commands and flags.
 ---
 
 # Command reference
@@ -166,18 +165,22 @@ clickup task edit --points 5
 
 ### `task search <query>`
 
-Search tasks by name with fuzzy matching and optional comment search.
+Search tasks by name with fuzzy matching and optional comment search. The `<query>` argument matches against task names as a case-insensitive substring. To search by task ID, pass the full ID (e.g., `CU-abc123`).
 
 ```sh
+# Search by name substring
 clickup task search "geozone" --comments --pick
+
+# Search and output as JSON
+clickup task search "login bug" --json
 ```
 
 | Flag | Description |
 |------|-------------|
-| `--space ID` | Limit search to a specific space |
+| `--space ID` | Limit search to a specific space (defaults to configured space) |
 | `--folder ID` | Limit search to a specific folder |
-| `--pick` | Interactively pick from results |
-| `--comments` | Also search within task comments |
+| `--pick` | Interactively pick from results and view the selected task |
+| `--comments` | Also search within task comment bodies |
 | `--json` | Output as JSON |
 | `--jq EXPR` | Filter JSON output with a jq expression |
 
@@ -255,13 +258,21 @@ List comments on a task.
 clickup comment list CU-abc123
 ```
 
-### `comment edit`
+### `comment edit <COMMENT_ID> [BODY]`
 
-Edit an existing comment.
+Edit an existing comment. If `BODY` is not provided (or `--editor` is used), your configured editor opens for editing.
 
 ```sh
-clickup comment edit
+# Edit a comment by ID
+clickup comment edit 12345 "Updated comment text"
+
+# Open editor to edit the comment
+clickup comment edit 12345 --editor
 ```
+
+| Flag | Description |
+|------|-------------|
+| `-e`, `--editor` | Open editor to compose comment body |
 
 ---
 
@@ -296,7 +307,14 @@ List all available statuses for the configured space.
 
 ```sh
 clickup status list
+
+# List statuses for a specific space
+clickup status list --space 12345
 ```
+
+| Flag | Description |
+|------|-------------|
+| `--space ID` | Space ID to list statuses for (defaults to configured space) |
 
 ---
 
@@ -316,7 +334,35 @@ clickup link pr
 
 # Link a specific PR by number
 clickup link pr 42
+
+# Link a PR from any repo to any task
+clickup link pr 42 --repo owner/repo --task CU-abc123
 ```
+
+| Flag | Description |
+|------|-------------|
+| `--task ID` | Target task ID (overrides auto-detection from branch) |
+| `--repo OWNER/REPO` | Target GitHub repository (overrides auto-detection) |
+
+### `link sync [NUMBER]`
+
+Sync ClickUp task info into a GitHub PR description and link back to the task. Inserts or updates a table in the PR body showing the task name, status, priority, and assignees. The update is idempotent -- running multiple times replaces the existing block rather than duplicating it.
+
+```sh
+# Sync the current PR
+clickup link sync
+
+# Sync a specific PR
+clickup link sync 42
+
+# Sync from any repo to any task
+clickup link sync 42 --repo owner/repo --task CU-abc123
+```
+
+| Flag | Description |
+|------|-------------|
+| `--task ID` | Target task ID (overrides auto-detection from branch) |
+| `--repo OWNER/REPO` | Target GitHub repository (overrides auto-detection) |
 
 ### `link branch`
 
@@ -324,7 +370,15 @@ Link the current git branch to a ClickUp task by posting a comment with the bran
 
 ```sh
 clickup link branch
+
+# Link to a specific task
+clickup link branch --task CU-abc123 --repo owner/repo
 ```
+
+| Flag | Description |
+|------|-------------|
+| `--task ID` | Target task ID (overrides auto-detection from branch) |
+| `--repo OWNER/REPO` | Target GitHub repository (overrides auto-detection) |
 
 ### `link commit [SHA]`
 
@@ -336,7 +390,15 @@ clickup link commit
 
 # Link a specific commit
 clickup link commit a1b2c3d
+
+# Link to a specific task
+clickup link commit a1b2c3d --task CU-abc123 --repo owner/repo
 ```
+
+| Flag | Description |
+|------|-------------|
+| `--task ID` | Target task ID (overrides auto-detection from branch) |
+| `--repo OWNER/REPO` | Target GitHub repository (overrides auto-detection) |
 
 ---
 
@@ -397,13 +459,24 @@ List all spaces in the current workspace.
 clickup space list
 ```
 
-### `space select`
+### `space select [NAME]`
 
-Interactively select a default space. The selection is saved to the config file.
+Interactively select a default space. If `NAME` is provided, the CLI selects the first space matching that name (useful for scripting). The selection is saved to the config file.
 
 ```sh
+# Interactive selection
 clickup space select
+
+# Select by name
+clickup space select "Engineering"
+
+# Save as a directory default
+clickup space select --directory
 ```
+
+| Flag | Description |
+|------|-------------|
+| `--directory` | Save the selection as a directory default for the current working directory |
 
 ---
 
@@ -454,4 +527,4 @@ clickup completion fish
 clickup completion powershell
 ```
 
-See the [Installation](installation#shell-completions) page for setup instructions.
+See the [Installation](/clickup-cli/installation/#shell-completions) page for setup instructions.
