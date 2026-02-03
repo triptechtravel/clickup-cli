@@ -58,7 +58,3 @@ clickup link pr
 ```
 
 See the [Getting started](getting-started) guide for a full walkthrough.
-
----
-
-Created by [Isaac Rowntree](https://github.com/isaacrowntree) -- open source under [MIT](https://github.com/triptechtravel/clickup-cli/blob/main/LICENSE).

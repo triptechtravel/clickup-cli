@@ -1,6 +1,11 @@
-# clickup
+# @triptechtravel/clickup-cli
 
 A command-line tool for working with ClickUp tasks, comments, and sprints -- designed for developers who live in the terminal and use GitHub.
+
+[![Release](https://img.shields.io/github/v/release/triptechtravel/clickup-cli)](https://github.com/triptechtravel/clickup-cli/releases)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/triptechtravel/clickup-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/triptechtravel/clickup-cli/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/triptechtravel/clickup-cli)](https://goreportcard.com/report/github.com/triptechtravel/clickup-cli)
 
 `clickup` integrates with git to auto-detect task IDs from branch names and links GitHub pull requests, branches, and commits to ClickUp tasks.
 
