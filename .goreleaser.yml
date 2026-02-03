@@ -37,6 +37,7 @@ brews:
       owner: triptechtravel
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    skip_upload: true
     homepage: "https://github.com/triptechtravel/clickup-cli"
     description: "CLI tool for ClickUp task management with GitHub integration"
     license: "MIT"

@@ -1,0 +1,16 @@
+title: clickup CLI
+description: Manage ClickUp tasks from the command line
+theme: just-the-docs
+url: "https://triptechtravel.github.io"
+baseurl: "/clickup-cli"
+
+aux_links:
+  "GitHub":
+    - "https://github.com/triptechtravel/clickup-cli"
+
+nav_sort: order
+
+color_scheme: dark
+
+search_enabled: true
+search.heading_level: 3
