@@ -60,15 +60,19 @@ func branchRun(opts *branchOptions) error {
 		fmt.Fprintf(ios.ErrOut, "Detected task %s from branch %s\n", cs.Bold(taskID), cs.Cyan(gitCtx.Branch))
 	}
 
-	// Build the comment text.
+	// Build rich text comment blocks.
 	repoSlug := fmt.Sprintf("%s/%s", gitCtx.RepoOwner, gitCtx.RepoName)
-	commentText := fmt.Sprintf(
-		"\xf0\x9f\x94\x97 **Branch linked**: `%s` in %s",
-		gitCtx.Branch, repoSlug,
-	)
+	blocks := []commentBlock{
+		{Text: "\xf0\x9f\x94\x97 "},
+		{Text: "Branch linked", Attributes: map[string]interface{}{"bold": true}},
+		{Text: ": "},
+		{Text: gitCtx.Branch, Attributes: map[string]interface{}{"code": true}},
+		{Text: " in " + repoSlug},
+		{Text: "\n"},
+	}
 
 	// Post the comment.
-	if err := postComment(opts.factory, taskID, commentText); err != nil {
+	if err := postRichComment(opts.factory, taskID, blocks); err != nil {
 		return err
 	}
 

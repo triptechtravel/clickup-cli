@@ -106,16 +106,20 @@ func commitRun(opts *commitOptions) error {
 		shortSHA = shortSHA[:7]
 	}
 
-	// Build the comment text.
+	// Build rich text comment blocks.
 	commitURL := fmt.Sprintf("https://github.com/%s/%s/commit/%s",
 		gitCtx.RepoOwner, gitCtx.RepoName, fullSHA)
-	commentText := fmt.Sprintf(
-		"\xf0\x9f\x94\x97 **Commit linked**: [`%s`](%s) - %s",
-		shortSHA, commitURL, commitMessage,
-	)
+	blocks := []commentBlock{
+		{Text: "\xf0\x9f\x94\x97 "},
+		{Text: "Commit linked", Attributes: map[string]interface{}{"bold": true}},
+		{Text: ": "},
+		{Text: shortSHA, Attributes: map[string]interface{}{"code": true, "link": commitURL}},
+		{Text: " - " + commitMessage},
+		{Text: "\n"},
+	}
 
 	// Post the comment.
-	if err := postComment(opts.factory, taskID, commentText); err != nil {
+	if err := postRichComment(opts.factory, taskID, blocks); err != nil {
 		return err
 	}
 

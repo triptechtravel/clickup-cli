@@ -16,6 +16,7 @@ func NewCmdLink(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(NewCmdLinkPR(f))
 	cmd.AddCommand(NewCmdLinkBranch(f))
 	cmd.AddCommand(NewCmdLinkCommit(f))
+	cmd.AddCommand(NewCmdLinkSync(f))
 
 	return cmd
 }
