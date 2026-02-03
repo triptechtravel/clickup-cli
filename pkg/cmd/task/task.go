@@ -1,0 +1,22 @@
+package task
+
+import (
+	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
+)
+
+// NewCmdTask returns the top-level "task" command that groups view, list, create, and edit.
+func NewCmdTask(f *cmdutil.Factory) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "task <command>",
+		Short: "Manage ClickUp tasks",
+		Long:  "View, list, create, and edit tasks in your ClickUp workspace.",
+	}
+
+	cmd.AddCommand(NewCmdView(f))
+	cmd.AddCommand(NewCmdList(f))
+	cmd.AddCommand(NewCmdCreate(f))
+	cmd.AddCommand(NewCmdEdit(f))
+
+	return cmd
+}
