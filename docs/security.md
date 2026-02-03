@@ -36,7 +36,7 @@ Tokens are never stored in the config file (`config.yml`) or logged to stdout.
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
-Email security concerns to: **security@triptech.co.nz**
+Email security concerns to: **info@campermate.com**
 
 Include:
 - Description of the vulnerability

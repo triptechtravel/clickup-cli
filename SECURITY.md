@@ -14,7 +14,7 @@ We take security seriously. If you discover a security vulnerability, please rep
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
-Instead, please email security concerns to: **security@triptech.co.nz**
+Instead, please email security concerns to: **info@campermate.com**
 
 Include:
 - Description of the vulnerability
