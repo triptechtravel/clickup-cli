@@ -203,6 +203,14 @@ clickup task view CU-abc123 --json
 clickup sprint current --json --jq '.[].name'
 ```
 
+## Documentation
+
+Full documentation is available at [triptechtravel.github.io/clickup-cli](https://triptechtravel.github.io/clickup-cli/).
+
+## Author
+
+Created by [Isaac Rowntree](https://github.com/isaacrowntree).
+
 ## License
 
 [MIT](LICENSE)

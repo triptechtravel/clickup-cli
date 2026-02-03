@@ -11,9 +11,15 @@ aux_links:
   "GitHub":
     - "https://github.com/triptechtravel/clickup-cli"
 
+aux_links_new_tab: true
+
 nav_sort: order
 
 color_scheme: dark
 
 search_enabled: true
 search.heading_level: 3
+
+footer_content: "Created by <a href=\"https://github.com/isaacrowntree\">Isaac Rowntree</a>. Licensed under <a href=\"https://github.com/triptechtravel/clickup-cli/blob/main/LICENSE\">MIT</a>."
+
+ga_tracking: null
