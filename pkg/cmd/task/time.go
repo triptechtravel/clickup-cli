@@ -101,6 +101,9 @@ func runTimeLog(f *cmdutil.Factory, opts *timeLogOptions) error {
 			return &cmdutil.SilentError{Err: fmt.Errorf("no task ID found in branch")}
 		}
 		taskID = gitCtx.TaskID.ID
+	} else {
+		parsed := git.ParseTaskID(taskID)
+		taskID = parsed.ID
 	}
 
 	// Parse duration.
@@ -266,6 +269,9 @@ func runTimeList(f *cmdutil.Factory, opts *timeListOptions) error {
 			return &cmdutil.SilentError{Err: fmt.Errorf("no task ID found in branch")}
 		}
 		taskID = gitCtx.TaskID.ID
+	} else {
+		parsed := git.ParseTaskID(taskID)
+		taskID = parsed.ID
 	}
 
 	// Get workspace (team) ID from config.

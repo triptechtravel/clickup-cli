@@ -16,7 +16,7 @@ summary (name, status, priority, assignees, dates) with every comment
 posted on the task.
 
 If no task ID is provided, the command attempts to auto-detect the task ID
-from the current git branch name. Branch names containing CU-<hex> or
+from the current git branch name. Branch names containing CU-<id> or
 PREFIX-<number> patterns are recognized.
 
 ```

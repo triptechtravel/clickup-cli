@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/raksul/go-clickup/clickup"
+	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
 
@@ -43,8 +44,14 @@ func upsertCustomFieldLink(f *cmdutil.Factory, taskID string, fieldName string, 
 		return err
 	}
 
+	parsed := git.ParseTaskID(taskID)
+	var getOpts *clickup.GetTaskOptions
+	if parsed.IsCustomID {
+		getOpts = &clickup.GetTaskOptions{CustomTaskIDs: true}
+	}
+
 	ctx := context.Background()
-	task, _, err := client.Clickup.Tasks.GetTask(ctx, taskID, nil)
+	task, _, err := client.Clickup.Tasks.GetTask(ctx, parsed.ID, getOpts)
 	if err != nil {
 		return fmt.Errorf("failed to fetch task: %w", err)
 	}

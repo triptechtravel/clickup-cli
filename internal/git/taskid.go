@@ -6,8 +6,8 @@ import (
 )
 
 var (
-	// CU-{hex} pattern for default ClickUp task IDs
-	cuIDPattern = regexp.MustCompile(`(?i)CU-([0-9a-f]+)`)
+	// CU-{alphanumeric} pattern for default ClickUp task IDs
+	cuIDPattern = regexp.MustCompile(`(?i)CU-([0-9a-z]+)`)
 
 	// PREFIX-{number} pattern for custom task IDs (e.g., PROJ-42, ENG-1234)
 	customIDPattern = regexp.MustCompile(`([A-Z][A-Z0-9]+-\d+)`)
@@ -41,11 +41,11 @@ type TaskIDResult struct {
 func ExtractTaskID(branch string) *TaskIDResult {
 	cleaned := stripBranchPrefix(branch)
 
-	// Try CU-{hex} pattern first
+	// Try CU-{alphanumeric} pattern first
 	if matches := cuIDPattern.FindStringSubmatch(cleaned); len(matches) >= 2 {
 		return &TaskIDResult{
 			Raw:        matches[0],
-			ID:         matches[0],
+			ID:         matches[1], // Strip CU- prefix; API expects raw ID
 			IsCustomID: false,
 		}
 	}
@@ -73,6 +73,39 @@ func stripBranchPrefix(branch string) string {
 		}
 	}
 	return branch
+}
+
+// ParseTaskID normalizes a task ID string passed as a CLI argument.
+// It handles CU- prefixed IDs (stripping the prefix), custom prefix IDs
+// (e.g., PROJ-42), and raw IDs (returned as-is).
+func ParseTaskID(input string) *TaskIDResult {
+	// Check for CU- prefix (default ClickUp ID format)
+	if matches := cuIDPattern.FindStringSubmatch(input); len(matches) >= 2 {
+		return &TaskIDResult{
+			Raw:        matches[0],
+			ID:         matches[1], // Strip CU- prefix; API expects raw ID
+			IsCustomID: false,
+		}
+	}
+
+	// Check for custom PREFIX-NUMBER pattern
+	if matches := customIDPattern.FindStringSubmatch(input); len(matches) >= 2 {
+		prefix := strings.Split(matches[1], "-")[0]
+		if !excludedPrefixes[prefix] {
+			return &TaskIDResult{
+				Raw:        matches[1],
+				ID:         matches[1],
+				IsCustomID: true,
+			}
+		}
+	}
+
+	// Assume it's a raw ClickUp task ID
+	return &TaskIDResult{
+		Raw:        input,
+		ID:         input,
+		IsCustomID: false,
+	}
 }
 
 // BranchNamingSuggestion returns a suggestion message for when no task ID is found.

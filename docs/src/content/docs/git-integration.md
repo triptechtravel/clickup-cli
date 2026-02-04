@@ -13,14 +13,14 @@ Two task ID patterns are recognized:
 
 ### Default ClickUp IDs
 
-Pattern: `CU-<hex>`
+Pattern: `CU-<id>`
 
-Matches the default alphanumeric hex IDs that ClickUp assigns to tasks. The match is case-insensitive.
+Matches the default alphanumeric IDs that ClickUp assigns to tasks. The match is case-insensitive. Both hex-only and full alphanumeric IDs are supported.
 
 Examples:
 - `CU-ae27de`
-- `CU-1a2b3c`
-- `cu-FF00AA`
+- `CU-86d1u2bz4`
+- `cu-abc123`
 
 ### Custom task IDs
 
@@ -71,7 +71,7 @@ For example, a branch named `FEATURE-123` will not match as a custom task ID.
 
 When scanning a branch name, the CLI applies patterns in this order:
 
-1. **CU-hex** -- checked first. If a `CU-<hex>` pattern is found, it is used immediately.
+1. **CU-id** -- checked first. If a `CU-<id>` pattern is found, it is used immediately. The `CU-` prefix is stripped before making API calls.
 2. **PREFIX-number** -- checked second. If a custom `PREFIX-<number>` pattern is found (and the prefix is not in the excluded list), it is used.
 
 If neither pattern matches, the command reports that no task ID was found and suggests a branch naming format.

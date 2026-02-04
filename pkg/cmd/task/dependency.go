@@ -6,6 +6,7 @@ import (
 
 	"github.com/raksul/go-clickup/clickup"
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
 
@@ -63,6 +64,9 @@ func runDependencyAdd(f *cmdutil.Factory, taskID string, opts *dependencyAddOpti
 	ios := f.IOStreams
 	cs := ios.ColorScheme()
 
+	parsed := git.ParseTaskID(taskID)
+	taskID = parsed.ID
+
 	client, err := f.ApiClient()
 	if err != nil {
 		return err
@@ -72,10 +76,10 @@ func runDependencyAdd(f *cmdutil.Factory, taskID string, opts *dependencyAddOpti
 	req := &clickup.AddDependencyRequest{}
 
 	if opts.dependsOn != "" {
-		req.DependsOn = opts.dependsOn
+		req.DependsOn = git.ParseTaskID(opts.dependsOn).ID
 	}
 	if opts.blocks != "" {
-		req.DependencyOf = opts.blocks
+		req.DependencyOf = git.ParseTaskID(opts.blocks).ID
 	}
 
 	_, err = client.Clickup.Dependencies.AddDependency(ctx, taskID, req, nil)
@@ -134,6 +138,9 @@ func runDependencyRemove(f *cmdutil.Factory, taskID string, opts *dependencyRemo
 	ios := f.IOStreams
 	cs := ios.ColorScheme()
 
+	parsed := git.ParseTaskID(taskID)
+	taskID = parsed.ID
+
 	client, err := f.ApiClient()
 	if err != nil {
 		return err
@@ -143,10 +150,10 @@ func runDependencyRemove(f *cmdutil.Factory, taskID string, opts *dependencyRemo
 	deleteOpts := &clickup.DeleteDependencyOptions{}
 
 	if opts.dependsOn != "" {
-		deleteOpts.DependsOn = opts.dependsOn
+		deleteOpts.DependsOn = git.ParseTaskID(opts.dependsOn).ID
 	}
 	if opts.blocks != "" {
-		deleteOpts.DependencyOf = opts.blocks
+		deleteOpts.DependencyOf = git.ParseTaskID(opts.blocks).ID
 	}
 
 	_, err = client.Clickup.Dependencies.DeleteDependency(ctx, taskID, deleteOpts)

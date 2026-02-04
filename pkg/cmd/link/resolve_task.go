@@ -39,10 +39,11 @@ func resolveTask(f *cmdutil.Factory, flagTaskID string) (*resolveTaskResult, err
 
 	// 1. Explicit --task flag.
 	if flagTaskID != "" {
-		fmt.Fprintf(ios.ErrOut, "Using task %s\n", cs.Bold(flagTaskID))
+		parsed := git.ParseTaskID(flagTaskID)
+		fmt.Fprintf(ios.ErrOut, "Using task %s\n", cs.Bold(parsed.ID))
 		// Still try to get git context for repo info, but don't fail if unavailable.
 		gitCtx, _ := f.GitContext()
-		return &resolveTaskResult{TaskID: flagTaskID, GitCtx: gitCtx}, nil
+		return &resolveTaskResult{TaskID: parsed.ID, GitCtx: gitCtx}, nil
 	}
 
 	// 2. Auto-detect from git branch.
@@ -198,7 +199,8 @@ func promptManualTaskID(p *prompter.Prompter) (string, error) {
 	if taskID == "" {
 		return "", fmt.Errorf("no task ID provided")
 	}
-	return taskID, nil
+	parsed := git.ParseTaskID(taskID)
+	return parsed.ID, nil
 }
 
 // resolveSearchTask is a minimal task representation for search results

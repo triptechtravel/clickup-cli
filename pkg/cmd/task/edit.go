@@ -117,6 +117,10 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 		}
 		taskID = gitCtx.TaskID.ID
 		isCustomID = gitCtx.TaskID.IsCustomID
+	} else {
+		parsed := git.ParseTaskID(taskID)
+		taskID = parsed.ID
+		isCustomID = parsed.IsCustomID
 	}
 
 	// Ensure at least one field is being updated.

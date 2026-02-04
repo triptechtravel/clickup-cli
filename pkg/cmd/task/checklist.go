@@ -6,6 +6,7 @@ import (
 
 	"github.com/raksul/go-clickup/clickup"
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
 
@@ -45,6 +46,9 @@ func newCmdChecklistAdd(f *cmdutil.Factory) *cobra.Command {
 func runChecklistAdd(f *cmdutil.Factory, taskID string, name string) error {
 	ios := f.IOStreams
 	cs := ios.ColorScheme()
+
+	parsed := git.ParseTaskID(taskID)
+	taskID = parsed.ID
 
 	client, err := f.ApiClient()
 	if err != nil {

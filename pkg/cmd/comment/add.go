@@ -79,6 +79,7 @@ func addRun(opts *addOptions) error {
 
 	// Resolve task ID from git branch if not provided.
 	taskID := opts.taskID
+	isCustomID := false
 	if taskID == "" {
 		gitCtx, err := opts.factory.GitContext()
 		if err != nil {
@@ -89,7 +90,12 @@ func addRun(opts *addOptions) error {
 			return fmt.Errorf("%s", git.BranchNamingSuggestion(gitCtx.Branch))
 		}
 		taskID = gitCtx.TaskID.ID
+		isCustomID = gitCtx.TaskID.IsCustomID
 		fmt.Fprintf(ios.ErrOut, "Detected task %s from branch %s\n", cs.Bold(taskID), cs.Cyan(gitCtx.Branch))
+	} else {
+		parsed := git.ParseTaskID(taskID)
+		taskID = parsed.ID
+		isCustomID = parsed.IsCustomID
 	}
 
 	// Resolve comment body.
@@ -114,6 +120,9 @@ func addRun(opts *addOptions) error {
 	}
 
 	url := fmt.Sprintf("https://api.clickup.com/api/v2/task/%s/comment", taskID)
+	if isCustomID {
+		url += "?custom_task_ids=true"
+	}
 
 	// Build comment payload, resolving @mentions to real ClickUp user tags.
 	var payload []byte

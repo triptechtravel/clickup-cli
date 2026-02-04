@@ -178,7 +178,7 @@ The config directory can be overridden with the `CLICKUP_CONFIG_DIR` environment
 
 The CLI auto-detects ClickUp task IDs from your current git branch name. Two patterns are recognized:
 
-- **`CU-<hex>`** -- default ClickUp task IDs (e.g., `CU-ae27de`)
+- **`CU-<id>`** -- default ClickUp task IDs (e.g., `CU-ae27de`, `CU-86d1u2bz4`)
 - **`PREFIX-<number>`** -- custom task IDs (e.g., `PROJ-42`, `ENG-1234`)
 
 Standard branch prefixes like `feature/`, `fix/`, `hotfix/`, `bugfix/`, `chore/`, and others are stripped before matching.

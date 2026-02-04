@@ -28,7 +28,7 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 		Long: `Display detailed information about a ClickUp task.
 
 If no task ID is provided, the command attempts to auto-detect the task ID
-from the current git branch name. Branch names containing CU-<hex> or
+from the current git branch name. Branch names containing CU-<id> or
 PREFIX-<number> patterns are recognized.`,
 		Example: `  # View a specific task
   clickup task view 86a3xrwkp
@@ -72,6 +72,10 @@ func runView(f *cmdutil.Factory, opts *viewOptions) error {
 		}
 		taskID = gitCtx.TaskID.ID
 		isCustomID = gitCtx.TaskID.IsCustomID
+	} else {
+		parsed := git.ParseTaskID(taskID)
+		taskID = parsed.ID
+		isCustomID = parsed.IsCustomID
 	}
 
 	client, err := f.ApiClient()

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/raksul/go-clickup/clickup"
 	"github.com/spf13/cobra"
 	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
@@ -63,6 +64,7 @@ func setRun(opts *setOptions) error {
 
 	// Resolve task ID.
 	taskID := opts.taskID
+	isCustomID := false
 	if taskID == "" {
 		gitCtx, err := opts.factory.GitContext()
 		if err != nil {
@@ -72,7 +74,12 @@ func setRun(opts *setOptions) error {
 			return fmt.Errorf("no task ID provided and none detected from branch\n\n%s", git.BranchNamingSuggestion(gitCtx.Branch))
 		}
 		taskID = gitCtx.TaskID.ID
+		isCustomID = gitCtx.TaskID.IsCustomID
 		fmt.Fprintf(ios.ErrOut, "Detected task %s from branch %s\n", cs.Cyan(taskID), cs.Cyan(gitCtx.Branch))
+	} else {
+		parsed := git.ParseTaskID(taskID)
+		taskID = parsed.ID
+		isCustomID = parsed.IsCustomID
 	}
 
 	client, err := opts.factory.ApiClient()
@@ -83,7 +90,11 @@ func setRun(opts *setOptions) error {
 	ctx := context.Background()
 
 	// Fetch the task to determine its space.
-	task, _, err := client.Clickup.Tasks.GetTask(ctx, taskID, nil)
+	var getOpts *clickup.GetTaskOptions
+	if isCustomID {
+		getOpts = &clickup.GetTaskOptions{CustomTaskIDs: true}
+	}
+	task, _, err := client.Clickup.Tasks.GetTask(ctx, taskID, getOpts)
 	if err != nil {
 		return fmt.Errorf("failed to get task %s: %w", taskID, err)
 	}
@@ -108,7 +119,7 @@ func setRun(opts *setOptions) error {
 	}
 
 	// Update the task status.
-	updateURL := fmt.Sprintf("https://api.clickup.com/api/v2/task/%s", taskID)
+	updateURL := fmt.Sprintf("https://api.clickup.com/api/v2/task/%s", task.ID)
 	payload := map[string]string{"status": matched}
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
