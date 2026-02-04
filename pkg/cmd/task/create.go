@@ -175,11 +175,18 @@ func runCreate(f *cmdutil.Factory, opts *createOptions) error {
 		taskReq.MarkdownDescription = opts.markdownDescription
 	}
 
-	if opts.status != "" {
-		// Validate status against the list's space statuses.
+	// Fetch the list once if we need it for status or tag validation.
+	var spaceID string
+	if opts.status != "" || len(opts.tags) > 0 {
 		list, _, listErr := client.Clickup.Lists.GetList(ctx, opts.listID)
 		if listErr == nil && list.Space.ID != "" {
-			validated, valErr := cmdutil.ValidateStatus(client, list.Space.ID, opts.status, ios.ErrOut)
+			spaceID = list.Space.ID
+		}
+	}
+
+	if opts.status != "" {
+		if spaceID != "" {
+			validated, valErr := cmdutil.ValidateStatus(client, spaceID, opts.status, ios.ErrOut)
 			if valErr != nil {
 				return valErr
 			}
@@ -197,6 +204,9 @@ func runCreate(f *cmdutil.Factory, opts *createOptions) error {
 	}
 
 	if len(opts.tags) > 0 {
+		if spaceID != "" {
+			opts.tags = cmdutil.ValidateTags(client, spaceID, opts.tags, ios.ErrOut)
+		}
 		taskReq.Tags = opts.tags
 	}
 

@@ -102,6 +102,7 @@ clickup link pr
 | `clickup task activity [task-id]` | View task details and comment history |
 | `clickup task time log [task-id]` | Log time to a task |
 | `clickup task time list [task-id]` | View time entries for a task |
+| `clickup task time delete <entry-id>` | Delete a time entry |
 | `clickup task dependency add/remove` | Manage task dependencies (depends-on, blocks) |
 | `clickup task checklist add/remove` | Manage task checklists and checklist items |
 | `clickup comment add [task-id]` | Add a comment to a task |
@@ -111,6 +112,7 @@ clickup link pr
 | `clickup status set STATUS [task-id]` | Change task status with fuzzy matching |
 | `clickup status list` | List available statuses for a space |
 | `clickup field list --list-id ID` | List available custom fields for a list |
+| `clickup tag list` | List available tags for a space |
 
 ### Workflow commands
 
@@ -151,14 +153,12 @@ workspace: "1234567"
 space: "89012345"
 sprint_folder: "67890123"
 editor: "vim"
-link_field: "GitHub Links"
 aliases:
   v: task view
   s: sprint current
 directory_defaults:
   /home/user/projects/api:
     space: "11111111"
-    link_field: "PR Link"
 ```
 
 | Field | Description |

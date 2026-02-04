@@ -167,12 +167,20 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 	if cmd.Flags().Changed("description") {
 		updateReq.Description = opts.description
 	}
-	// markdown-description is handled via raw API after the main update call.
-	if cmd.Flags().Changed("status") {
-		// Validate status against the task's space statuses.
+
+	// Fetch the task once if we need it for status or tag validation.
+	var spaceID string
+	if cmd.Flags().Changed("status") || cmd.Flags().Changed("tags") {
 		fetchTask, _, fetchErr := client.Clickup.Tasks.GetTask(context.Background(), taskID, getOpts)
 		if fetchErr == nil && fetchTask.Space.ID != "" {
-			validated, valErr := cmdutil.ValidateStatus(client, fetchTask.Space.ID, opts.status, ios.ErrOut)
+			spaceID = fetchTask.Space.ID
+		}
+	}
+
+	// markdown-description is handled via raw API after the main update call.
+	if cmd.Flags().Changed("status") {
+		if spaceID != "" {
+			validated, valErr := cmdutil.ValidateStatus(client, spaceID, opts.status, ios.ErrOut)
 			if valErr != nil {
 				return valErr
 			}
@@ -191,6 +199,9 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 	}
 
 	if cmd.Flags().Changed("tags") {
+		if spaceID != "" {
+			opts.tags = cmdutil.ValidateTags(client, spaceID, opts.tags, ios.ErrOut)
+		}
 		updateReq.Tags = opts.tags
 	}
 

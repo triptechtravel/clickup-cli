@@ -32,6 +32,7 @@ Links GitHub PRs, branches, and commits to ClickUp tasks.
 * [clickup space](/clickup-cli/reference/clickup_space/)	 - Manage spaces
 * [clickup sprint](/clickup-cli/reference/clickup_sprint/)	 - Manage sprints
 * [clickup status](/clickup-cli/reference/clickup_status/)	 - Manage task statuses
+* [clickup tag](/clickup-cli/reference/clickup_tag/)	 - Manage space tags
 * [clickup task](/clickup-cli/reference/clickup_task/)	 - Manage ClickUp tasks
 * [clickup version](/clickup-cli/reference/clickup_version/)	 - Print the version of clickup CLI
 

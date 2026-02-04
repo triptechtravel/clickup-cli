@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/triptechtravel/clickup-cli/internal/git"
+	"github.com/triptechtravel/clickup-cli/internal/prompter"
 	"github.com/triptechtravel/clickup-cli/internal/tableprinter"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
@@ -25,6 +26,7 @@ func NewCmdTime(f *cmdutil.Factory) *cobra.Command {
 
 	cmd.AddCommand(NewCmdTimeLog(f))
 	cmd.AddCommand(NewCmdTimeList(f))
+	cmd.AddCommand(NewCmdTimeDelete(f))
 
 	return cmd
 }
@@ -116,7 +118,7 @@ func runTimeLog(f *cmdutil.Factory, opts *timeLogOptions) error {
 	// Parse date (default to today).
 	var startDate time.Time
 	if opts.date != "" {
-		startDate, err = time.Parse("2006-01-02", opts.date)
+		startDate, err = time.ParseInLocation("2006-01-02", opts.date, time.Local)
 		if err != nil {
 			return fmt.Errorf("invalid date %q (expected YYYY-MM-DD): %w", opts.date, err)
 		}
@@ -175,17 +177,32 @@ func runTimeLog(f *cmdutil.Factory, opts *timeLogOptions) error {
 		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(respBody))
 	}
 
-	fmt.Fprintf(ios.Out, "%s Logged %s to task %s\n",
+	var logResult struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&logResult)
+	entryID := logResult.Data.ID
+
+	fmt.Fprintf(ios.Out, "%s Logged %s to task %s",
 		cs.Green("✓"),
 		cs.Bold(formatDuration(strconv.FormatInt(durationMs, 10))),
 		cs.Bold(taskID),
 	)
+	if entryID != "" {
+		fmt.Fprintf(ios.Out, " %s", cs.Gray("(entry "+entryID+")"))
+	}
+	fmt.Fprintln(ios.Out)
 
 	// Quick actions footer
 	fmt.Fprintln(ios.Out)
 	fmt.Fprintln(ios.Out, cs.Gray("---"))
 	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
 	fmt.Fprintf(ios.Out, "  %s  clickup task time list %s\n", cs.Gray("Entries:"), taskID)
+	if entryID != "" {
+		fmt.Fprintf(ios.Out, "  %s  clickup task time delete %s\n", cs.Gray("Delete:"), entryID)
+	}
 	fmt.Fprintf(ios.Out, "  %s  clickup task view %s\n", cs.Gray("View:"), taskID)
 	fmt.Fprintf(ios.Out, "  %s  clickup task time list %s --json\n", cs.Gray("JSON:"), taskID)
 
@@ -329,6 +346,7 @@ func printTimeEntryTable(f *cmdutil.Factory, entries []timeEntry, taskID string)
 	tp := tableprinter.New(ios)
 
 	// Header row.
+	tp.AddField(cs.Bold("ID"))
 	tp.AddField(cs.Bold("DATE"))
 	tp.AddField(cs.Bold("USER"))
 	tp.AddField(cs.Bold("DURATION"))
@@ -336,9 +354,11 @@ func printTimeEntryTable(f *cmdutil.Factory, entries []timeEntry, taskID string)
 	tp.AddField(cs.Bold("BILLABLE"))
 	tp.EndRow()
 
-	tp.SetTruncateColumn(3) // Truncate description column if table is too wide.
+	tp.SetTruncateColumn(4) // Truncate description column if table is too wide.
 
 	for _, e := range entries {
+		tp.AddField(e.ID)
+
 		// Convert start ms to date.
 		dateStr := e.Start
 		if t, err := parseUnixMillis(e.Start); err == nil {
@@ -368,9 +388,103 @@ func printTimeEntryTable(f *cmdutil.Factory, entries []timeEntry, taskID string)
 	fmt.Fprintln(ios.Out, cs.Gray("---"))
 	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
 	fmt.Fprintf(ios.Out, "  %s  clickup task time log %s --duration <dur>\n", cs.Gray("Log:"), taskID)
+	fmt.Fprintf(ios.Out, "  %s  clickup task time delete <entry-id>\n", cs.Gray("Delete:"))
 	fmt.Fprintf(ios.Out, "  %s  clickup task view %s\n", cs.Gray("View:"), taskID)
 	fmt.Fprintf(ios.Out, "  %s  clickup task time list %s --json\n", cs.Gray("JSON:"), taskID)
 
+	return nil
+}
+
+// --- time delete ---
+
+type timeDeleteOptions struct {
+	factory *cmdutil.Factory
+	entryID string
+	confirm bool
+}
+
+// NewCmdTimeDelete returns a command to delete a time entry.
+func NewCmdTimeDelete(f *cmdutil.Factory) *cobra.Command {
+	opts := &timeDeleteOptions{
+		factory: f,
+	}
+
+	cmd := &cobra.Command{
+		Use:   "delete <entry-id>",
+		Short: "Delete a time entry",
+		Long: `Delete a time entry from ClickUp.
+
+ENTRY_ID is required. Find entry IDs with 'clickup task time list TASK_ID'.
+Use --yes to skip the confirmation prompt.`,
+		Example: `  # Delete a time entry (with confirmation)
+  clickup task time delete 1234567890
+
+  # Delete without confirmation
+  clickup task time delete 1234567890 --yes
+
+  # Find entry IDs first
+  clickup task time list 86a3xrwkp`,
+		Args:              cobra.ExactArgs(1),
+		PersistentPreRunE: cmdutil.NeedsAuth(f),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			opts.entryID = args[0]
+			return runTimeDelete(opts)
+		},
+	}
+
+	cmd.Flags().BoolVarP(&opts.confirm, "yes", "y", false, "Skip confirmation prompt")
+
+	return cmd
+}
+
+func runTimeDelete(opts *timeDeleteOptions) error {
+	ios := opts.factory.IOStreams
+	cs := ios.ColorScheme()
+
+	if !opts.confirm && ios.IsTerminal() {
+		p := prompter.New(ios)
+		ok, err := p.Confirm(fmt.Sprintf("Delete time entry %s?", opts.entryID), false)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			fmt.Fprintln(ios.ErrOut, "Cancelled.")
+			return nil
+		}
+	}
+
+	cfg, err := opts.factory.Config()
+	if err != nil {
+		return err
+	}
+	teamID := cfg.Workspace
+	if teamID == "" {
+		return fmt.Errorf("workspace not configured. Run 'clickup config set workspace <id>' first")
+	}
+
+	client, err := opts.factory.ApiClient()
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("https://api.clickup.com/api/v2/team/%s/time_entries/%s", teamID, opts.entryID)
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := client.DoRequest(req)
+	if err != nil {
+		return fmt.Errorf("API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(respBody))
+	}
+
+	fmt.Fprintf(ios.Out, "%s Time entry %s deleted\n", cs.Green("!"), cs.Bold(opts.entryID))
 	return nil
 }
 
