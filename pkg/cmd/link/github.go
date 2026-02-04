@@ -32,6 +32,52 @@ func fetchCurrentPR() (*ghPR, error) {
 		"Make sure you have an open PR for the current branch, or provide a PR number as an argument")
 }
 
+// fetchPRForTaskID searches for an open or merged PR whose branch name
+// contains the given task ID. This is used when --task is specified but no
+// PR number is given and the current branch doesn't have a PR (e.g. after
+// merging and switching to develop/main).
+func fetchPRForTaskID(taskID, repo string) (*ghPR, error) {
+	args := []string{"pr", "list", "--search", taskID, "--state", "all",
+		"--json", "number,title,body,url,headRefName", "--limit", "10"}
+	if repo != "" {
+		args = append(args, "--repo", repo)
+	}
+
+	cmd := exec.Command("gh", args...)
+	out, err := cmd.Output()
+	if err != nil {
+		if isGHNotInstalled(err) {
+			return nil, ghNotInstalledError()
+		}
+		return nil, fmt.Errorf("failed to search PRs for task %s: %w", taskID, err)
+	}
+
+	var prs []struct {
+		ghPR
+		HeadRefName string `json:"headRefName"`
+	}
+	if err := json.Unmarshal(out, &prs); err != nil {
+		return nil, fmt.Errorf("failed to parse gh output: %w", err)
+	}
+
+	// Prefer PRs whose branch name contains the task ID.
+	for _, pr := range prs {
+		if strings.Contains(pr.HeadRefName, taskID) {
+			result := pr.ghPR
+			return &result, nil
+		}
+	}
+
+	// Fall back to the first result if any matched the search query.
+	if len(prs) > 0 {
+		result := prs[0].ghPR
+		return &result, nil
+	}
+
+	return nil, fmt.Errorf("no PR found for task %s.\n\n"+
+		"Provide a PR number as an argument, e.g.: clickup link pr 42 --task %s", taskID, taskID)
+}
+
 // runGHPR executes a gh pr command and parses the JSON output.
 func runGHPR(args []string, errContext string) (*ghPR, error) {
 	cmd := exec.Command("gh", args...)

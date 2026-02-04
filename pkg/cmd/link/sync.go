@@ -110,7 +110,11 @@ func syncRun(opts *syncOptions) error {
 	if opts.prNumber > 0 {
 		pr, err = fetchPR(opts.prNumber, opts.repo)
 	} else {
+		// Try current branch first, then search by task ID if --task was given.
 		pr, err = fetchCurrentPR()
+		if err != nil && opts.taskID != "" {
+			pr, err = fetchPRForTaskID(taskID, opts.repo)
+		}
 	}
 	if err != nil {
 		return err
