@@ -97,6 +97,7 @@ clickup link pr
 | `clickup task list --list-id ID` | List tasks with optional filters |
 | `clickup task create --list-id ID` | Create a new task (interactive or flags) |
 | `clickup task edit [task-id]` | Edit task fields (name, status, priority, dates, tags, points, custom fields, etc.) |
+| `clickup task delete <task-id>` | Delete a task permanently |
 | `clickup task search <query>` | Search tasks with fuzzy matching |
 | `clickup task recent` | Show your recently updated tasks with folder/list context |
 | `clickup task activity [task-id]` | View task details and comment history |

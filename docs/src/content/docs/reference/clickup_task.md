@@ -23,6 +23,7 @@ View, list, create, edit, and search tasks. Track time, manage dependencies and 
 * [clickup task activity](/clickup-cli/reference/clickup_task_activity/)	 - View a task's details and comment history
 * [clickup task checklist](/clickup-cli/reference/clickup_task_checklist/)	 - Manage task checklists
 * [clickup task create](/clickup-cli/reference/clickup_task_create/)	 - Create a new ClickUp task
+* [clickup task delete](/clickup-cli/reference/clickup_task_delete/)	 - Delete a task
 * [clickup task dependency](/clickup-cli/reference/clickup_task_dependency/)	 - Manage task dependencies
 * [clickup task edit](/clickup-cli/reference/clickup_task_edit/)	 - Edit a ClickUp task
 * [clickup task list](/clickup-cli/reference/clickup_task_list/)	 - List tasks in a ClickUp list
