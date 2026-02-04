@@ -1,0 +1,22 @@
+{
+  "name": "clickup-cli",
+  "owner": {
+    "name": "Campermate"
+  },
+  "metadata": {
+    "description": "Claude Code skills for the clickup-cli tool",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "clickup-cli",
+      "description": "ClickUp CLI integration — manage tasks, sprints, comments, and statuses from Claude Code",
+      "version": "1.0.0",
+      "source": "./",
+      "strict": false,
+      "skills": ["./skills/clickup-cli"],
+      "category": "productivity",
+      "tags": ["clickup", "task-management", "cli", "project-management"]
+    }
+  ]
+}

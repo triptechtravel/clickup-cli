@@ -200,6 +200,24 @@ clickup task search "auth" --folder "Engineering Sprint"
 
 The `task search` command also suggests `task recent` when no results are found, both in interactive mode (as a menu option) and non-interactive mode (as a tip message).
 
+## Claude Code skill (plugin marketplace)
+
+Install the ClickUp CLI skill into Claude Code so it automatically uses the CLI for ClickUp operations. No need to clone this repo.
+
+```sh
+# In Claude Code, run:
+/plugin marketplace add triptechtravel/clickup-cli
+/plugin install clickup-cli@clickup-cli
+```
+
+Once installed, Claude Code will automatically use `clickup` commands when you ask it to create tasks, check sprint status, add comments, link PRs, or manage statuses.
+
+If you have the repo cloned locally, you can alternatively symlink the skill:
+
+```sh
+make install-skill
+```
+
 ## Tips
 
 - Use `clickup task recent --json` to discover active lists/folders before searching

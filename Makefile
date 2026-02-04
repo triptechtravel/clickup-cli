@@ -33,3 +33,13 @@ docs:
 .PHONY: snapshot
 snapshot:
 	goreleaser --snapshot --clean
+
+.PHONY: install-skill
+install-skill:
+	@mkdir -p $(HOME)/.claude/skills
+	@ln -sfn $(CURDIR)/skills/clickup-cli $(HOME)/.claude/skills/clickup-cli
+	@echo "Linked Claude Code skill: clickup-cli → ~/.claude/skills/clickup-cli"
+	@echo ""
+	@echo "Or install via plugin marketplace (no clone required):"
+	@echo "  /plugin marketplace add triptechtravel/clickup-cli"
+	@echo "  /plugin install clickup-cli@clickup-cli"
