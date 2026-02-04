@@ -113,6 +113,9 @@ The CLI auto-detects task IDs from git branch names. Branch naming convention: `
 clickup link pr
 clickup link pr --task CU-abc123
 
+# Link a specific PR number to a task (useful after merging)
+clickup link pr 42 --task CU-abc123
+
 # Link current branch
 clickup link branch
 
@@ -121,9 +124,32 @@ clickup link commit
 
 # Sync ClickUp task info to GitHub PR description
 clickup link sync
+clickup link sync --task CU-abc123
+clickup link sync 42 --repo owner/repo --task CU-abc123
 ```
 
 Links are stored in the task's markdown description as rich-text with clickable URLs.
+
+**Note:** When `--task` is specified but no PR number, the CLI first tries the current branch's PR, then searches for PRs matching the task ID in their branch name. This works even after merging when the feature branch is deleted.
+
+## Time Tracking
+
+```bash
+# Log time to a task (auto-detects from git branch)
+clickup task time log --duration 2h
+clickup task time log 86abc123 --duration 1h30m --description "Implemented auth flow"
+
+# Log time for a specific date
+clickup task time log --duration 45m --date 2025-01-15
+
+# Log billable time
+clickup task time log --duration 3h --billable
+
+# List time entries for a task
+clickup task time list
+clickup task time list 86abc123
+clickup task time list 86abc123 --json
+```
 
 ## Inbox
 

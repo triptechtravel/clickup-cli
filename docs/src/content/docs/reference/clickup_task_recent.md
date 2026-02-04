@@ -30,6 +30,9 @@ clickup task recent [flags]
   # Show all team activity
   clickup task recent --all
 
+  # Only show tasks from the sprint folder
+  clickup task recent --sprint
+
   # Show more results
   clickup task recent --limit 30
 
@@ -45,6 +48,7 @@ clickup task recent [flags]
       --jq string         Filter JSON output using a jq expression
       --json              Output JSON
       --limit int         Maximum number of tasks to show (default 20)
+      --sprint            Only show tasks from the current sprint folder
       --template string   Format JSON output using a Go template
 ```
 

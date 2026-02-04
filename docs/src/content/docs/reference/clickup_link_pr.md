@@ -16,6 +16,8 @@ the PR. Running the command again updates the existing entry rather than
 creating duplicates.
 
 If NUMBER is not provided, the current PR is detected using the GitHub CLI (gh).
+When --task is specified and no PR is found for the current branch, the CLI
+searches for PRs whose branch name contains the task ID (useful after merging).
 The ClickUp task ID is auto-detected from the current git branch name,
 or can be specified explicitly with --task.
 

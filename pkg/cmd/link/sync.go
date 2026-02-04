@@ -34,7 +34,9 @@ func NewCmdLinkSync(f *cmdutil.Factory) *cobra.Command {
 Adds the ClickUp task URL and status to the PR body, and updates the task
 description (or configured custom field) with a link to the PR.
 
-The task ID is auto-detected from the branch name, or specified with --task.`,
+The task ID is auto-detected from the branch name, or specified with --task.
+When --task is specified and no PR is found for the current branch, the CLI
+searches for PRs whose branch name contains the task ID (useful after merging).`,
 		Example: `  # Sync current branch's PR with the detected task
   clickup link sync
 

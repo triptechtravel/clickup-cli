@@ -62,6 +62,7 @@ clickup task search <query> [flags]
 
 ```
       --comments          Also search through task comments (slower)
+      --exact             Only show exact substring matches (no fuzzy results)
       --folder string     Limit search to a specific folder (name, substring match)
   -h, --help              help for search
       --jq string         Filter JSON output using a jq expression
