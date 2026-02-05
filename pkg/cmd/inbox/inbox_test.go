@@ -4,7 +4,76 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
+
+func TestNewCmdInbox_Defaults(t *testing.T) {
+	f := &cmdutil.Factory{}
+	cmd := NewCmdInbox(f)
+
+	daysFlag := cmd.Flags().Lookup("days")
+	if daysFlag == nil {
+		t.Fatal("expected --days flag")
+	}
+	if daysFlag.DefValue != "7" {
+		t.Errorf("--days default = %q, want %q", daysFlag.DefValue, "7")
+	}
+
+	limitFlag := cmd.Flags().Lookup("limit")
+	if limitFlag == nil {
+		t.Fatal("expected --limit flag")
+	}
+	if limitFlag.DefValue != "200" {
+		t.Errorf("--limit default = %q, want %q", limitFlag.DefValue, "200")
+	}
+}
+
+func TestContainsMention_TaskDescriptions(t *testing.T) {
+	// The same containsMention function is used for both comments and task
+	// descriptions. These cases test description-specific patterns.
+	tests := []struct {
+		name     string
+		desc     string
+		username string
+		want     bool
+	}{
+		{
+			name:     "mention in multiline description",
+			desc:     "This task requires\n@alice to review the approach\nbefore we proceed.",
+			username: "alice",
+			want:     true,
+		},
+		{
+			name:     "mention with full name style",
+			desc:     "Assigned to @isaac rowntree for implementation",
+			username: "isaac rowntree",
+			want:     true,
+		},
+		{
+			name:     "no mention in description",
+			desc:     "Implement the new feature for the dashboard",
+			username: "alice",
+			want:     false,
+		},
+		{
+			name:     "empty description",
+			desc:     "",
+			username: "alice",
+			want:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := containsMention(tt.desc, tt.username)
+			if got != tt.want {
+				t.Errorf("containsMention(%q, %q) = %v, want %v",
+					tt.desc, tt.username, got, tt.want)
+			}
+		})
+	}
+}
 
 func TestContainsMention(t *testing.T) {
 	tests := []struct {

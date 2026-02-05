@@ -27,14 +27,15 @@ type inboxOptions struct {
 }
 
 type mention struct {
-	TaskID      string   `json:"task_id"`
-	TaskName    string   `json:"task_name"`
-	CommentID   string   `json:"comment_id"`
-	CommentText string   `json:"comment_text"`
-	Attachments []string `json:"attachments,omitempty"`
-	Author      string   `json:"author"`
-	Date        string   `json:"date"`
-	DateMs      int64    `json:"-"`
+	TaskID        string   `json:"task_id"`
+	TaskName      string   `json:"task_name"`
+	CommentID     string   `json:"comment_id,omitempty"`
+	CommentText   string   `json:"comment_text"`
+	Attachments   []string `json:"attachments,omitempty"`
+	Author        string   `json:"author"`
+	Date          string   `json:"date"`
+	DateMs        int64    `json:"-"`
+	IsDescription bool     `json:"is_description,omitempty"`
 }
 
 type userResponse struct {
@@ -101,7 +102,7 @@ approximates your inbox by searching task comments.`,
 	}
 
 	cmd.Flags().IntVar(&opts.days, "days", 7, "How many days back to search")
-	cmd.Flags().IntVar(&opts.limit, "limit", 50, "Maximum number of tasks to scan for mentions")
+	cmd.Flags().IntVar(&opts.limit, "limit", 200, "Maximum number of tasks to scan for mentions")
 	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 
 	return cmd
@@ -208,6 +209,25 @@ func inboxRun(opts *inboxOptions) error {
 		if r.err != nil {
 			continue
 		}
+
+		// Check task description for @mentions.
+		desc := r.task.TextContent
+		if desc == "" {
+			desc = r.task.Description
+		}
+		if desc != "" && containsMention(desc, username) {
+			ms, _ := strconv.ParseInt(r.task.DateUpdated, 10, 64)
+			mentions = append(mentions, mention{
+				TaskID:      r.task.ID,
+				TaskName:    r.task.Name,
+				CommentText: desc,
+				Author:      r.task.Creator.Username,
+				Date:        r.task.DateUpdated,
+				DateMs:      ms,
+				IsDescription: true,
+			})
+		}
+
 		for _, c := range r.comments {
 			if containsMention(c.CommentText, username) && strings.ToLower(c.User.Username) != username {
 				ms, _ := strconv.ParseInt(c.Date, 10, 64)
@@ -246,8 +266,13 @@ func inboxRun(opts *inboxOptions) error {
 
 	for i, m := range mentions {
 		// Header line: author + task ID + time
-		fmt.Fprintf(ios.Out, "%s commented on %s  %s\n",
+		action := "commented on"
+		if m.IsDescription {
+			action = "mentioned you in description of"
+		}
+		fmt.Fprintf(ios.Out, "%s %s %s  %s\n",
 			cs.Bold(m.Author),
+			action,
 			cs.Cyan("#"+m.TaskID),
 			cs.Gray(formatMentionDate(m.Date)),
 		)

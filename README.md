@@ -19,7 +19,7 @@ A command-line tool for working with ClickUp tasks, comments, and sprints -- des
 - **GitHub linking** -- links PRs, branches, and commits to ClickUp tasks via a managed description section rendered as rich text (or optional custom field)
 - **Bidirectional sync** -- `link sync` pushes ClickUp task info into GitHub PR descriptions and vice versa
 - **Sprint dashboard** -- shows current sprint tasks grouped by status with assignees and priorities
-- **Inbox** -- surfaces recent @mentions across your workspace
+- **Inbox** -- surfaces recent @mentions in comments and task descriptions across your workspace
 - **Fuzzy status matching** -- change task status with partial or fuzzy input
 - **Time tracking** -- log and view time entries on tasks
 - **Full task properties** -- set tags, due dates, start dates, time estimates, story points, parent tasks, linked tasks, and task types from the CLI
@@ -125,7 +125,7 @@ clickup link pr
 | `clickup link commit [SHA]` | Link a git commit to a task |
 | `clickup sprint current` | Show tasks in the active sprint |
 | `clickup sprint list` | List sprints in the sprint folder |
-| `clickup inbox` | Show recent @mentions across your workspace |
+| `clickup inbox` | Show recent @mentions in comments and task descriptions |
 
 ### Setup commands
 

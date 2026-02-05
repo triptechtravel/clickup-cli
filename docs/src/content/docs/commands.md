@@ -709,7 +709,7 @@ clickup space select --directory
 
 ### `inbox`
 
-Show recent comments that @mention you across your workspace. Scans recently updated tasks for comments containing your username.
+Show recent @mentions across your workspace. Scans recently updated tasks for mentions in both comments and task descriptions.
 
 ```sh
 # Show mentions from the last 7 days (default)
@@ -718,6 +718,9 @@ clickup inbox
 # Look back 30 days
 clickup inbox --days 30
 
+# Scan more tasks in a busy workspace
+clickup inbox --limit 500
+
 # JSON output for scripting
 clickup inbox --json
 ```
@@ -725,9 +728,11 @@ clickup inbox --json
 | Flag | Description |
 |------|-------------|
 | `--days N` | How many days back to search (default: 7) |
-| `--limit N` | Maximum number of tasks to scan (default: 50) |
+| `--limit N` | Maximum number of tasks to scan (default: 200) |
 | `--json` | Output as JSON |
 | `--jq EXPR` | Filter JSON output with a jq expression |
+
+The command checks both task description text and comment bodies for `@username` mentions. Description mentions show as "mentioned you in description of" to distinguish them from comment mentions. Since ClickUp does not provide a public inbox API, this approximates your inbox by scanning task data directly.
 
 ---
 

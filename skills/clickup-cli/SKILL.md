@@ -154,9 +154,10 @@ clickup task time list 86abc123 --json
 ## Inbox
 
 ```bash
-# Show @mentions from the last 7 days
+# Show @mentions from the last 7 days (scans comments and task descriptions)
 clickup inbox
 clickup inbox --days 30
+clickup inbox --limit 500    # Scan more tasks in busy workspaces
 ```
 
 ## Workspace
