@@ -170,10 +170,16 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 
 	// Fetch the task once if we need it for status or tag validation.
 	var spaceID string
+	var currentTagNames []string
 	if cmd.Flags().Changed("status") || cmd.Flags().Changed("tags") {
 		fetchTask, _, fetchErr := client.Clickup.Tasks.GetTask(context.Background(), taskID, getOpts)
 		if fetchErr == nil && fetchTask.Space.ID != "" {
 			spaceID = fetchTask.Space.ID
+		}
+		if fetchErr == nil && cmd.Flags().Changed("tags") {
+			for _, tag := range fetchTask.Tags {
+				currentTagNames = append(currentTagNames, tag.Name)
+			}
 		}
 	}
 
@@ -202,7 +208,8 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 		if spaceID != "" {
 			opts.tags = cmdutil.ValidateTags(client, spaceID, opts.tags, ios.ErrOut)
 		}
-		updateReq.Tags = opts.tags
+		// Tags are applied via dedicated API calls after task update (below),
+		// not via the request body which ClickUp ignores.
 	}
 
 	if cmd.Flags().Changed("due-date") {
@@ -263,6 +270,13 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 	task, _, err := client.Clickup.Tasks.UpdateTask(context.Background(), taskID, getOpts, updateReq)
 	if err != nil {
 		return fmt.Errorf("failed to update task %s: %w", taskID, err)
+	}
+
+	// Set tags via dedicated API calls (replaces existing tags with desired set).
+	if cmd.Flags().Changed("tags") {
+		if err := setTaskTags(client, task.ID, currentTagNames, opts.tags); err != nil {
+			return fmt.Errorf("task updated but failed to set tags: %w", err)
+		}
 	}
 
 	// Set points via raw API call if specified (not supported by go-clickup library).

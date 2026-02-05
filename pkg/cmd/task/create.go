@@ -207,7 +207,8 @@ func runCreate(f *cmdutil.Factory, opts *createOptions) error {
 		if spaceID != "" {
 			opts.tags = cmdutil.ValidateTags(client, spaceID, opts.tags, ios.ErrOut)
 		}
-		taskReq.Tags = opts.tags
+		// Tags are applied via dedicated API calls after task creation (below),
+		// not via the request body which ClickUp ignores.
 	}
 
 	if opts.dueDate != "" {
@@ -256,6 +257,13 @@ func runCreate(f *cmdutil.Factory, opts *createOptions) error {
 	task, _, err := client.Clickup.Tasks.CreateTask(ctx, opts.listID, taskReq)
 	if err != nil {
 		return fmt.Errorf("failed to create task: %w", err)
+	}
+
+	// Set tags via dedicated API calls (not supported via task request body).
+	if len(opts.tags) > 0 {
+		if err := addTaskTags(client, task.ID, opts.tags); err != nil {
+			return fmt.Errorf("task created but failed to set tags: %w", err)
+		}
 	}
 
 	// Set points via raw API call if specified (not supported by go-clickup library).
