@@ -50,11 +50,48 @@ clickup task activity CU-abc123
 
 ### Create & Edit
 
-```bash
-# Create a task (interactive if no --name)
-clickup task create --list-id 12345 --name "Fix login bug" --priority 2
-clickup task create --list-id 12345  # Interactive mode
+**IMPORTANT: When creating a task, fill in ALL applicable fields.** Do not create bare tasks with just a name. Ask the user for any information you don't already have. A well-created task should include as many of these as possible:
 
+- `--name` — task name (required)
+- `--description` or `--markdown-description` — clear description of the work
+- `--status` — initial status (e.g., "open", "in progress")
+- `--priority` — 1=Urgent, 2=High, 3=Normal, 4=Low
+- `--assignee` — user ID(s) for who should work on it
+- `--tags` — relevant tags (repeatable)
+- `--due-date` — deadline (YYYY-MM-DD)
+- `--start-date` — when work should begin (YYYY-MM-DD)
+- `--time-estimate` — estimated effort (e.g., "2h", "4h", "1d")
+- `--points` — sprint/story points
+- `--parent` — parent task ID if this is a subtask
+- `--links-to` — related task ID
+- `--type` — 0=task, 1=milestone
+- `--field "Name=value"` — custom fields (repeatable)
+
+After creating a task, consider adding checklists for acceptance criteria or subtasks:
+
+```bash
+clickup task checklist add <task-id> "Acceptance Criteria"
+clickup task checklist item add <checklist-id> "Unit tests pass"
+clickup task checklist item add <checklist-id> "Code reviewed"
+```
+
+Example of a well-populated task creation:
+
+```bash
+clickup task create --list-id 12345 \
+  --name "Fix login timeout on slow connections" \
+  --markdown-description "Users on slow 3G connections get a timeout error..." \
+  --status "open" \
+  --priority 2 \
+  --assignee 12345678 \
+  --tags "bug" --tags "auth" \
+  --due-date 2025-03-01 \
+  --start-date 2025-02-20 \
+  --time-estimate 4h \
+  --points 3
+```
+
+```bash
 # Edit a task (auto-detects from git branch)
 clickup task edit --status "in progress" --priority 2
 clickup task edit CU-abc123 --field "Environment=production"
