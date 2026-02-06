@@ -2,7 +2,9 @@ package api
 
 import (
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/raksul/go-clickup/clickup"
@@ -49,8 +51,22 @@ func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	if resp.StatusCode == 401 {
+		// Read the body before closing so we can include the actual API error.
+		// ClickUp returns 401 for permission errors (not just expired tokens),
+		// and discarding the body hides the real cause.
+		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, &AuthExpiredError{}
+
+		// If the body contains a specific error code/message, it's a permission
+		// error, not an expired token. Return it as a regular API error so the
+		// caller gets the real message instead of "re-authenticate".
+		if len(body) > 0 && strings.Contains(string(body), "ECODE") {
+			return nil, &APIError{
+				StatusCode: 401,
+				Message:    string(body),
+			}
+		}
+		return nil, &AuthExpiredError{Detail: string(body)}
 	}
 
 	return resp, nil

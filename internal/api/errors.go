@@ -22,9 +22,15 @@ func (e *APIError) Error() string {
 }
 
 // AuthExpiredError indicates the API token is invalid, expired, or revoked.
-type AuthExpiredError struct{}
+// Detail preserves the original API response body for debugging.
+type AuthExpiredError struct {
+	Detail string
+}
 
 func (e *AuthExpiredError) Error() string {
+	if e.Detail != "" {
+		return fmt.Sprintf("authentication/permission error (HTTP 401): %s", e.Detail)
+	}
 	return "authentication expired or revoked. Run 'clickup auth login' to re-authenticate"
 }
 

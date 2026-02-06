@@ -133,10 +133,10 @@ clickup sprint list
 # Add a comment (supports @mentions — resolves usernames to ClickUp user tags)
 clickup comment add CU-abc123 "Looks good, @alice please review"
 
-# List comments
+# List comments (newest first — .[0] is most recent, .[-1] is oldest)
 clickup comment list CU-abc123
 
-# Edit/delete comments
+# Edit/delete comments (you can only edit comments you authored)
 clickup comment edit <comment-id> "Updated text"
 clickup comment delete <comment-id>
 ```
