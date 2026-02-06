@@ -337,6 +337,17 @@ jobs:
           clickup comment add "" "CI ${STATUS}: ${{ github.event.check_suite.head_branch }} (${{ github.sha }})"
 ```
 
+## Releasing
+
+Releases are handled automatically by GitHub Actions using [goreleaser](https://goreleaser.com/). To create a new release:
+
+```sh
+git tag v0.x.y
+git push origin main --tags
+```
+
+The workflow builds binaries for all platforms, creates a GitHub release, and updates the Homebrew tap. **Do not run `goreleaser` locally** — it will conflict with the CI release.
+
 ## Documentation
 
 Full documentation is available at [triptechtravel.github.io/clickup-cli](https://triptechtravel.github.io/clickup-cli/).
