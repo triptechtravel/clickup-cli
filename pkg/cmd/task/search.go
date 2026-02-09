@@ -32,10 +32,11 @@ type searchOptions struct {
 }
 
 type searchTask struct {
-	ID       string `json:"id"`
-	CustomID string `json:"custom_id"`
-	Name     string `json:"name"`
-	Status   struct {
+	ID          string `json:"id"`
+	CustomID    string `json:"custom_id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Status      struct {
 		Status string `json:"status"`
 	} `json:"status"`
 	Priority struct {
@@ -55,9 +56,10 @@ type searchResponse struct {
 type matchKind int
 
 const (
-	matchSubstring matchKind = iota // exact substring match (highest priority)
-	matchFuzzy                      // fuzzy match by name
-	matchComment                    // matched via comment text
+	matchSubstring   matchKind = iota // exact substring match (highest priority)
+	matchFuzzy                        // fuzzy match by name
+	matchDescription                  // matched via description substring
+	matchComment                      // matched via comment text
 )
 
 // scoredTask wraps a searchTask with match metadata for sorting.
@@ -119,12 +121,14 @@ func NewCmdSearch(f *cmdutil.Factory) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "search <query>",
-		Short: "Search tasks by name",
-		Long: `Search ClickUp tasks across the workspace by name.
+		Short: "Search tasks by name and description",
+		Long: `Search ClickUp tasks across the workspace by name and description.
 
-Returns tasks whose names match the search query using substring and fuzzy
-matching. Exact substring matches are shown first, followed by fuzzy matches
-sorted by relevance.
+Returns tasks whose names or descriptions match the search query. Matching
+priority: name substring > name fuzzy > description substring. When no
+--space or --folder is specified, search uses progressive drill-down:
+sprint tasks first, then your assigned tasks, then configured space, then
+full workspace.
 
 Use --space and --folder to narrow the search scope for faster results.
 Use --comments to also search through task comments (slower).
@@ -342,6 +346,8 @@ func runSearch(opts *searchOptions) error {
 			tp.AddField(cs.Green("name"))
 		case matchFuzzy:
 			tp.AddField(cs.Yellow("fuzzy"))
+		case matchDescription:
+			tp.AddField(cs.Blue("desc"))
 		case matchComment:
 			tp.AddField(cs.Cyan("comment"))
 		}
@@ -364,8 +370,77 @@ func runSearch(opts *searchOptions) error {
 	return nil
 }
 
-// doSearch performs the actual search using either the paginated team endpoint
-// or the space/folder hierarchy (when --space or --folder is specified).
+// fetchTeamTasks fetches one page of tasks from the team endpoint with optional extra query params.
+func fetchTeamTasks(ctx context.Context, client *api.Client, teamID string, page int, extraParams string) ([]searchTask, error) {
+	apiURL := fmt.Sprintf(
+		"https://api.clickup.com/api/v2/team/%s/task?include_closed=true&page=%d&order_by=updated&reverse=true",
+		teamID, page,
+	)
+	if extraParams != "" {
+		apiURL += "&" + extraParams
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.DoRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("API request failed: %w", err)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, nil
+	}
+
+	var result searchResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, err
+	}
+
+	return result.Tasks, nil
+}
+
+// searchLevel searches tasks at a given drill-down level and returns scored matches.
+func searchLevel(ctx context.Context, client *api.Client, teamID, query string, extraParams string, maxPages int, comments bool, ios *iostreams.IOStreams) ([]scoredTask, error) {
+	var allScored []scoredTask
+	for page := 0; page < maxPages; page++ {
+		if ctx.Err() != nil {
+			break
+		}
+
+		tasks, err := fetchTeamTasks(ctx, client, teamID, page, extraParams)
+		if err != nil {
+			return nil, err
+		}
+		if len(tasks) == 0 {
+			break
+		}
+
+		matched, unmatched := filterTasks(query, tasks)
+		allScored = append(allScored, matched...)
+
+		if comments && len(unmatched) > 0 {
+			limit := len(unmatched)
+			if limit > 100 {
+				limit = 100
+			}
+			commentMatches := searchTaskComments(ctx, client, query, unmatched[:limit])
+			allScored = append(allScored, commentMatches...)
+		}
+	}
+	return allScored, nil
+}
+
+// doSearch performs the actual search using progressive drill-down or
+// the space/folder hierarchy (when --space or --folder is specified).
 func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 	ios := opts.factory.IOStreams
 
@@ -389,82 +464,69 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 		return searchViaSpaces(ctx, opts)
 	}
 
-	// Search across multiple pages of the team tasks endpoint.
 	query := strings.ToLower(opts.query)
-	var allScored []scoredTask
-	for page := 0; page < 10; page++ {
-		if ctx.Err() != nil {
-			fmt.Fprintf(ios.ErrOut, "Search timed out\n")
-			break
-		}
 
-		apiURL := fmt.Sprintf(
-			"https://api.clickup.com/api/v2/team/%s/task?include_closed=true&page=%d&order_by=updated&reverse=true",
-			teamID, page,
-		)
+	// Progressive drill-down: sprint → user → space → workspace.
 
-		req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
-		if err != nil {
-			return nil, err
-		}
-
-		resp, err := client.DoRequest(req)
-		if err != nil {
-			return nil, fmt.Errorf("API request failed: %w", err)
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if err != nil {
-			return nil, err
-		}
-
-		if resp.StatusCode != 200 {
-			break
-		}
-
-		var result searchResponse
-		if err := json.Unmarshal(body, &result); err != nil {
-			return nil, err
-		}
-
-		if len(result.Tasks) == 0 {
-			break
-		}
-
-		// Score tasks by name (substring + fuzzy).
-		nameMatched, unmatched := filterTasksByName(query, result.Tasks)
-		allScored = append(allScored, nameMatched...)
-
-		// If --comments is enabled, check comments on unmatched tasks.
-		if opts.comments && len(unmatched) > 0 {
-			limit := len(unmatched)
-			if limit > 100 {
-				limit = 100
+	// Level 1: Sprint list (if sprint_folder configured).
+	if cfg.SprintFolder != "" {
+		fmt.Fprintf(ios.ErrOut, "  searching sprint...\n")
+		listID, err := cmdutil.ResolveCurrentSprintListID(ctx, client.Clickup, cfg.SprintFolder)
+		if err == nil && listID != "" {
+			scored, err := searchLevel(ctx, client, teamID, query, "list_ids[]="+listID, 1, opts.comments, ios)
+			if err != nil {
+				return nil, err
 			}
-			fmt.Fprintf(ios.ErrOut, "  checking comments on %d tasks...\n", limit)
-			commentMatches := searchTaskComments(ctx, client, query, unmatched[:limit])
-			allScored = append(allScored, commentMatches...)
+			if len(scored) > 0 {
+				return scored, nil
+			}
 		}
+	}
 
-		fmt.Fprintf(ios.ErrOut, "  scanned page %d (%d tasks)...\n", page+1, len(result.Tasks))
+	// Level 2: User's assigned tasks.
+	fmt.Fprintf(ios.ErrOut, "  searching your tasks...\n")
+	userID, err := cmdutil.GetCurrentUserID(client)
+	if err == nil {
+		scored, err := searchLevel(ctx, client, teamID, query, fmt.Sprintf("assignees[]=%d", userID), 1, opts.comments, ios)
+		if err != nil {
+			return nil, err
+		}
+		if len(scored) > 0 {
+			return scored, nil
+		}
+	}
+
+	// Level 3: Configured space.
+	if cfg.Space != "" {
+		fmt.Fprintf(ios.ErrOut, "  searching space...\n")
+		scored, err := searchLevel(ctx, client, teamID, query, "space_ids[]="+cfg.Space, 3, opts.comments, ios)
+		if err != nil {
+			return nil, err
+		}
+		if len(scored) > 0 {
+			return scored, nil
+		}
+	}
+
+	// Level 4: Full workspace (up to 10 pages).
+	fmt.Fprintf(ios.ErrOut, "  searching workspace...\n")
+	scored, err := searchLevel(ctx, client, teamID, query, "", 10, opts.comments, ios)
+	if err != nil {
+		return nil, err
+	}
+	if len(scored) > 0 {
+		return scored, nil
 	}
 
 	// If nothing found via pagination, fall back to space traversal.
-	if len(allScored) == 0 {
-		fmt.Fprintf(ios.ErrOut, "Falling back to space/folder search...\n")
-		spaceTasks, err := searchViaSpaces(ctx, opts)
-		if err != nil {
-			return nil, err
-		}
-		allScored = append(allScored, spaceTasks...)
-	}
-
-	return allScored, nil
+	fmt.Fprintf(ios.ErrOut, "Falling back to space/folder search...\n")
+	return searchViaSpaces(ctx, opts)
 }
 
-// filterTasksByName scores tasks by name and separates matched from unmatched.
-func filterTasksByName(query string, tasks []searchTask) (matched []scoredTask, unmatched []searchTask) {
+// filterTasks scores tasks by name and description, separating matched from unmatched.
+// Priority: name substring > name fuzzy > description substring.
+func filterTasks(query string, tasks []searchTask) (matched []scoredTask, unmatched []searchTask) {
+	lowerQuery := strings.ToLower(query)
 	for _, t := range tasks {
 		kind, rank, ok := scoreTaskName(query, t.Name)
 		if ok {
@@ -472,6 +534,11 @@ func filterTasksByName(query string, tasks []searchTask) (matched []scoredTask, 
 				searchTask: t,
 				kind:       kind,
 				fuzzyRank:  rank,
+			})
+		} else if strings.Contains(strings.ToLower(t.Description), lowerQuery) {
+			matched = append(matched, scoredTask{
+				searchTask: t,
+				kind:       matchDescription,
 			})
 		} else {
 			unmatched = append(unmatched, t)
@@ -830,7 +897,7 @@ func searchViaSpaces(ctx context.Context, opts *searchOptions) ([]scoredTask, er
 
 			var taskResp searchResponse
 			if json.Unmarshal(body, &taskResp) == nil {
-				nameMatched, unmatched := filterTasksByName(query, taskResp.Tasks)
+				nameMatched, unmatched := filterTasks(query, taskResp.Tasks)
 				results = append(results, nameMatched...)
 
 				// If --comments is enabled, check comments on unmatched tasks.

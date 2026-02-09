@@ -94,9 +94,7 @@ The following commands auto-detect the task ID from the branch when no explicit 
 
 ## GitHub linking strategy
 
-The `link` commands connect GitHub artifacts to ClickUp tasks idempotently. Links are written via ClickUp's `markdown_description` API field, so they render as rich text with clickable links, bold formatting, and code blocks directly in the ClickUp UI.
-
-By default, links are stored in a managed section of the task description. Optionally, you can configure a `link_field` to store links in a custom field instead (see [Configuration](/clickup-cli/configuration/#github-link-storage)).
+The `link` commands connect GitHub artifacts to ClickUp tasks idempotently. Links are written via ClickUp's `markdown_description` API field, so they render as rich text with clickable links, bold formatting, and code blocks directly in the ClickUp UI. Links are stored in a managed section of the task description.
 
 Each link type produces a different entry in the description:
 

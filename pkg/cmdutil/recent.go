@@ -43,7 +43,7 @@ func FetchRecentTasks(f *Factory, limit int) ([]RecentTask, error) {
 	}
 
 	// Get current user ID (1 API call).
-	userID, err := getCurrentUserID(client)
+	userID, err := GetCurrentUserID(client)
 	if err != nil {
 		// Fall back to unfiltered recent tasks if we can't get user.
 		return fetchRecentTeamTasks(client, teamID, nil, limit)
@@ -167,7 +167,7 @@ type userResp struct {
 	} `json:"user"`
 }
 
-func getCurrentUserID(client *api.Client) (int, error) {
+func GetCurrentUserID(client *api.Client) (int, error) {
 	req, err := http.NewRequest("GET", "https://api.clickup.com/api/v2/user", nil)
 	if err != nil {
 		return 0, err

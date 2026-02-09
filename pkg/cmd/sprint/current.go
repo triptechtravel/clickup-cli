@@ -123,19 +123,23 @@ func runSprintCurrent(f *cmdutil.Factory, folderID string, jsonFlags *cmdutil.JS
 	}
 
 	// Find the current sprint (list with dates containing today).
+	currentListID, err := cmdutil.ResolveCurrentSprintListID(ctx, client.Clickup, folderID)
+	if err != nil {
+		return fmt.Errorf("failed to list sprints: %w", err)
+	}
+
 	lists, _, err := client.Clickup.Lists.GetLists(ctx, folderID, false)
 	if err != nil {
 		return fmt.Errorf("failed to list sprints: %w", err)
 	}
 
-	now := time.Now()
 	var currentList *clickup.List
-	for i, l := range lists {
-		start := parseMSTimestamp(l.StartDate)
-		due := parseMSTimestamp(l.DueDate)
-		if !start.IsZero() && !due.IsZero() && !now.Before(start) && !now.After(due) {
-			currentList = &lists[i]
-			break
+	if currentListID != "" {
+		for i, l := range lists {
+			if l.ID == currentListID {
+				currentList = &lists[i]
+				break
+			}
 		}
 	}
 

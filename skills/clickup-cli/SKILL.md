@@ -30,10 +30,12 @@ Configuration is stored in `~/.config/clickup/config.yml`. Supports per-director
 
 ```bash
 # View a task (auto-detects from git branch if no ID given)
+# Also detects tasks via PR URL in descriptions when branch has no task ID
 clickup task view
 clickup task view CU-abc123
 
-# Search tasks by name (supports fuzzy matching)
+# Search tasks by name and description (supports fuzzy matching)
+# Uses progressive drill-down: sprint → your tasks → space → workspace
 clickup task search "login bug"
 clickup task search "login bug" --exact    # Exact matches only
 
@@ -168,6 +170,8 @@ clickup link sync 42 --repo owner/repo --task CU-abc123
 Links are stored in the task's markdown description as rich-text with clickable URLs.
 
 **Note:** When `--task` is specified but no PR number, the CLI first tries the current branch's PR, then searches for PRs matching the task ID in their branch name. This works even after merging when the feature branch is deleted.
+
+**Auto-detection:** `task view` can detect the associated ClickUp task even on branches without task IDs by finding the branch's GitHub PR URL in task descriptions.
 
 ## Time Tracking
 

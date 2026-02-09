@@ -169,9 +169,8 @@ directory_defaults:
 | `sprint_folder` | Folder ID containing sprint lists |
 | `editor` | Editor for interactive descriptions |
 | `prompt` | Controls interactive prompts (`"enabled"` by default) |
-| `link_field` | Custom field name for storing GitHub links (optional; defaults to description section) |
 | `aliases` | Custom command aliases |
-| `directory_defaults` | Per-directory space and link_field overrides |
+| `directory_defaults` | Per-directory space overrides |
 
 The config directory can be overridden with the `CLICKUP_CONFIG_DIR` environment variable.
 

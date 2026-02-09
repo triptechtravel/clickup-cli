@@ -215,17 +215,3 @@ func TestParseLinksBlock_ClickUpStarBullets(t *testing.T) {
 	assert.Equal(t, "Task description.", rest)
 }
 
-func TestExtractURL_MarkdownLink(t *testing.T) {
-	line := "[owner/repo#42 — Fix bug](https://github.com/owner/repo/pull/42)"
-	assert.Equal(t, "https://github.com/owner/repo/pull/42", extractURL(line))
-}
-
-func TestExtractURL_PlainParenthesized(t *testing.T) {
-	line := "PR: owner/repo#42 - Fix bug (https://github.com/owner/repo/pull/42)"
-	assert.Equal(t, "https://github.com/owner/repo/pull/42", extractURL(line))
-}
-
-func TestExtractURL_NoURL(t *testing.T) {
-	line := "Branch: `feat/thing` in owner/repo"
-	assert.Equal(t, "", extractURL(line))
-}

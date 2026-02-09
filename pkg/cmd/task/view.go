@@ -2,13 +2,16 @@ package task
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/raksul/go-clickup/clickup"
 	"github.com/spf13/cobra"
 	"github.com/triptechtravel/clickup-cli/internal/git"
+	"github.com/triptechtravel/clickup-cli/internal/iostreams"
 	"github.com/triptechtravel/clickup-cli/internal/text"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
@@ -29,7 +32,10 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 
 If no task ID is provided, the command attempts to auto-detect the task ID
 from the current git branch name. Branch names containing CU-<id> or
-PREFIX-<number> patterns are recognized.`,
+PREFIX-<number> patterns are recognized.
+
+If no task ID is found in the branch name, the command checks for an
+associated GitHub PR and searches task descriptions for the PR URL.`,
 		Example: `  # View a specific task
   clickup task view 86a3xrwkp
 
@@ -67,11 +73,19 @@ func runView(f *cmdutil.Factory, opts *viewOptions) error {
 			return fmt.Errorf("could not detect task ID: %w\n\n%s", err, git.BranchNamingSuggestion(""))
 		}
 		if gitCtx.TaskID == nil {
-			fmt.Fprintln(ios.ErrOut, cs.Yellow(git.BranchNamingSuggestion(gitCtx.Branch)))
-			return &cmdutil.SilentError{Err: fmt.Errorf("no task ID found in branch")}
+			// Try to find task via current branch's PR URL in task descriptions.
+			if foundID, foundCustom, prNum := findTaskViaPR(f, ios); foundID != "" {
+				fmt.Fprintf(ios.ErrOut, "Detected task %s via PR #%d\n", cs.Bold(foundID), prNum)
+				taskID = foundID
+				isCustomID = foundCustom
+			} else {
+				fmt.Fprintln(ios.ErrOut, cs.Yellow(git.BranchNamingSuggestion(gitCtx.Branch)))
+				return &cmdutil.SilentError{Err: fmt.Errorf("no task ID found in branch")}
+			}
+		} else {
+			taskID = gitCtx.TaskID.ID
+			isCustomID = gitCtx.TaskID.IsCustomID
 		}
-		taskID = gitCtx.TaskID.ID
-		isCustomID = gitCtx.TaskID.IsCustomID
 	} else {
 		parsed := git.ParseTaskID(taskID)
 		taskID = parsed.ID
@@ -326,6 +340,102 @@ func printTaskView(f *cmdutil.Factory, task *clickup.Task) error {
 	fmt.Fprintf(out, "  %s  clickup task view %s --json\n", cs.Gray("JSON:"), id)
 
 	return nil
+}
+
+// findTaskViaPR detects the current branch's PR URL and searches task descriptions
+// for it using progressive drill-down. Returns (taskID, isCustomID, prNumber).
+func findTaskViaPR(f *cmdutil.Factory, ios *iostreams.IOStreams) (string, bool, int) {
+	prURL, prNum := detectPRInfo()
+	if prURL == "" {
+		return "", false, 0
+	}
+
+	client, err := f.ApiClient()
+	if err != nil {
+		return "", false, 0
+	}
+
+	cfg, err := f.Config()
+	if err != nil {
+		return "", false, 0
+	}
+
+	teamID := cfg.Workspace
+	if teamID == "" {
+		return "", false, 0
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Progressive drill-down: sprint → user → space → workspace.
+	type level struct {
+		label       string
+		extraParams string
+		maxPages    int
+	}
+
+	var levels []level
+
+	if cfg.SprintFolder != "" {
+		listID, err := cmdutil.ResolveCurrentSprintListID(ctx, client.Clickup, cfg.SprintFolder)
+		if err == nil && listID != "" {
+			levels = append(levels, level{"sprint", "list_ids[]=" + listID, 1})
+		}
+	}
+
+	if userID, err := cmdutil.GetCurrentUserID(client); err == nil {
+		levels = append(levels, level{"your tasks", fmt.Sprintf("assignees[]=%d", userID), 1})
+	}
+
+	if cfg.Space != "" {
+		levels = append(levels, level{"space", "space_ids[]=" + cfg.Space, 3})
+	}
+
+	levels = append(levels, level{"workspace", "", 10})
+
+	for _, lvl := range levels {
+		if ctx.Err() != nil {
+			break
+		}
+		fmt.Fprintf(ios.ErrOut, "  searching %s for PR #%d...\n", lvl.label, prNum)
+		for page := 0; page < lvl.maxPages; page++ {
+			tasks, err := fetchTeamTasks(ctx, client, teamID, page, lvl.extraParams)
+			if err != nil || len(tasks) == 0 {
+				break
+			}
+			for _, t := range tasks {
+				if strings.Contains(t.Description, prURL) {
+					id := t.ID
+					isCustom := false
+					if t.CustomID != "" {
+						id = t.CustomID
+						isCustom = true
+					}
+					return id, isCustom, prNum
+				}
+			}
+		}
+	}
+
+	return "", false, 0
+}
+
+// detectPRInfo uses the GitHub CLI to detect the current branch's PR URL and number.
+// Returns ("", 0) on any error.
+func detectPRInfo() (string, int) {
+	out, err := exec.Command("gh", "pr", "view", "--json", "url,number").Output()
+	if err != nil {
+		return "", 0
+	}
+	var pr struct {
+		URL    string `json:"url"`
+		Number int    `json:"number"`
+	}
+	if json.Unmarshal(out, &pr) != nil {
+		return "", 0
+	}
+	return pr.URL, pr.Number
 }
 
 // formatMillisDuration converts milliseconds to a human-readable duration string.
