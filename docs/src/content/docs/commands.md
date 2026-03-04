@@ -181,6 +181,13 @@ clickup task edit CU-abc123 --parent 86def456
 
 # Change task type to milestone
 clickup task edit CU-abc123 --type 1
+
+# Add tags without removing existing ones
+clickup task edit CU-abc123 --add-tags new-feature-development
+clickup task edit 86abc1 86abc2 --add-tags r&d,new-app-development
+
+# Remove specific tags
+clickup task edit CU-abc123 --remove-tags fix
 ```
 
 | Flag | Description |

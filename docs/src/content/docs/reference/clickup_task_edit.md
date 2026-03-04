@@ -42,11 +42,19 @@ clickup task edit [<task-id>...] [flags]
 
   # Bulk edit: set due date on many tasks
   clickup task edit 86abc1 86abc2 86abc3 --due-date 2026-03-01
+
+  # Add tags without removing existing ones
+  clickup task edit CU-abc123 --add-tags new-feature-development
+  clickup task edit 86abc1 86abc2 --add-tags r&d,new-app-development
+
+  # Remove specific tags
+  clickup task edit CU-abc123 --remove-tags fix
 ```
 
 ### Options
 
 ```
+      --add-tags strings              Add tags without removing existing ones
       --assignee ints                 Assignee user ID(s) to add
       --clear-field stringArray       Clear a custom field value ("Name", repeatable)
       --description string            New task description
@@ -64,6 +72,7 @@ clickup task edit [<task-id>...] [flags]
       --points float                  Sprint/story points (-1 to clear) (default -999)
       --priority int                  New task priority (1=Urgent, 2=High, 3=Normal, 4=Low)
       --remove-assignee ints          Assignee user ID(s) to remove
+      --remove-tags strings           Remove specific tags
       --start-date string             Start date (YYYY-MM-DD, or "none" to clear)
       --start-date-time               Include time component in start date
       --status string                 New task status

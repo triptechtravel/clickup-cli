@@ -21,6 +21,6 @@ Log time and view time entries for ClickUp tasks.
 
 * [clickup task](/clickup-cli/reference/clickup_task/)	 - Manage ClickUp tasks
 * [clickup task time delete](/clickup-cli/reference/clickup_task_time_delete/)	 - Delete a time entry
-* [clickup task time list](/clickup-cli/reference/clickup_task_time_list/)	 - View time entries for a task
+* [clickup task time list](/clickup-cli/reference/clickup_task_time_list/)	 - View time entries for a task or date range
 * [clickup task time log](/clickup-cli/reference/clickup_task_time_log/)	 - Log time to a task
 
