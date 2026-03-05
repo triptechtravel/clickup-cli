@@ -19,7 +19,7 @@ Flag details, examples, and options for each command are in the auto-generated [
 |---------|-------------|
 | [`task view`](/clickup-cli/reference/clickup_task_view/) | View task details (auto-detects from git branch) |
 | [`task list`](/clickup-cli/reference/clickup_task_list/) | List tasks in a ClickUp list with filters |
-| [`task create`](/clickup-cli/reference/clickup_task_create/) | Create a new task (interactive or flags, supports `--from-file` for bulk) |
+| [`task create`](/clickup-cli/reference/clickup_task_create/) | Create a new task (`--current` for active sprint, or `--list-id`; supports `--from-file` for bulk) |
 | [`task edit`](/clickup-cli/reference/clickup_task_edit/) | Edit task fields — supports bulk edit with multiple task IDs |
 | [`task delete`](/clickup-cli/reference/clickup_task_delete/) | Delete a task permanently |
 | [`task search`](/clickup-cli/reference/clickup_task_search/) | Search tasks with fuzzy matching |

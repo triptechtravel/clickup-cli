@@ -16,16 +16,20 @@ func ResolveCurrentSprintListID(ctx context.Context, clickupClient *clickup.Clie
 		return "", err
 	}
 
-	now := time.Now()
+	return MatchSprintListID(lists, time.Now()), nil
+}
+
+// MatchSprintListID finds the list whose start/due date range contains the given time.
+// Returns "" if no list matches.
+func MatchSprintListID(lists []clickup.List, now time.Time) string {
 	for _, l := range lists {
 		start := ParseMSTimestamp(l.StartDate)
 		due := ParseMSTimestamp(l.DueDate)
 		if !start.IsZero() && !due.IsZero() && !now.Before(start) && !now.After(due) {
-			return l.ID, nil
+			return l.ID
 		}
 	}
-
-	return "", nil
+	return ""
 }
 
 // ParseMSTimestamp parses a millisecond Unix timestamp string into a time.Time.

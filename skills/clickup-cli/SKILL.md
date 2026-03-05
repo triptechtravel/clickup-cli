@@ -84,6 +84,8 @@ clickup task activity CU-abc123
 
 **IMPORTANT: When creating a task, fill in ALL applicable fields.** Do not create bare tasks with just a name. Ask the user for any information you don't already have. Use the naming conventions above for the `--name` flag. A well-created task should include as many of these as possible:
 
+- `--current` — **preferred**: auto-resolves the active sprint list (no need to know the list ID)
+- `--list-id` — explicit list ID (use when creating outside the current sprint)
 - `--name` — task name (required — follow naming conventions above)
 - `--description` or `--markdown-description` — clear description of the work
 - `--status` — initial status (e.g., "open", "in progress")
@@ -99,6 +101,8 @@ clickup task activity CU-abc123
 - `--type` — 0=task, 1=milestone
 - `--field "Name=value"` — custom fields (repeatable)
 
+**IMPORTANT: Always use `--current` instead of hardcoding sprint list IDs.** Sprint list IDs change every sprint. Never cache or remember a specific list ID — always let the CLI resolve it dynamically.
+
 After creating a task, consider adding checklists for acceptance criteria or subtasks:
 
 ```bash
@@ -110,7 +114,7 @@ clickup task checklist item add <checklist-id> "Code reviewed"
 Example of a well-populated task creation:
 
 ```bash
-clickup task create --list-id 12345 \
+clickup task create --current \
   --name "[Bug] Auth — Fix login timeout on slow connections (API)" \
   --markdown-description "Users on slow 3G connections get a timeout error..." \
   --status "open" \
@@ -129,8 +133,8 @@ clickup task create --list-id 12345 \
 
 ```bash
 # Create many tasks at once from a JSON file
-clickup task create --list-id 12345 --from-file tasks.json
-clickup task create --list-id 12345 --from-file tasks.json --json
+clickup task create --current --from-file tasks.json
+clickup task create --current --from-file tasks.json --json
 ```
 
 The JSON file should contain an array of task objects:

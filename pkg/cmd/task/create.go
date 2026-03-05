@@ -17,6 +17,7 @@ const pointsNotSet = -999.0
 
 type createOptions struct {
 	listID              string
+	currentSprint       bool
 	name                string
 	description         string
 	markdownDescription string
@@ -69,13 +70,14 @@ func NewCmdCreate(f *cmdutil.Factory) *cobra.Command {
 		Short: "Create a new ClickUp task",
 		Long: `Create a new task in a ClickUp list.
 
-The --list-id flag is required to specify which list to create the task in.
+Either --list-id or --current is required. Use --current to automatically
+resolve the active sprint list from the configured sprint folder.
 If --name is not provided, the command enters interactive mode and prompts
 for the task name, description, status, priority, due date, and time estimate.
 
 Use --from-file to bulk create tasks from a JSON file. The file should
 contain an array of task objects. Each object supports the same fields as
-the CLI flags. The --list-id flag is still required and applies to all tasks.
+the CLI flags.
 
 Additional properties can be set with flags:
   --tags           Tags to add (comma-separated or repeat flag)
@@ -86,32 +88,41 @@ Additional properties can be set with flags:
   --field          Set a custom field ("Name=value", repeatable)
   --parent         Create as subtask of another task
   --type           Task type (0=task, 1=milestone)`,
-		Example: `  # Create with flags (use naming convention: [Type] Context — Action (Platform))
+		Example: `  # Create in the current sprint (auto-resolves list from sprint folder)
+  clickup task create --current \
+    --name "[Bug] Auth — Fix login timeout (API)" --priority 2
+
+  # Create with explicit list ID
   clickup task create --list-id 12345 \
     --name "[Bug] Auth — Fix login timeout (API)" --priority 2
 
   # Interactive mode (prompts for details)
-  clickup task create --list-id 12345
+  clickup task create --current
 
   # Create with custom field and due date
-  clickup task create --list-id 12345 \
+  clickup task create --current \
     --name "[Feature] Deploy — Release v2 to staging" \
     --field "Environment=staging" --due-date 2025-03-01
 
   # Create a subtask
   clickup task create --list-id 12345 --name "Write tests" --parent 86abc123
 
-  # Bulk create from JSON file (array of task objects)
-  # Supports: name, description, status, priority, assignees, tags,
-  #           due_date, start_date, time_estimate, points, parent, fields
-  clickup task create --list-id 12345 --from-file tasks.json
+  # Bulk create from JSON file
+  clickup task create --current --from-file tasks.json
 
   # Bulk create subtasks under a parent
   clickup task create --list-id 12345 --from-file checklist.json`,
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if opts.currentSprint {
+				listID, err := resolveCurrentSprintList(f)
+				if err != nil {
+					return err
+				}
+				opts.listID = listID
+			}
 			if opts.listID == "" {
-				return fmt.Errorf("required flag --list-id not set")
+				return fmt.Errorf("either --list-id or --current is required")
 			}
 			if opts.fromFile != "" {
 				return runBulkCreate(f, opts)
@@ -120,7 +131,8 @@ Additional properties can be set with flags:
 		},
 	}
 
-	cmd.Flags().StringVar(&opts.listID, "list-id", "", "ClickUp list ID (required)")
+	cmd.Flags().StringVar(&opts.listID, "list-id", "", "ClickUp list ID")
+	cmd.Flags().BoolVar(&opts.currentSprint, "current", false, "Create in the current sprint (auto-resolves list ID from sprint folder)")
 	cmd.Flags().StringVar(&opts.name, "name", "", "Task name (convention: [Type] Context — Action (Platform))")
 	cmd.Flags().StringVar(&opts.description, "description", "", "Task description")
 	cmd.Flags().StringVar(&opts.markdownDescription, "markdown-description", "", "Task description in markdown")
@@ -141,7 +153,7 @@ Additional properties can be set with flags:
 	cmd.Flags().StringArrayVar(&opts.fields, "field", nil, `Set a custom field value ("Name=value", repeatable)`)
 	cmd.Flags().StringVar(&opts.fromFile, "from-file", "", "Create tasks from a JSON file (array of task objects)")
 
-	_ = cmd.MarkFlagRequired("list-id")
+	cmd.MarkFlagsMutuallyExclusive("list-id", "current")
 
 	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 

@@ -1,6 +1,7 @@
 package task
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/raksul/go-clickup/clickup"
 	"github.com/triptechtravel/clickup-cli/internal/api"
+	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
 
 // parseDate converts a YYYY-MM-DD string to a *clickup.Date.
@@ -210,4 +212,34 @@ func setMarkdownDescription(client *api.Client, taskID string, md string) error 
 		return fmt.Errorf("failed to set markdown description: status %d", resp.StatusCode)
 	}
 	return nil
+}
+
+// resolveCurrentSprintList resolves the current sprint's list ID from the
+// configured sprint folder. Returns an error if no sprint folder is configured
+// or no active sprint is found.
+func resolveCurrentSprintList(f *cmdutil.Factory) (string, error) {
+	cfg, err := f.Config()
+	if err != nil {
+		return "", err
+	}
+
+	folderID := cfg.SprintFolder
+	if folderID == "" {
+		return "", fmt.Errorf("no sprint folder configured. Run 'clickup sprint current' first or use --list-id")
+	}
+
+	client, err := f.ApiClient()
+	if err != nil {
+		return "", err
+	}
+
+	listID, err := cmdutil.ResolveCurrentSprintListID(context.Background(), client.Clickup, folderID)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve current sprint: %w", err)
+	}
+	if listID == "" {
+		return "", fmt.Errorf("no active sprint found in folder %s. Use --list-id to specify a list", folderID)
+	}
+
+	return listID, nil
 }

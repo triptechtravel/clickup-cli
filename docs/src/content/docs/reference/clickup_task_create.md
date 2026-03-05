@@ -11,13 +11,14 @@ Create a new ClickUp task
 
 Create a new task in a ClickUp list.
 
-The --list-id flag is required to specify which list to create the task in.
+Either --list-id or --current is required. Use --current to automatically
+resolve the active sprint list from the configured sprint folder.
 If --name is not provided, the command enters interactive mode and prompts
 for the task name, description, status, priority, due date, and time estimate.
 
 Use --from-file to bulk create tasks from a JSON file. The file should
 contain an array of task objects. Each object supports the same fields as
-the CLI flags. The --list-id flag is still required and applies to all tasks.
+the CLI flags.
 
 Additional properties can be set with flags:
   --tags           Tags to add (comma-separated or repeat flag)
@@ -36,25 +37,27 @@ clickup task create [flags]
 ### Examples
 
 ```
-  # Create with flags (use naming convention: [Type] Context — Action (Platform))
+  # Create in the current sprint (auto-resolves list from sprint folder)
+  clickup task create --current \
+    --name "[Bug] Auth — Fix login timeout (API)" --priority 2
+
+  # Create with explicit list ID
   clickup task create --list-id 12345 \
     --name "[Bug] Auth — Fix login timeout (API)" --priority 2
 
   # Interactive mode (prompts for details)
-  clickup task create --list-id 12345
+  clickup task create --current
 
   # Create with custom field and due date
-  clickup task create --list-id 12345 \
+  clickup task create --current \
     --name "[Feature] Deploy — Release v2 to staging" \
     --field "Environment=staging" --due-date 2025-03-01
 
   # Create a subtask
   clickup task create --list-id 12345 --name "Write tests" --parent 86abc123
 
-  # Bulk create from JSON file (array of task objects)
-  # Supports: name, description, status, priority, assignees, tags,
-  #           due_date, start_date, time_estimate, points, parent, fields
-  clickup task create --list-id 12345 --from-file tasks.json
+  # Bulk create from JSON file
+  clickup task create --current --from-file tasks.json
 
   # Bulk create subtasks under a parent
   clickup task create --list-id 12345 --from-file checklist.json
@@ -64,6 +67,7 @@ clickup task create [flags]
 
 ```
       --assignee ints                 Assignee user ID(s)
+      --current                       Create in the current sprint (auto-resolves list ID from sprint folder)
       --description string            Task description
       --due-date string               Due date (YYYY-MM-DD)
       --due-date-time                 Include time component in due date
@@ -73,7 +77,7 @@ clickup task create [flags]
       --jq string                     Filter JSON output using a jq expression
       --json                          Output JSON
       --links-to string               Link to another task by ID
-      --list-id string                ClickUp list ID (required)
+      --list-id string                ClickUp list ID
       --markdown-description string   Task description in markdown
       --name string                   Task name (convention: [Type] Context — Action (Platform))
       --notify-all                    Notify all assignees and watchers
