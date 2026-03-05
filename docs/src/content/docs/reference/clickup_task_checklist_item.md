@@ -3,8 +3,6 @@ title: "clickup task checklist item"
 description: "Auto-generated reference for clickup task checklist item"
 ---
 
-## clickup task checklist item
-
 Manage checklist items
 
 ### Synopsis

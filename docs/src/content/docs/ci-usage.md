@@ -3,8 +3,6 @@ title: CI usage
 description: Using the clickup CLI in CI/CD pipelines with JSON output and non-interactive auth.
 ---
 
-# CI usage
-
 The CLI works in non-interactive environments like GitHub Actions, GitLab CI, and other CI/CD pipelines.
 
 ## Authentication

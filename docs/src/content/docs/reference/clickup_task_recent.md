@@ -3,8 +3,6 @@ title: "clickup task recent"
 description: "Auto-generated reference for clickup task recent"
 ---
 
-## clickup task recent
-
 Show recently updated tasks
 
 ### Synopsis

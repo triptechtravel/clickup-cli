@@ -3,8 +3,6 @@ title: "clickup link sync"
 description: "Auto-generated reference for clickup link sync"
 ---
 
-## clickup link sync
-
 Sync ClickUp task info to a GitHub PR
 
 ### Synopsis

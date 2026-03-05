@@ -3,8 +3,6 @@ title: "clickup comment"
 description: "Auto-generated reference for clickup comment"
 ---
 
-## clickup comment
-
 Manage comments on ClickUp tasks
 
 ### Synopsis

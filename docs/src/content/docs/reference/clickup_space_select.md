@@ -3,8 +3,6 @@ title: "clickup space select"
 description: "Auto-generated reference for clickup space select"
 ---
 
-## clickup space select
-
 Set default space
 
 ### Synopsis

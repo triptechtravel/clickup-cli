@@ -3,8 +3,6 @@ title: "clickup task checklist item resolve"
 description: "Auto-generated reference for clickup task checklist item resolve"
 ---
 
-## clickup task checklist item resolve
-
 Mark a checklist item as resolved
 
 ```

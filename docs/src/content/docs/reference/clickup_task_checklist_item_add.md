@@ -3,8 +3,6 @@ title: "clickup task checklist item add"
 description: "Auto-generated reference for clickup task checklist item add"
 ---
 
-## clickup task checklist item add
-
 Add an item to a checklist
 
 ```

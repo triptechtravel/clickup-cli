@@ -3,8 +3,6 @@ title: "clickup comment add"
 description: "Auto-generated reference for clickup comment add"
 ---
 
-## clickup comment add
-
 Add a comment to a task
 
 ### Synopsis

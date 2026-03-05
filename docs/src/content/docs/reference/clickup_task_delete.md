@@ -3,8 +3,6 @@ title: "clickup task delete"
 description: "Auto-generated reference for clickup task delete"
 ---
 
-## clickup task delete
-
 Delete a task
 
 ### Synopsis

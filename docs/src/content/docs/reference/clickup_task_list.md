@@ -3,8 +3,6 @@ title: "clickup task list"
 description: "Auto-generated reference for clickup task list"
 ---
 
-## clickup task list
-
 List tasks in a ClickUp list
 
 ### Synopsis

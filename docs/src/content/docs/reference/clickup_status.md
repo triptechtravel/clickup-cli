@@ -3,8 +3,6 @@ title: "clickup status"
 description: "Auto-generated reference for clickup status"
 ---
 
-## clickup status
-
 Manage task statuses
 
 ### Synopsis

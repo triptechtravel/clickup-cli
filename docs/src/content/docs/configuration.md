@@ -3,8 +3,6 @@ title: Configuration
 description: Config file reference, per-directory defaults, aliases, and environment variables.
 ---
 
-# Configuration
-
 The CLI stores configuration in a YAML file at `~/.config/clickup/config.yml`. This file is created automatically during `clickup auth login`.
 
 ## Config file reference

@@ -3,8 +3,6 @@ title: "clickup task list-add"
 description: "Auto-generated reference for clickup task list-add"
 ---
 
-## clickup task list-add
-
 Add tasks to an additional list
 
 ### Synopsis

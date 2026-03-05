@@ -3,8 +3,6 @@ title: "clickup link branch"
 description: "Auto-generated reference for clickup link branch"
 ---
 
-## clickup link branch
-
 Link the current git branch to a ClickUp task
 
 ### Synopsis

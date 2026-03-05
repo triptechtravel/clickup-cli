@@ -3,8 +3,6 @@ title: "clickup tag list"
 description: "Auto-generated reference for clickup tag list"
 ---
 
-## clickup tag list
-
 List tags in a space
 
 ### Synopsis

@@ -3,8 +3,6 @@ title: "clickup sprint current"
 description: "Auto-generated reference for clickup sprint current"
 ---
 
-## clickup sprint current
-
 Show current sprint tasks
 
 ### Synopsis

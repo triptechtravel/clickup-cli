@@ -3,8 +3,6 @@ title: "clickup version"
 description: "Auto-generated reference for clickup version"
 ---
 
-## clickup version
-
 Print the version of clickup CLI
 
 ```

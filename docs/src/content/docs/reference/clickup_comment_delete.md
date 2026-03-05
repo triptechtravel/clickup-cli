@@ -3,8 +3,6 @@ title: "clickup comment delete"
 description: "Auto-generated reference for clickup comment delete"
 ---
 
-## clickup comment delete
-
 Delete a comment
 
 ### Synopsis

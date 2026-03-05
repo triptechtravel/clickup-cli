@@ -3,8 +3,6 @@ title: "clickup link pr"
 description: "Auto-generated reference for clickup link pr"
 ---
 
-## clickup link pr
-
 Link a GitHub PR to a ClickUp task
 
 ### Synopsis

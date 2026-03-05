@@ -3,8 +3,6 @@ title: "clickup comment list"
 description: "Auto-generated reference for clickup comment list"
 ---
 
-## clickup comment list
-
 List comments on a task
 
 ### Synopsis

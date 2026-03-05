@@ -3,8 +3,6 @@ title: "clickup auth status"
 description: "Auto-generated reference for clickup auth status"
 ---
 
-## clickup auth status
-
 Show authentication status
 
 ### Synopsis

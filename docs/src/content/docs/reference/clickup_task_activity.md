@@ -3,8 +3,6 @@ title: "clickup task activity"
 description: "Auto-generated reference for clickup task activity"
 ---
 
-## clickup task activity
-
 View a task's details and comment history
 
 ### Synopsis

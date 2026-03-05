@@ -3,8 +3,6 @@ title: "clickup field list"
 description: "Auto-generated reference for clickup field list"
 ---
 
-## clickup field list
-
 List custom fields available in a list
 
 ### Synopsis

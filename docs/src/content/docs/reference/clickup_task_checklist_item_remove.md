@@ -3,8 +3,6 @@ title: "clickup task checklist item remove"
 description: "Auto-generated reference for clickup task checklist item remove"
 ---
 
-## clickup task checklist item remove
-
 Remove an item from a checklist
 
 ```

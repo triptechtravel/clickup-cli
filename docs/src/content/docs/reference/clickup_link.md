@@ -3,8 +3,6 @@ title: "clickup link"
 description: "Auto-generated reference for clickup link"
 ---
 
-## clickup link
-
 Link GitHub objects to ClickUp tasks
 
 ### Synopsis

@@ -3,8 +3,6 @@ title: "clickup task time log"
 description: "Auto-generated reference for clickup task time log"
 ---
 
-## clickup task time log
-
 Log time to a task
 
 ### Synopsis

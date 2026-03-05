@@ -3,8 +3,6 @@ title: "clickup task dependency add"
 description: "Auto-generated reference for clickup task dependency add"
 ---
 
-## clickup task dependency add
-
 Add a dependency to a task
 
 ### Synopsis

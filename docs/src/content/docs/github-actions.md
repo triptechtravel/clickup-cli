@@ -3,8 +3,6 @@ title: GitHub Actions
 description: Pre-built GitHub Actions workflows for automating ClickUp task updates on PR events.
 ---
 
-# GitHub Actions
-
 Automate ClickUp task updates from GitHub PR events. The CLI provides all the building blocks -- the workflows below wire them to GitHub events.
 
 Copy these from the [`examples/`](https://github.com/triptechtravel/clickup-cli/tree/main/examples) directory in the repository.

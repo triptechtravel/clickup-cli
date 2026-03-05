@@ -3,8 +3,6 @@ title: "clickup status list"
 description: "Auto-generated reference for clickup status list"
 ---
 
-## clickup status list
-
 List available statuses for a space
 
 ### Synopsis

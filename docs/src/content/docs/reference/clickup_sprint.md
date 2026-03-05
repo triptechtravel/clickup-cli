@@ -3,8 +3,6 @@ title: "clickup sprint"
 description: "Auto-generated reference for clickup sprint"
 ---
 
-## clickup sprint
-
 Manage sprints
 
 ### Synopsis

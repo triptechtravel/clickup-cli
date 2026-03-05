@@ -3,8 +3,6 @@ title: "clickup space"
 description: "Auto-generated reference for clickup space"
 ---
 
-## clickup space
-
 Manage spaces
 
 ### Synopsis

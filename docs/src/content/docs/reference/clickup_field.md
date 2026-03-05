@@ -3,8 +3,6 @@ title: "clickup field"
 description: "Auto-generated reference for clickup field"
 ---
 
-## clickup field
-
 Manage custom fields
 
 ### Synopsis

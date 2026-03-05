@@ -3,8 +3,6 @@ title: Installation
 description: Install the clickup CLI via Go, Homebrew, or binary release.
 ---
 
-# Installation
-
 There are three ways to install the `clickup` CLI.
 
 ## Go

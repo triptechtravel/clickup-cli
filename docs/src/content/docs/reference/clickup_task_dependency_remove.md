@@ -3,8 +3,6 @@ title: "clickup task dependency remove"
 description: "Auto-generated reference for clickup task dependency remove"
 ---
 
-## clickup task dependency remove
-
 Remove a dependency from a task
 
 ### Synopsis

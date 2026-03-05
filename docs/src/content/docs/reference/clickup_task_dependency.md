@@ -3,8 +3,6 @@ title: "clickup task dependency"
 description: "Auto-generated reference for clickup task dependency"
 ---
 
-## clickup task dependency
-
 Manage task dependencies
 
 ### Synopsis

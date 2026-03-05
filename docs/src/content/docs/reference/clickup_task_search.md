@@ -3,8 +3,6 @@ title: "clickup task search"
 description: "Auto-generated reference for clickup task search"
 ---
 
-## clickup task search
-
 Search tasks by name and description
 
 ### Synopsis

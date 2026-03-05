@@ -3,8 +3,6 @@ title: "clickup auth login"
 description: "Auto-generated reference for clickup auth login"
 ---
 
-## clickup auth login
-
 Authenticate with ClickUp
 
 ### Synopsis

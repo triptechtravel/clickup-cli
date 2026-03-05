@@ -3,8 +3,6 @@ title: "clickup inbox"
 description: "Auto-generated reference for clickup inbox"
 ---
 
-## clickup inbox
-
 Show recent @mentions
 
 ### Synopsis

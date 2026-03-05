@@ -3,8 +3,6 @@ title: "clickup task list-remove"
 description: "Auto-generated reference for clickup task list-remove"
 ---
 
-## clickup task list-remove
-
 Remove tasks from a list
 
 ### Synopsis

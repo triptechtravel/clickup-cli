@@ -3,8 +3,6 @@ title: "clickup sprint list"
 description: "Auto-generated reference for clickup sprint list"
 ---
 
-## clickup sprint list
-
 List sprints in a folder
 
 ### Synopsis

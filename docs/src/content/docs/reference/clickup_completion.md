@@ -3,8 +3,6 @@ title: "clickup completion"
 description: "Auto-generated reference for clickup completion"
 ---
 
-## clickup completion
-
 Generate shell completion scripts
 
 ### Synopsis

@@ -3,8 +3,6 @@ title: "clickup auth logout"
 description: "Auto-generated reference for clickup auth logout"
 ---
 
-## clickup auth logout
-
 Log out of ClickUp
 
 ### Synopsis

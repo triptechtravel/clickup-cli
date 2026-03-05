@@ -3,8 +3,6 @@ title: "clickup space list"
 description: "Auto-generated reference for clickup space list"
 ---
 
-## clickup space list
-
 List spaces in your workspace
 
 ```

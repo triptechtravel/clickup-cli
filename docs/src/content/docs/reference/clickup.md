@@ -3,8 +3,6 @@ title: "clickup"
 description: "Auto-generated reference for clickup"
 ---
 
-## clickup
-
 ClickUp CLI - manage tasks from the command line
 
 ### Synopsis

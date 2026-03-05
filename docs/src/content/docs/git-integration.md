@@ -3,8 +3,6 @@ title: Git integration
 description: How the CLI auto-detects ClickUp task IDs from git branch names.
 ---
 
-# Git integration
-
 The CLI auto-detects ClickUp task IDs from your current git branch name. This means most commands work without specifying a task ID explicitly, as long as your branch name includes one.
 
 ## Supported patterns

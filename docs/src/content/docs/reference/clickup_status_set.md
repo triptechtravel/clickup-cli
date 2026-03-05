@@ -3,8 +3,6 @@ title: "clickup status set"
 description: "Auto-generated reference for clickup status set"
 ---
 
-## clickup status set
-
 Set the status of a task
 
 ### Synopsis

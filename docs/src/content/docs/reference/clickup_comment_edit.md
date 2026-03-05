@@ -3,8 +3,6 @@ title: "clickup comment edit"
 description: "Auto-generated reference for clickup comment edit"
 ---
 
-## clickup comment edit
-
 Edit a comment
 
 ### Synopsis

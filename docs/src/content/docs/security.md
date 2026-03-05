@@ -3,8 +3,6 @@ title: Security
 description: Credential storage, security best practices, and vulnerability reporting.
 ---
 
-# Security
-
 ## Credential storage
 
 The CLI stores your ClickUp API token in the operating system keyring:

@@ -3,8 +3,6 @@ title: "clickup task create"
 description: "Auto-generated reference for clickup task create"
 ---
 
-## clickup task create
-
 Create a new ClickUp task
 
 ### Synopsis

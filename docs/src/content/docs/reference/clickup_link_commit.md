@@ -3,8 +3,6 @@ title: "clickup link commit"
 description: "Auto-generated reference for clickup link commit"
 ---
 
-## clickup link commit
-
 Link a git commit to a ClickUp task
 
 ### Synopsis

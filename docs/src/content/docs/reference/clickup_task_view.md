@@ -3,8 +3,6 @@ title: "clickup task view"
 description: "Auto-generated reference for clickup task view"
 ---
 
-## clickup task view
-
 View a ClickUp task
 
 ### Synopsis

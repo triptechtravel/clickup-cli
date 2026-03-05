@@ -3,8 +3,6 @@ title: "clickup tag"
 description: "Auto-generated reference for clickup tag"
 ---
 
-## clickup tag
-
 Manage space tags
 
 ### Synopsis

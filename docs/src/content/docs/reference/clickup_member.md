@@ -3,8 +3,6 @@ title: "clickup member"
 description: "Auto-generated reference for clickup member"
 ---
 
-## clickup member
-
 Manage workspace members
 
 ### Synopsis

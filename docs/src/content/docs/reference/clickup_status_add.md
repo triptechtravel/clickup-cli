@@ -3,8 +3,6 @@ title: "clickup status add"
 description: "Auto-generated reference for clickup status add"
 ---
 
-## clickup status add
-
 Add a new status to a space
 
 ### Synopsis

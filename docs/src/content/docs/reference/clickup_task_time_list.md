@@ -3,8 +3,6 @@ title: "clickup task time list"
 description: "Auto-generated reference for clickup task time list"
 ---
 
-## clickup task time list
-
 View time entries for a task or date range
 
 ### Synopsis

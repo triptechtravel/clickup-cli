@@ -3,8 +3,6 @@ title: "clickup task time delete"
 description: "Auto-generated reference for clickup task time delete"
 ---
 
-## clickup task time delete
-
 Delete a time entry
 
 ### Synopsis

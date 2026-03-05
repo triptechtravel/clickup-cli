@@ -3,8 +3,6 @@ title: "clickup task time"
 description: "Auto-generated reference for clickup task time"
 ---
 
-## clickup task time
-
 Track time on ClickUp tasks
 
 ### Synopsis
