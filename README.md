@@ -8,113 +8,71 @@ A command-line tool for working with ClickUp tasks, comments, and sprints -- des
 [![Go Report Card](https://goreportcard.com/badge/github.com/triptechtravel/clickup-cli)](https://goreportcard.com/report/github.com/triptechtravel/clickup-cli)
 [![Go Reference](https://pkg.go.dev/badge/github.com/triptechtravel/clickup-cli.svg)](https://pkg.go.dev/github.com/triptechtravel/clickup-cli)
 
-`clickup` integrates with git to auto-detect task IDs from branch names and links GitHub pull requests, branches, and commits to ClickUp tasks.
-
-## Features
-
-- **Task management** -- view, list, create, and edit ClickUp tasks from the terminal
-- **Custom fields** -- list, set, and clear custom field values on tasks (text, number, dropdown, labels, date, checkbox, URL, and more)
-- **Dependencies & checklists** -- add/remove task dependencies and manage checklists with items
-- **Git integration** -- auto-detects task IDs from branch names (`CU-abc123` or `PROJ-42`)
-- **GitHub linking** -- links PRs, branches, and commits to ClickUp tasks via a managed description section rendered as rich text (or optional custom field)
-- **Bidirectional sync** -- `link sync` pushes ClickUp task info into GitHub PR descriptions and vice versa
-- **Sprint dashboard** -- shows current sprint tasks grouped by status with assignees and priorities
-- **Inbox** -- surfaces recent @mentions in comments and task descriptions across your workspace
-- **Fuzzy status matching** -- change task status with partial or fuzzy input
-- **Time tracking** -- log and view time entries on tasks; workspace-wide timesheet queries with date ranges
-- **Full task properties** -- set tags, due dates, start dates, time estimates, story points, parent tasks, linked tasks, and task types from the CLI
-- **AI-friendly** -- structured `--json` output and explicit `--task`/`--repo` flags make it easy for AI coding agents (Claude Code, Copilot, Cursor) to read ClickUp context and update tasks as part of a development workflow
-- **GitHub Actions ready** -- automate status changes, PR linking, and task updates on PR events
-- **JSON output** -- all list/view commands support `--json` and `--jq` for scripting
-- **Shell completions** -- bash, zsh, fish, and PowerShell
-- **Secure credentials** -- tokens stored in the system keyring with automatic expiration detection
-
-## Installation
-
-### Go
+## Install
 
 ```sh
-go install github.com/triptechtravel/clickup-cli/cmd/clickup@latest
-```
-
-### Homebrew
-
-```sh
+# Homebrew
 brew install triptechtravel/tap/clickup
+
+# Go
+go install github.com/triptechtravel/clickup-cli/cmd/clickup@latest
+
+# Or download a binary from the releases page
 ```
-
-### Binary releases
-
-Download a prebuilt binary from the [releases page](https://github.com/triptechtravel/clickup-cli/releases) and add it to your `PATH`.
 
 ## Quick start
 
-Authenticate with your ClickUp account:
-
 ```sh
-clickup auth login
+clickup auth login        # authenticate with your API token
+clickup space select       # choose a default space
+clickup task view          # view the task from your current git branch
+clickup status set "done"  # fuzzy-matched status update
+clickup link pr            # link the current GitHub PR to the task
 ```
 
-You will be prompted for a personal API token. Get one from **ClickUp > Settings > ClickUp API > API tokens**. The login flow also selects your default workspace.
+See the [getting started guide](https://triptechtravel.github.io/clickup-cli/getting-started/) for a full walkthrough.
 
-Select a default space:
+## What it does
 
-```sh
-clickup space select
-```
+- **Task management** -- view, create, edit, search, and bulk-edit tasks with custom fields, tags, points, and time estimates
+- **Git integration** -- auto-detects task IDs from branch names and links PRs, branches, and commits to ClickUp
+- **Sprint dashboard** -- `sprint current` shows tasks grouped by status; `task create --current` creates tasks in the active sprint
+- **Time tracking** -- log time, view per-task entries, or query workspace-wide timesheets by date range
+- **Comments & inbox** -- add comments with @mentions, view your recent mentions across the workspace
+- **Fuzzy status matching** -- set statuses with partial input (`"review"` matches `"code review"`)
+- **AI-friendly** -- `--json` output and explicit flags make it easy for AI agents to read and update tasks
+- **CI/CD ready** -- `--with-token`, exit codes, and JSON output for automation; includes GitHub Actions examples
 
-View the task associated with your current git branch:
+## Commands
 
-```sh
-clickup task view
-```
-
-Or specify a task ID directly:
-
-```sh
-clickup task view CU-abc123
-```
-
-Set a task's status with fuzzy matching:
-
-```sh
-clickup status set "in progress"
-```
-
-Link your current GitHub PR to the task:
-
-```sh
-clickup link pr
-```
-
-## Command overview
+Full command list with flags and examples: **[Command reference](https://triptechtravel.github.io/clickup-cli/commands/)**
 
 | Area | Key commands |
 |------|-------------|
-| **Tasks** | `task view`, `task list`, `task create`, `task edit`, `task search`, `task recent`, `task delete` |
-| **Time tracking** | `task time log`, `task time list`, `task time delete` |
-| **Comments** | `comment add`, `comment list`, `comment edit`, `comment delete` |
+| **Tasks** | `task view`, `task create`, `task edit`, `task search`, `task recent` |
+| **Time** | `task time log`, `task time list` |
 | **Status** | `status set`, `status list`, `status add` |
-| **Git & GitHub** | `link pr`, `link sync`, `link branch`, `link commit` |
+| **Git** | `link pr`, `link sync`, `link branch`, `link commit` |
 | **Sprints** | `sprint current`, `sprint list` |
-| **Workspace** | `inbox`, `member list`, `space list`, `space select`, `tag list`, `field list` |
-| **Auth** | `auth login`, `auth logout`, `auth status` |
-
-All list/view commands support `--json` and `--jq` for scripting. See the [full command reference](https://triptechtravel.github.io/clickup-cli/commands/) for flags, examples, and detailed usage.
-
-## Git integration
-
-The CLI auto-detects ClickUp task IDs from branch names (`CU-abc123` or `PROJ-42`). Name your branches with the task ID:
-
-```sh
-git checkout -b feature/CU-ae27de-add-user-auth
-```
-
-Then `task view`, `task edit`, `status set`, `link pr`, and other commands automatically target the correct task. See the [git integration guide](https://triptechtravel.github.io/clickup-cli/git-integration/) for details.
+| **Comments** | `comment add`, `comment list` |
+| **Workspace** | `inbox`, `member list`, `space select`, `tag list`, `field list` |
 
 ## Documentation
 
-Full documentation -- including [configuration](https://triptechtravel.github.io/clickup-cli/configuration/), [CI usage](https://triptechtravel.github.io/clickup-cli/ci-usage/), [GitHub Actions](https://triptechtravel.github.io/clickup-cli/github-actions/), [AI agent integration](https://triptechtravel.github.io/clickup-cli/ai-agents/), and [auto-generated command reference](https://triptechtravel.github.io/clickup-cli/reference/clickup/) -- is available at **[triptechtravel.github.io/clickup-cli](https://triptechtravel.github.io/clickup-cli/)**.
+**[triptechtravel.github.io/clickup-cli](https://triptechtravel.github.io/clickup-cli/)**
+
+- [Installation](https://triptechtravel.github.io/clickup-cli/installation/) -- Homebrew, Go, binaries, shell completions
+- [Getting started](https://triptechtravel.github.io/clickup-cli/getting-started/) -- first-time setup walkthrough
+- [Configuration](https://triptechtravel.github.io/clickup-cli/configuration/) -- config file, per-directory defaults, aliases
+- [Git integration](https://triptechtravel.github.io/clickup-cli/git-integration/) -- branch naming, GitHub linking strategy
+- [CI usage](https://triptechtravel.github.io/clickup-cli/ci-usage/) -- non-interactive auth, JSON output, scripting
+- [GitHub Actions](https://triptechtravel.github.io/clickup-cli/github-actions/) -- ready-to-use workflow templates
+- [AI agents](https://triptechtravel.github.io/clickup-cli/ai-agents/) -- integration with Claude Code, Copilot, Cursor
+- [Command reference](https://triptechtravel.github.io/clickup-cli/reference/clickup/) -- auto-generated flag and usage docs
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, project structure, and guidelines.
 
 ## Author
 

@@ -68,17 +68,7 @@ aliases:
 
 ## GitHub link storage
 
-The `link pr`, `link branch`, `link commit`, and `link sync` commands store GitHub links on ClickUp tasks. Links are written via ClickUp's `markdown_description` API field, so they render as rich text with **bold headers**, clickable links, and `code` formatting directly in the ClickUp UI.
-
-Links are stored in a managed block within the task description:
-
-```markdown
-**GitHub** _(clickup-cli)_
-- [owner/repo#42 — Fix login bug](https://github.com/owner/repo/pull/42)
-- Branch: `feat/fix-login` in owner/repo
-```
-
-In ClickUp this renders as a bold header with clickable PR links and code-formatted branch names. Each entry is deduplicated by a unique key (e.g., `owner/repo#42`), so re-running the same command updates the existing entry. Multiple PRs from different repos coexist as separate entries — ideal for cross-cutting tasks.
+The `link` commands store GitHub links in the task's `markdown_description` field, rendered as rich text in the ClickUp UI. See the [GitHub linking strategy](/clickup-cli/git-integration/#github-linking-strategy) section of the git integration guide for format details and examples.
 
 ## Environment variables
 
