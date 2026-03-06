@@ -48,7 +48,7 @@ func parseFieldValue(field *clickup.CustomField, rawValue string) (interface{}, 
 			return nil, fmt.Errorf("invalid checkbox value %q for field %q (use true/false)", rawValue, field.Name)
 		}
 
-	case "dropdown":
+	case "dropdown", "drop_down":
 		return resolveDropdownOption(field, rawValue)
 
 	case "labels":
@@ -262,7 +262,7 @@ func formatCustomFieldValue(field clickup.CustomField) string {
 			}
 		}
 
-	case "dropdown":
+	case "dropdown", "drop_down":
 		return formatDropdownValue(field)
 
 	case "labels":
