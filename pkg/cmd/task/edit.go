@@ -217,7 +217,7 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 	}
 	if cmd.Flags().Changed("add-tags") {
 		if spaceID != "" {
-			opts.addTags = cmdutil.ValidateTags(client, spaceID, opts.addTags, ios.ErrOut)
+			opts.addTags = cmdutil.EnsureTagsExist(client, spaceID, opts.addTags, ios.ErrOut)
 		}
 	}
 

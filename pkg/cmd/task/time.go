@@ -2,14 +2,18 @@ package task
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/raksul/go-clickup/clickup"
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/api"
 	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/internal/prompter"
 	"github.com/triptechtravel/clickup-cli/internal/tableprinter"
@@ -216,6 +220,7 @@ type timeListOptions struct {
 	startDate string
 	endDate   string
 	assignee  string
+	tags      []string
 	jsonFlags cmdutil.JSONFlags
 }
 
@@ -268,6 +273,7 @@ the current user; use --assignee to change.`,
 	cmd.Flags().StringVar(&opts.startDate, "start-date", "", "Start date for timesheet mode (YYYY-MM-DD)")
 	cmd.Flags().StringVar(&opts.endDate, "end-date", "", "End date for timesheet mode (YYYY-MM-DD)")
 	cmd.Flags().StringVar(&opts.assignee, "assignee", "", "Filter by user ID, or \"all\" for everyone (default: current user)")
+	cmd.Flags().StringSliceVar(&opts.tags, "tag", nil, `Filter by task tag(s) — comma-separated or repeated (OR logic, timesheet mode only)`)
 	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 
 	return cmd
@@ -282,6 +288,10 @@ type timeEntryTask struct {
 	Name string `json:"name"`
 }
 
+type timeEntryTaskLocation struct {
+	ListID string `json:"list_id"`
+}
+
 type timeEntry struct {
 	ID          string         `json:"id"`
 	Duration    string         `json:"duration"`
@@ -291,8 +301,9 @@ type timeEntry struct {
 	User        struct {
 		Username string `json:"username"`
 	} `json:"user"`
-	Billable bool           `json:"billable"`
-	Task     *timeEntryTask `json:"task,omitempty"`
+	Billable     bool                  `json:"billable"`
+	Task         *timeEntryTask        `json:"task,omitempty"`
+	TaskLocation *timeEntryTaskLocation `json:"task_location,omitempty"`
 }
 
 func runTimeList(f *cmdutil.Factory, opts *timeListOptions) error {
@@ -449,6 +460,15 @@ func runTimeListTimesheet(f *cmdutil.Factory, opts *timeListOptions) error {
 		return fmt.Errorf("failed to decode response: %w", err)
 	}
 
+	// Filter by tag if requested.
+	if len(opts.tags) > 0 {
+		filtered, err := filterTimeEntriesByTags(client, result.Data, opts.tags)
+		if err != nil {
+			return fmt.Errorf("failed to filter by tag: %w", err)
+		}
+		result.Data = filtered
+	}
+
 	if opts.jsonFlags.WantsJSON() {
 		return opts.jsonFlags.OutputJSON(ios.Out, result.Data)
 	}
@@ -459,6 +479,65 @@ func runTimeListTimesheet(f *cmdutil.Factory, opts *timeListOptions) error {
 	}
 
 	return printTimesheetTable(f, result.Data, opts.startDate, opts.endDate)
+}
+
+// filterTimeEntriesByTags filters time entries to only those whose task has at
+// least one of the specified tags. It extracts unique list IDs from the entries'
+// task_location, fetches tasks with the tag filter from each list (handling
+// pagination), and then keeps only entries whose task ID is in the qualifying set.
+func filterTimeEntriesByTags(client *api.Client, entries []timeEntry, tags []string) ([]timeEntry, error) {
+	// Collect unique list IDs from time entries.
+	listIDs := make(map[string]bool)
+	for _, e := range entries {
+		if e.TaskLocation != nil && e.TaskLocation.ListID != "" {
+			listIDs[e.TaskLocation.ListID] = true
+		}
+	}
+
+	if len(listIDs) == 0 {
+		return nil, nil
+	}
+
+	// For each list, fetch all tasks matching the tags (with pagination).
+	qualifyingTaskIDs := make(map[string]bool)
+	ctx := context.Background()
+
+	for listID := range listIDs {
+		page := 0
+		for {
+			taskOpts := &clickup.GetTasksOptions{
+				Tags:          tags,
+				Page:          page,
+				IncludeClosed: true,
+			}
+			tasks, _, err := client.Clickup.Tasks.GetTasks(ctx, listID, taskOpts)
+			if err != nil {
+				// If we get a permission error for a list, skip it rather than failing.
+				if strings.Contains(err.Error(), "401") || strings.Contains(err.Error(), "ECODE") {
+					break
+				}
+				return nil, fmt.Errorf("failed to get tasks for list %s: %w", listID, err)
+			}
+			for _, t := range tasks {
+				qualifyingTaskIDs[t.ID] = true
+			}
+			// ClickUp returns max 100 tasks per page; if fewer, we're done.
+			if len(tasks) < 100 {
+				break
+			}
+			page++
+		}
+	}
+
+	// Filter entries to only those with a qualifying task ID.
+	var filtered []timeEntry
+	for _, e := range entries {
+		if e.Task != nil && qualifyingTaskIDs[e.Task.ID] {
+			filtered = append(filtered, e)
+		}
+	}
+
+	return filtered, nil
 }
 
 func printTimesheetTable(f *cmdutil.Factory, entries []timeEntry, startDate, endDate string) error {
