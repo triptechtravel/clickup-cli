@@ -232,16 +232,20 @@ func runCreate(f *cmdutil.Factory, opts *createOptions) error {
 
 	// Fetch the list once if we need it for status or tag validation.
 	var spaceID string
+	var listStatuses []string
 	if opts.status != "" || len(opts.tags) > 0 {
 		list, _, listErr := client.Clickup.Lists.GetList(ctx, opts.listID)
 		if listErr == nil && list.Space.ID != "" {
 			spaceID = list.Space.ID
+			for _, s := range list.Statuses {
+				listStatuses = append(listStatuses, s.Status)
+			}
 		}
 	}
 
 	if opts.status != "" {
 		if spaceID != "" {
-			validated, valErr := cmdutil.ValidateStatus(client, spaceID, opts.status, ios.ErrOut)
+			validated, valErr := cmdutil.ValidateStatusFromLists(client, spaceID, listStatuses, opts.status, ios.ErrOut)
 			if valErr != nil {
 				return valErr
 			}
@@ -413,6 +417,7 @@ func runBulkCreate(f *cmdutil.Factory, opts *createOptions) error {
 
 	// Fetch the list once for status/tag validation.
 	var spaceID string
+	var listStatuses []string
 	needsValidation := false
 	for _, e := range entries {
 		if e.Status != "" || len(e.Tags) > 0 {
@@ -424,6 +429,9 @@ func runBulkCreate(f *cmdutil.Factory, opts *createOptions) error {
 		list, _, listErr := client.Clickup.Lists.GetList(ctx, opts.listID)
 		if listErr == nil && list.Space.ID != "" {
 			spaceID = list.Space.ID
+			for _, s := range list.Statuses {
+				listStatuses = append(listStatuses, s.Status)
+			}
 		}
 	}
 
@@ -466,7 +474,7 @@ func runBulkCreate(f *cmdutil.Factory, opts *createOptions) error {
 		if entry.Status != "" {
 			status := entry.Status
 			if spaceID != "" {
-				validated, valErr := cmdutil.ValidateStatus(client, spaceID, status, ios.ErrOut)
+				validated, valErr := cmdutil.ValidateStatusFromLists(client, spaceID, listStatuses, status, ios.ErrOut)
 				if valErr != nil {
 					fmt.Fprintf(ios.ErrOut, "%s (%d/%d) %s: %v\n", cs.Yellow("!"), i+1, total, entry.Name, valErr)
 					continue

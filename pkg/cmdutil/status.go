@@ -1,6 +1,7 @@
 package cmdutil
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -88,16 +89,52 @@ type spaceStatusResponse struct {
 	} `json:"statuses"`
 }
 
-// ValidateStatus validates a status string against the available statuses for a space.
+// ValidateStatus validates a status string against the available statuses for a task's list,
+// falling back to space-level statuses if the list has no custom overrides.
 // If the status fuzzy-matches, it returns the matched value and prints a warning to w.
 // If no match, it returns an error with available statuses. If validation cannot be
 // performed (e.g. network error), the original status is returned unchanged.
 func ValidateStatus(client *api.Client, spaceID, status string, w io.Writer) (string, error) {
+	return ValidateStatusWithList(client, spaceID, "", status, w)
+}
+
+// ValidateStatusWithList validates a status string against the available statuses for a list,
+// falling back to space-level statuses if the list has no custom status overrides.
+func ValidateStatusWithList(client *api.Client, spaceID, listID, status string, w io.Writer) (string, error) {
+	// Try list-level statuses first (lists can override space statuses).
+	if listID != "" {
+		statusNames, err := FetchListStatuses(client, listID)
+		if err == nil && len(statusNames) > 0 {
+			return matchAndReport(status, statusNames, w)
+		}
+	}
+
+	// Fall back to space-level statuses.
 	statusNames, err := FetchSpaceStatuses(client, spaceID)
 	if err != nil || len(statusNames) == 0 {
 		return status, nil // graceful fallback
 	}
 
+	return matchAndReport(status, statusNames, w)
+}
+
+// ValidateStatusFromLists validates a status string against pre-fetched list statuses,
+// falling back to space-level statuses if no list statuses are provided.
+func ValidateStatusFromLists(client *api.Client, spaceID string, listStatuses []string, status string, w io.Writer) (string, error) {
+	if len(listStatuses) > 0 {
+		return matchAndReport(status, listStatuses, w)
+	}
+
+	// Fall back to space-level statuses.
+	statusNames, err := FetchSpaceStatuses(client, spaceID)
+	if err != nil || len(statusNames) == 0 {
+		return status, nil // graceful fallback
+	}
+
+	return matchAndReport(status, statusNames, w)
+}
+
+func matchAndReport(status string, statusNames []string, w io.Writer) (string, error) {
 	matched, err := MatchStatus(status, statusNames)
 	if err != nil {
 		return "", err
@@ -135,6 +172,25 @@ func FetchSpaceStatuses(client *api.Client, spaceID string) ([]string, error) {
 
 	statusNames := make([]string, len(spaceResp.Statuses))
 	for i, s := range spaceResp.Statuses {
+		statusNames[i] = s.Status
+	}
+	return statusNames, nil
+}
+
+// FetchListStatuses fetches the available status names for a ClickUp list.
+// Returns nil if the list doesn't have custom status overrides.
+func FetchListStatuses(client *api.Client, listID string) ([]string, error) {
+	list, _, err := client.Clickup.Lists.GetList(context.Background(), listID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch list statuses: %w", err)
+	}
+
+	if len(list.Statuses) == 0 {
+		return nil, nil
+	}
+
+	statusNames := make([]string, len(list.Statuses))
+	for i, s := range list.Statuses {
 		statusNames[i] = s.Status
 	}
 	return statusNames, nil

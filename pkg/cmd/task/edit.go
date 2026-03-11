@@ -176,8 +176,8 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 		updateReq.Description = opts.description
 	}
 
-	// Validate status and tags against the first task's space (shared across batch).
-	var spaceID string
+	// Validate status and tags against the first task's space/list (shared across batch).
+	var spaceID, listID string
 	if cmd.Flags().Changed("status") || cmd.Flags().Changed("tags") || cmd.Flags().Changed("add-tags") {
 		parsed := git.ParseTaskID(taskIDs[0])
 		var getOpts *clickup.GetTaskOptions
@@ -187,12 +187,13 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 		fetchTask, _, fetchErr := client.Clickup.Tasks.GetTask(context.Background(), parsed.ID, getOpts)
 		if fetchErr == nil && fetchTask.Space.ID != "" {
 			spaceID = fetchTask.Space.ID
+			listID = fetchTask.List.ID
 		}
 	}
 
 	if cmd.Flags().Changed("status") {
 		if spaceID != "" {
-			validated, valErr := cmdutil.ValidateStatus(client, spaceID, opts.status, ios.ErrOut)
+			validated, valErr := cmdutil.ValidateStatusWithList(client, spaceID, listID, opts.status, ios.ErrOut)
 			if valErr != nil {
 				return valErr
 			}

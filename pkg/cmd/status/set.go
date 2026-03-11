@@ -32,7 +32,7 @@ func NewCmdSet(f *cmdutil.Factory) *cobra.Command {
 		Short: "Set the status of a task",
 		Long: `Change a task's status using fuzzy matching.
 
-The STATUS argument is matched against available statuses for the task's space.
+The STATUS argument is matched against available statuses for the task's list (or space if the list has no custom statuses).
 Matching priority: exact match, then case-insensitive contains, then fuzzy match.
 
 If TASK is not provided, the task ID is auto-detected from the current git branch.`,
@@ -101,19 +101,8 @@ func setRun(opts *setOptions) error {
 
 	currentStatus := task.Status.Status
 
-	// Fetch statuses for the task's space.
-	spaceID := task.Space.ID
-	statusNames, err := cmdutil.FetchSpaceStatuses(client, spaceID)
-	if err != nil {
-		return err
-	}
-
-	if len(statusNames) == 0 {
-		return fmt.Errorf("no statuses found for space %s", spaceID)
-	}
-
-	// Find the best matching status.
-	matched, err := cmdutil.MatchStatus(opts.targetStatus, statusNames)
+	// Validate status against the task's list (with space fallback).
+	matched, err := cmdutil.ValidateStatusWithList(client, task.Space.ID, task.List.ID, opts.targetStatus, ios.ErrOut)
 	if err != nil {
 		return err
 	}
