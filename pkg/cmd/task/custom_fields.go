@@ -112,7 +112,7 @@ func resolveDropdownOption(field *clickup.CustomField, optionName string) (inter
 	}
 
 	for _, opt := range options {
-		if name, ok := opt["name"].(string); ok {
+		if name := getOptionName(opt); name != "" {
 			if strings.EqualFold(name, optionName) {
 				if id, ok := opt["id"].(string); ok {
 					return id, nil
@@ -144,7 +144,7 @@ func resolveLabelOptions(field *clickup.CustomField, rawValue string) (interface
 		}
 		found := false
 		for _, opt := range options {
-			if optName, ok := opt["name"].(string); ok {
+			if optName := getOptionName(opt); optName != "" {
 				if strings.EqualFold(optName, name) {
 					if id, ok := opt["id"].(string); ok {
 						ids = append(ids, id)
@@ -206,11 +206,23 @@ func extractTypeConfigOptions(typeConfig interface{}) []map[string]interface{} {
 	return result
 }
 
+// getOptionName returns the display name for a custom field option.
+// Dropdown fields use the "name" key, while labels fields use "label".
+func getOptionName(opt map[string]interface{}) string {
+	if name, ok := opt["name"].(string); ok {
+		return name
+	}
+	if label, ok := opt["label"].(string); ok {
+		return label
+	}
+	return ""
+}
+
 // listOptionNames returns a comma-separated list of option names.
 func listOptionNames(options []map[string]interface{}) string {
 	var names []string
 	for _, opt := range options {
-		if name, ok := opt["name"].(string); ok {
+		if name := getOptionName(opt); name != "" {
 			names = append(names, name)
 		}
 	}
@@ -340,7 +352,7 @@ func formatDropdownValue(field clickup.CustomField) string {
 			options := extractTypeConfigOptions(field.TypeConfig)
 			for _, opt := range options {
 				if id, ok := opt["id"].(string); ok && id == s {
-					if name, ok := opt["name"].(string); ok {
+					if name := getOptionName(opt); name != "" {
 						return name
 					}
 				}
@@ -354,7 +366,7 @@ func formatDropdownValue(field clickup.CustomField) string {
 	idx := int(optionIdx)
 	for _, opt := range options {
 		if orderIdx, ok := opt["orderindex"].(float64); ok && int(orderIdx) == idx {
-			if name, ok := opt["name"].(string); ok {
+			if name := getOptionName(opt); name != "" {
 				return name
 			}
 		}
@@ -373,7 +385,7 @@ func formatLabelsValue(field clickup.CustomField) string {
 	optionMap := make(map[string]string)
 	for _, opt := range options {
 		if id, ok := opt["id"].(string); ok {
-			if name, ok := opt["name"].(string); ok {
+			if name := getOptionName(opt); name != "" {
 				optionMap[id] = name
 			}
 		}
@@ -392,7 +404,7 @@ func formatLabelsValue(field clickup.CustomField) string {
 			idx := int(val)
 			for _, opt := range options {
 				if orderIdx, ok := opt["orderindex"].(float64); ok && int(orderIdx) == idx {
-					if name, ok := opt["name"].(string); ok {
+					if name := getOptionName(opt); name != "" {
 						names = append(names, name)
 					}
 				}
