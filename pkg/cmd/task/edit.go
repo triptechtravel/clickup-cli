@@ -161,6 +161,11 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 		return fmt.Errorf("at least one field flag must be provided")
 	}
 
+	cfg, err := f.Config()
+	if err != nil {
+		return err
+	}
+
 	client, err := f.ApiClient()
 	if err != nil {
 		return err
@@ -180,10 +185,7 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 	var spaceID, listID string
 	if cmd.Flags().Changed("status") || cmd.Flags().Changed("tags") || cmd.Flags().Changed("add-tags") {
 		parsed := git.ParseTaskID(taskIDs[0])
-		var getOpts *clickup.GetTaskOptions
-		if parsed.IsCustomID {
-			getOpts = &clickup.GetTaskOptions{CustomTaskIDs: true}
-		}
+		getOpts := cmdutil.CustomIDTaskOptions(cfg, parsed.IsCustomID)
 		fetchTask, _, fetchErr := client.Clickup.Tasks.GetTask(context.Background(), parsed.ID, getOpts)
 		if fetchErr == nil && fetchTask.Space.ID != "" {
 			spaceID = fetchTask.Space.ID
@@ -295,10 +297,7 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 	for i, rawID := range taskIDs {
 		parsed := git.ParseTaskID(rawID)
 		taskID := parsed.ID
-		var getOpts *clickup.GetTaskOptions
-		if parsed.IsCustomID {
-			getOpts = &clickup.GetTaskOptions{CustomTaskIDs: true}
-		}
+		getOpts := cmdutil.CustomIDTaskOptions(cfg, parsed.IsCustomID)
 
 		task, _, err := client.Clickup.Tasks.UpdateTask(context.Background(), taskID, getOpts, updateReq)
 		if err != nil {

@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/raksul/go-clickup/clickup"
 	"github.com/spf13/cobra"
 	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
@@ -82,10 +81,13 @@ func syncRun(opts *syncOptions) error {
 	}
 
 	parsed := git.ParseTaskID(taskID)
-	var getOpts *clickup.GetTaskOptions
-	if parsed.IsCustomID {
-		getOpts = &clickup.GetTaskOptions{CustomTaskIDs: true}
+
+	cfg, cfgErr := opts.factory.Config()
+	if cfgErr != nil {
+		return cfgErr
 	}
+
+	getOpts := cmdutil.CustomIDTaskOptions(cfg, parsed.IsCustomID)
 
 	ctx := context.Background()
 	task, _, err := client.Clickup.Tasks.GetTask(ctx, parsed.ID, getOpts)
