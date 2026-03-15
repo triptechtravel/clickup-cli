@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/raksul/go-clickup/clickup"
 	"github.com/spf13/cobra"
 	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
@@ -82,6 +81,11 @@ func setRun(opts *setOptions) error {
 		isCustomID = parsed.IsCustomID
 	}
 
+	cfg, err := opts.factory.Config()
+	if err != nil {
+		return err
+	}
+
 	client, err := opts.factory.ApiClient()
 	if err != nil {
 		return err
@@ -90,10 +94,7 @@ func setRun(opts *setOptions) error {
 	ctx := context.Background()
 
 	// Fetch the task to determine its space.
-	var getOpts *clickup.GetTaskOptions
-	if isCustomID {
-		getOpts = &clickup.GetTaskOptions{CustomTaskIDs: true}
-	}
+	getOpts := cmdutil.CustomIDTaskOptions(cfg, isCustomID)
 	task, _, err := client.Clickup.Tasks.GetTask(ctx, taskID, getOpts)
 	if err != nil {
 		return fmt.Errorf("failed to get task %s: %w", taskID, err)

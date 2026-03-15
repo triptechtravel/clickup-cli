@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/raksul/go-clickup/clickup"
 	"github.com/spf13/cobra"
 	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/internal/prompter"
@@ -51,12 +50,12 @@ func runDelete(f *cmdutil.Factory, opts *deleteOptions) error {
 	parsed := git.ParseTaskID(opts.taskID)
 	taskID := parsed.ID
 
-	var getOpts *clickup.GetTaskOptions
-	if parsed.IsCustomID {
-		getOpts = &clickup.GetTaskOptions{
-			CustomTaskIDs: true,
-		}
+	cfg, err := f.Config()
+	if err != nil {
+		return err
 	}
+
+	getOpts := cmdutil.CustomIDTaskOptions(cfg, parsed.IsCustomID)
 
 	client, err := f.ApiClient()
 	if err != nil {

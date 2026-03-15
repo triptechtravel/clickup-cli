@@ -92,10 +92,13 @@ func listRun(opts *listOptions) error {
 		return err
 	}
 
-	url := fmt.Sprintf("https://api.clickup.com/api/v2/task/%s/comment", taskID)
-	if isCustomID {
-		url += "?custom_task_ids=true"
+	cfg, cfgErr := opts.factory.Config()
+	if cfgErr != nil {
+		return cfgErr
 	}
+
+	url := fmt.Sprintf("https://api.clickup.com/api/v2/task/%s/comment", taskID)
+	url += cmdutil.CustomIDQueryParam(cfg, isCustomID)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)

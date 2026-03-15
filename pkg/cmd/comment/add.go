@@ -119,10 +119,13 @@ func addRun(opts *addOptions) error {
 		return err
 	}
 
-	url := fmt.Sprintf("https://api.clickup.com/api/v2/task/%s/comment", taskID)
-	if isCustomID {
-		url += "?custom_task_ids=true"
+	cfg, cfgErr := opts.factory.Config()
+	if cfgErr != nil {
+		return cfgErr
 	}
+
+	url := fmt.Sprintf("https://api.clickup.com/api/v2/task/%s/comment", taskID)
+	url += cmdutil.CustomIDQueryParam(cfg, isCustomID)
 
 	// Build comment payload, resolving @mentions to real ClickUp user tags.
 	var payload []byte

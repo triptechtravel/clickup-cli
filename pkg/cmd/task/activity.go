@@ -14,6 +14,7 @@ import (
 	"github.com/raksul/go-clickup/clickup"
 	"github.com/spf13/cobra"
 	"github.com/triptechtravel/clickup-cli/internal/api"
+	"github.com/triptechtravel/clickup-cli/internal/config"
 	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/internal/text"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
@@ -115,17 +116,17 @@ func runActivity(f *cmdutil.Factory, opts *activityOptions) error {
 		isCustomID = parsed.IsCustomID
 	}
 
+	cfg, err := f.Config()
+	if err != nil {
+		return err
+	}
+
 	client, err := f.ApiClient()
 	if err != nil {
 		return err
 	}
 
-	var getOpts *clickup.GetTaskOptions
-	if isCustomID {
-		getOpts = &clickup.GetTaskOptions{
-			CustomTaskIDs: true,
-		}
-	}
+	getOpts := cmdutil.CustomIDTaskOptions(cfg, isCustomID)
 
 	ctx := context.Background()
 
@@ -136,7 +137,7 @@ func runActivity(f *cmdutil.Factory, opts *activityOptions) error {
 	}
 
 	// Fetch comments via raw HTTP request.
-	comments, err := fetchComments(client, taskID, isCustomID)
+	comments, err := fetchComments(client, cfg, taskID, isCustomID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch comments for task %s: %w", taskID, err)
 	}
@@ -157,11 +158,9 @@ func runActivity(f *cmdutil.Factory, opts *activityOptions) error {
 	return printActivity(f, task, comments)
 }
 
-func fetchComments(client *api.Client, taskID string, isCustomID bool) ([]comment, error) {
+func fetchComments(client *api.Client, cfg *config.Config, taskID string, isCustomID bool) ([]comment, error) {
 	url := fmt.Sprintf("https://api.clickup.com/api/v2/task/%s/comment", taskID)
-	if isCustomID {
-		url += "?custom_task_ids=true"
-	}
+	url += cmdutil.CustomIDQueryParam(cfg, isCustomID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {

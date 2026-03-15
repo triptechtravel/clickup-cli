@@ -114,17 +114,17 @@ func runView(f *cmdutil.Factory, opts *viewOptions) error {
 		isCustomID = parsed.IsCustomID
 	}
 
+	cfg, err := f.Config()
+	if err != nil {
+		return err
+	}
+
 	client, err := f.ApiClient()
 	if err != nil {
 		return err
 	}
 
-	getOpts := &clickup.GetTaskOptions{
-		IncludeSubTasks: true,
-	}
-	if isCustomID {
-		getOpts.CustomTaskIDs = true
-	}
+	getOpts := cmdutil.CustomIDTaskOptionsWithSubtasks(cfg, isCustomID)
 
 	ctx := context.Background()
 	task, _, err := client.Clickup.Tasks.GetTask(ctx, taskID, getOpts)
