@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lithammer/fuzzysearch/fuzzy"
@@ -466,7 +468,37 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 
 	query := strings.ToLower(opts.query)
 
-	// Progressive drill-down: sprint → user → space → workspace.
+	// Search uses a 6-level progressive drill-down. Each level is more
+	// expensive than the previous one, so we return early as soon as we
+	// find results. The key insight: the paginated team-task endpoint
+	// (GET /team/{id}/task) orders by date_updated and does NOT cover
+	// tasks in folderless lists. This means a task that hasn't been
+	// touched recently (or lives in a folderless list) is invisible to
+	// pagination alone. Level 0 (server-side search=) and Level 4
+	// (parallel space traversal) exist specifically to close that gap.
+	//
+	// Level 0: Server-side search (1 API call)       — fast, best-effort
+	// Level 1: Sprint list                           — 1 page, if configured
+	// Level 2: User's assigned tasks                 — 1 page
+	// Level 3: Configured default space              — 3 pages, if configured
+	// Level 4: Parallel space traversal              — all spaces/lists
+	// Level 5: Workspace paginated                   — 10 pages, last resort
+
+	// Level 0: Pass the query as ClickUp's `search` query-parameter so that
+	// filtering happens server-side. This is a single API call and finds
+	// tasks by name regardless of when they were last updated. It won't
+	// cover tasks in folderless lists (a known ClickUp API limitation),
+	// which is why we still need Level 4.
+	fmt.Fprintf(ios.ErrOut, "  searching (server-side)...\n")
+	scored, err := searchLevel(ctx, client, teamID, query, "search="+url.QueryEscape(query), 1, opts.comments, ios)
+	if err != nil {
+		fmt.Fprintf(ios.ErrOut, "  server-side search failed: %v\n", err)
+	}
+	if len(scored) > 0 {
+		return scored, nil
+	}
+
+	// Levels 1-2: Cheap, targeted searches (unchanged from before).
 
 	// Level 1: Sprint list (if sprint_folder configured).
 	if cfg.SprintFolder != "" {
@@ -496,31 +528,63 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 		}
 	}
 
-	// Level 3: Configured space.
+	// Level 3: Configured default space — a fast, targeted paginated search
+	// scoped to a single space. If we get an exact substring match, return
+	// immediately. Otherwise, keep any fuzzy results and continue to deeper
+	// levels — a fuzzy match here doesn't mean the exact task isn't hiding
+	// in a folderless list that pagination can't reach.
 	if cfg.Space != "" {
-		fmt.Fprintf(ios.ErrOut, "  searching space...\n")
-		scored, err := searchLevel(ctx, client, teamID, query, "space_ids[]="+cfg.Space, 3, opts.comments, ios)
+		fmt.Fprintf(ios.ErrOut, "  searching configured space...\n")
+		spaceScored, err := searchLevel(ctx, client, teamID, query, "space_ids[]="+cfg.Space, 3, opts.comments, ios)
 		if err != nil {
 			return nil, err
 		}
-		if len(scored) > 0 {
-			return scored, nil
+		if hasSubstringMatch(spaceScored) {
+			return spaceScored, nil
 		}
+		scored = append(scored, spaceScored...)
 	}
 
-	// Level 4: Full workspace (up to 10 pages).
+	// Level 4: Parallel space traversal — walks every space, discovers all
+	// folders + folderless lists, and fetches tasks from each list concurrently.
+	// This is the only level that reliably finds tasks in folderless lists.
+	// It uses goroutines (capped at 8) for both list discovery and task
+	// fetching, and cancels remaining work as soon as an exact substring
+	// match is found. Typical latency: ~10s for ~200 lists.
+	fmt.Fprintf(ios.ErrOut, "  searching all spaces...\n")
+	viaSpaces, err := searchViaSpaces(ctx, opts)
+	if err != nil {
+		fmt.Fprintf(ios.ErrOut, "  space search failed: %v\n", err)
+	}
+	scored = append(scored, viaSpaces...)
+	if len(scored) > 0 {
+		return dedupScored(scored), nil
+	}
+
+	// Level 5: Full workspace paginated (10 pages) as a last resort.
+	// This can find tasks that space traversal missed (e.g. tasks beyond
+	// page 0 of a large list), but it's slow and limited to recently-updated
+	// tasks.
 	fmt.Fprintf(ios.ErrOut, "  searching workspace...\n")
-	scored, err := searchLevel(ctx, client, teamID, query, "", 10, opts.comments, ios)
+	scored, err = searchLevel(ctx, client, teamID, query, "", 10, opts.comments, ios)
 	if err != nil {
 		return nil, err
 	}
-	if len(scored) > 0 {
-		return scored, nil
-	}
+	return scored, nil
+}
 
-	// If nothing found via pagination, fall back to space traversal.
-	fmt.Fprintf(ios.ErrOut, "Falling back to space/folder search...\n")
-	return searchViaSpaces(ctx, opts)
+// hasSubstringMatch returns true if any scored task is an exact substring match
+// in the task name. Used to decide whether a search level's results are
+// definitive enough to skip deeper (more expensive) levels. Fuzzy-only results
+// are NOT considered definitive because the exact task may exist in a list that
+// the current level cannot reach (e.g. folderless lists).
+func hasSubstringMatch(tasks []scoredTask) bool {
+	for _, t := range tasks {
+		if t.kind == matchSubstring {
+			return true
+		}
+	}
+	return false
 }
 
 // filterTasks scores tasks by name and description, separating matched from unmatched.
@@ -782,6 +846,27 @@ func pickTask(ios *iostreams.IOStreams, allTasks []searchTask) error {
 	return nil
 }
 
+// searchViaSpaces traverses the full space → folder → list hierarchy and
+// fetches tasks from every discovered list. Unlike the paginated team-task
+// endpoint, this covers folderless lists (lists not inside any folder),
+// which is where many tasks live in workspaces that use flat list structures.
+//
+// The function runs in two phases, both fully parallelized:
+//
+//   Phase 1 — List discovery: up to 8 spaces are queried concurrently.
+//   For each space, we fetch its folders (and their lists) plus any
+//   folderless lists. All discovered list IDs are collected into a
+//   single slice.
+//
+//   Phase 2 — Task fetching: up to 8 lists are queried concurrently.
+//   Each list is fetched (page 0 only) and tasks are scored against the
+//   query. When an exact substring match is found, a child context is
+//   cancelled to abort all remaining in-flight HTTP requests, providing
+//   an early exit that typically saves several seconds.
+//
+// The semaphore (channel of size 8) is shared between phases but never
+// used concurrently — Phase 1 completes (listWg.Wait) before Phase 2
+// starts, so all 8 slots are guaranteed to be free.
 func searchViaSpaces(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 	ios := opts.factory.IOStreams
 	client, err := opts.factory.ApiClient()
@@ -796,22 +881,29 @@ func searchViaSpaces(ctx context.Context, opts *searchOptions) ([]scoredTask, er
 
 	teamID := cfg.Workspace
 
-	// Get spaces.
 	spaces, _, err := client.Clickup.Spaces.GetSpaces(ctx, teamID, false)
 	if err != nil {
 		return nil, err
 	}
 
 	query := strings.ToLower(opts.query)
-	var results []scoredTask
+
+	// Phase 1: Discover all list IDs across all spaces in parallel.
+	// Each goroutine handles one space: fetching its folders, each folder's
+	// lists, and the space's folderless lists. Results are collected under
+	// listMu. The semaphore caps concurrency at 8 to stay within ClickUp's
+	// rate limits (100 req/min on most plans).
+	var (
+		listMu     sync.Mutex
+		listWg     sync.WaitGroup
+		allListIDs []string
+		sem        = make(chan struct{}, 8)
+	)
 
 	for _, space := range spaces {
 		if ctx.Err() != nil {
-			fmt.Fprintf(ios.ErrOut, "Search timed out during space traversal\n")
 			break
 		}
-
-		// Filter by --space if provided (match by name or ID).
 		if opts.space != "" {
 			if !strings.EqualFold(space.Name, opts.space) && space.ID != opts.space {
 				continue
@@ -820,99 +912,146 @@ func searchViaSpaces(ctx context.Context, opts *searchOptions) ([]scoredTask, er
 
 		fmt.Fprintf(ios.ErrOut, "  searching space %q...\n", space.Name)
 
-		// Get folders in space.
-		folders, _, err := client.Clickup.Folders.GetFolders(ctx, space.ID, false)
-		if err != nil {
-			continue
-		}
+		listWg.Add(1)
+		sem <- struct{}{}
+		go func(spaceID string) {
+			defer listWg.Done()
+			defer func() { <-sem }()
 
-		var listIDs []string
+			var ids []string
 
-		for _, folder := range folders {
-			if ctx.Err() != nil {
-				break
-			}
-
-			// Filter by --folder if provided (substring match, case-insensitive).
-			if opts.folder != "" {
-				if !strings.Contains(strings.ToLower(folder.Name), strings.ToLower(opts.folder)) {
-					continue
-				}
-			}
-
-			fmt.Fprintf(ios.ErrOut, "    folder %q...\n", folder.Name)
-			lists, _, err := client.Clickup.Lists.GetLists(ctx, folder.ID, false)
-			if err != nil {
-				continue
-			}
-			for _, l := range lists {
-				listIDs = append(listIDs, l.ID)
-			}
-		}
-
-		// Also get folderless lists (only if no --folder filter).
-		if opts.folder == "" {
-			folderlessURL := fmt.Sprintf("https://api.clickup.com/api/v2/space/%s/list", url.PathEscape(space.ID))
-			req, err := http.NewRequestWithContext(ctx, "GET", folderlessURL, nil)
+			// Get folder lists.
+			folders, _, err := client.Clickup.Folders.GetFolders(ctx, spaceID, false)
 			if err == nil {
-				resp, err := client.DoRequest(req)
-				if err == nil {
-					body, _ := io.ReadAll(resp.Body)
-					resp.Body.Close()
-					var listResp struct {
-						Lists []struct {
-							ID string `json:"id"`
-						} `json:"lists"`
+				for _, folder := range folders {
+					if ctx.Err() != nil {
+						break
 					}
-					if json.Unmarshal(body, &listResp) == nil {
-						for _, l := range listResp.Lists {
-							listIDs = append(listIDs, l.ID)
+					if opts.folder != "" {
+						if !strings.Contains(strings.ToLower(folder.Name), strings.ToLower(opts.folder)) {
+							continue
+						}
+					}
+					lists, _, err := client.Clickup.Lists.GetLists(ctx, folder.ID, false)
+					if err == nil {
+						for _, l := range lists {
+							ids = append(ids, l.ID)
 						}
 					}
 				}
 			}
+
+			// Get folderless lists.
+			if opts.folder == "" {
+				folderlessURL := fmt.Sprintf("https://api.clickup.com/api/v2/space/%s/list", url.PathEscape(spaceID))
+				req, err := http.NewRequestWithContext(ctx, "GET", folderlessURL, nil)
+				if err == nil {
+					resp, err := client.DoRequest(req)
+					if err == nil {
+						body, _ := io.ReadAll(resp.Body)
+						resp.Body.Close()
+						var listResp struct {
+							Lists []struct {
+								ID string `json:"id"`
+							} `json:"lists"`
+						}
+						if json.Unmarshal(body, &listResp) == nil {
+							for _, l := range listResp.Lists {
+								ids = append(ids, l.ID)
+							}
+						}
+					}
+				}
+			}
+
+			listMu.Lock()
+			allListIDs = append(allListIDs, ids...)
+			listMu.Unlock()
+		}(space.ID)
+	}
+	listWg.Wait()
+
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	fmt.Fprintf(ios.ErrOut, "    scanning %d lists...\n", len(allListIDs))
+
+	// Phase 2: Fetch tasks from all lists in parallel and score them.
+	//
+	// We create a child context (searchCtx) that gets cancelled as soon as
+	// any goroutine finds an exact substring match. This causes all in-flight
+	// HTTP requests (created with searchCtx) to abort, and the launch loop
+	// to stop enqueuing new work. The result: for a 200-list workspace,
+	// finding the target task in the first ~50 lists means the other ~150
+	// are never fetched.
+	//
+	// foundExact is accessed with sync/atomic (not the mutex) because it is
+	// read in the comment-search path outside resultMu to avoid serializing
+	// the expensive comment fetching behind the lock.
+	searchCtx, searchCancel := context.WithCancel(ctx)
+	defer searchCancel()
+
+	var (
+		resultMu   sync.Mutex
+		resultWg   sync.WaitGroup
+		results    []scoredTask
+		foundExact int32 // 0 = not found, 1 = found; accessed via atomic.{Load,Store}Int32
+	)
+
+	for _, listID := range allListIDs {
+		if searchCtx.Err() != nil {
+			break
 		}
+		resultWg.Add(1)
+		sem <- struct{}{}
+		go func(lid string) {
+			defer resultWg.Done()
+			defer func() { <-sem }()
 
-		fmt.Fprintf(ios.ErrOut, "    scanning %d lists...\n", len(listIDs))
-
-		// Search tasks in each list.
-		for _, listID := range listIDs {
-			if ctx.Err() != nil {
-				break
-			}
-
-			taskURL := fmt.Sprintf("https://api.clickup.com/api/v2/list/%s/task?include_closed=true&page=0", url.PathEscape(listID))
-			req, err := http.NewRequestWithContext(ctx, "GET", taskURL, nil)
+			taskURL := fmt.Sprintf("https://api.clickup.com/api/v2/list/%s/task?include_closed=true&page=0", url.PathEscape(lid))
+			req, err := http.NewRequestWithContext(searchCtx, "GET", taskURL, nil)
 			if err != nil {
-				continue
+				return
 			}
-
 			resp, err := client.DoRequest(req)
 			if err != nil {
-				continue
+				return
 			}
-
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
 
 			var taskResp searchResponse
 			if json.Unmarshal(body, &taskResp) == nil {
 				nameMatched, unmatched := filterTasks(query, taskResp.Tasks)
-				results = append(results, nameMatched...)
-
-				// If --comments is enabled, check comments on unmatched tasks.
-				if opts.comments && len(unmatched) > 0 {
+				if len(nameMatched) > 0 {
+					resultMu.Lock()
+					results = append(results, nameMatched...)
+					for _, m := range nameMatched {
+						if m.kind == matchSubstring {
+							atomic.StoreInt32(&foundExact, 1)
+							searchCancel()
+							break
+						}
+					}
+					resultMu.Unlock()
+				}
+				if opts.comments && atomic.LoadInt32(&foundExact) == 0 && len(unmatched) > 0 {
 					limit := len(unmatched)
 					if limit > 100 {
 						limit = 100
 					}
-					fmt.Fprintf(ios.ErrOut, "      checking comments on %d tasks...\n", limit)
-					commentMatches := searchTaskComments(ctx, client, query, unmatched[:limit])
-					results = append(results, commentMatches...)
+					commentMatches := searchTaskComments(searchCtx, client, query, unmatched[:limit])
+					if len(commentMatches) > 0 {
+						resultMu.Lock()
+						results = append(results, commentMatches...)
+						resultMu.Unlock()
+					}
 				}
 			}
-		}
+		}(listID)
 	}
+	resultWg.Wait()
 
 	return results, nil
 }
