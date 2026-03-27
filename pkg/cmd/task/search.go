@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -27,6 +28,7 @@ type searchOptions struct {
 	query     string
 	space     string
 	folder    string
+	assignee  string
 	pick      bool
 	comments  bool
 	exact     bool
@@ -133,6 +135,7 @@ sprint tasks first, then your assigned tasks, then configured space, then
 full workspace.
 
 Use --space and --folder to narrow the search scope for faster results.
+Use --assignee to filter by team member (name, username, or numeric ID).
 Use --comments to also search through task comments (slower).
 
 In interactive mode (TTY), if many results are found you will be asked
@@ -153,6 +156,10 @@ recently updated tasks and discover which folders/lists to search in.`,
   # Search within a specific folder
   clickup task search nextjs --folder "Engineering sprint"
 
+  # Filter by assignee (name, username, or ID)
+  clickup task search --assignee Michela
+  clickup task search "bug" --assignee 42547184
+
   # Also search through task comments
   clickup task search "migration issue" --comments
 
@@ -165,16 +172,22 @@ recently updated tasks and discover which folders/lists to search in.`,
 
   # JSON output
   clickup task search geozone --json`,
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.RangeArgs(0, 1),
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.query = args[0]
+			if len(args) > 0 {
+				opts.query = args[0]
+			}
+			if opts.query == "" && opts.assignee == "" {
+				return fmt.Errorf("either a search query or --assignee is required")
+			}
 			return runSearch(opts)
 		},
 	}
 
 	cmd.Flags().StringVar(&opts.space, "space", "", "Limit search to a specific space (name or ID)")
 	cmd.Flags().StringVar(&opts.folder, "folder", "", "Limit search to a specific folder (name, substring match)")
+	cmd.Flags().StringVar(&opts.assignee, "assignee", "", "Filter by assignee (name, username, or numeric ID)")
 	cmd.Flags().BoolVar(&opts.pick, "pick", false, "Interactively select a task and print its ID")
 	cmd.Flags().BoolVar(&opts.comments, "comments", false, "Also search through task comments (slower)")
 	cmd.Flags().BoolVar(&opts.exact, "exact", false, "Only show exact substring matches (no fuzzy results)")
@@ -441,6 +454,120 @@ func searchLevel(ctx context.Context, client *api.Client, teamID, query string, 
 	return allScored, nil
 }
 
+type resolvedMember struct {
+	Username string
+	ID       int
+}
+
+// resolveAssigneeID resolves an --assignee value to a numeric ClickUp user ID.
+// Accepts a numeric ID string, a username, or a partial name (case-insensitive
+// substring match). Returns the resolved member or an error.
+func resolveAssigneeID(ctx context.Context, f *cmdutil.Factory, client *api.Client, input string) (resolvedMember, error) {
+	cfg, err := f.Config()
+	if err != nil {
+		return resolvedMember{}, err
+	}
+	teams, _, err := client.Clickup.Teams.GetTeams(ctx)
+	if err != nil {
+		return resolvedMember{}, err
+	}
+
+	var members []resolvedMember
+	for _, team := range teams {
+		if team.ID != cfg.Workspace {
+			continue
+		}
+		for _, m := range team.Members {
+			members = append(members, resolvedMember{m.User.Username, m.User.ID})
+		}
+		break
+	}
+
+	// Numeric ID — look up the display name.
+	if numID, err := strconv.Atoi(input); err == nil {
+		for _, m := range members {
+			if m.ID == numID {
+				return m, nil
+			}
+		}
+		return resolvedMember{input, numID}, nil
+	}
+
+	lowerInput := strings.ToLower(input)
+
+	// Exact username match.
+	for _, m := range members {
+		if strings.ToLower(m.Username) == lowerInput {
+			return m, nil
+		}
+	}
+
+	// Substring match on username.
+	for _, m := range members {
+		if strings.Contains(strings.ToLower(m.Username), lowerInput) {
+			return m, nil
+		}
+	}
+
+	return resolvedMember{}, fmt.Errorf("no workspace member matching %q", input)
+}
+
+// searchByAssignee fetches all tasks assigned to the given user across the
+// workspace. If a query is also provided, results are filtered client-side.
+// Uses the paginated team-task endpoint with assignees[]={id}.
+func searchByAssignee(ctx context.Context, opts *searchOptions, client *api.Client, teamID string) ([]scoredTask, error) {
+	ios := opts.factory.IOStreams
+
+	member, err := resolveAssigneeID(ctx, opts.factory, client, opts.assignee)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Fprintf(ios.ErrOut, "  searching tasks assigned to %s (ID %d)...\n", member.Username, member.ID)
+
+	assigneeParam := fmt.Sprintf("assignees[]=%d", member.ID)
+
+	// Fetch up to 10 pages of tasks for this assignee.
+	var allTasks []searchTask
+	for page := 0; page < 10; page++ {
+		if ctx.Err() != nil {
+			break
+		}
+		tasks, err := fetchTeamTasks(ctx, client, teamID, page, assigneeParam)
+		if err != nil {
+			return nil, err
+		}
+		if len(tasks) == 0 {
+			break
+		}
+		allTasks = append(allTasks, tasks...)
+	}
+
+	// If a query was provided, filter results by name/description.
+	// Otherwise, return all tasks as substring matches (they matched by assignee).
+	if opts.query != "" {
+		matched, unmatched := filterTasks(strings.ToLower(opts.query), allTasks)
+		if opts.comments && len(unmatched) > 0 {
+			limit := len(unmatched)
+			if limit > 100 {
+				limit = 100
+			}
+			commentMatches := searchTaskComments(ctx, client, opts.query, unmatched[:limit])
+			matched = append(matched, commentMatches...)
+		}
+		return matched, nil
+	}
+
+	// No query — return all assignee tasks as-is.
+	var scored []scoredTask
+	for _, t := range allTasks {
+		scored = append(scored, scoredTask{
+			searchTask: t,
+			kind:       matchSubstring,
+		})
+	}
+	return scored, nil
+}
+
 // doSearch performs the actual search using progressive drill-down or
 // the space/folder hierarchy (when --space or --folder is specified).
 func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
@@ -459,6 +586,14 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 	teamID := cfg.Workspace
 	if teamID == "" {
 		return nil, fmt.Errorf("workspace ID required. Set with 'clickup auth login'")
+	}
+
+	// If --assignee is specified, resolve the name/username to a numeric ID
+	// and fetch all tasks assigned to that person. The query (if provided)
+	// is used to filter the results client-side. This takes priority over
+	// other search strategies since the user explicitly asked for a person.
+	if opts.assignee != "" {
+		return searchByAssignee(ctx, opts, client, teamID)
 	}
 
 	// If --space or --folder is specified, go directly to targeted search.
