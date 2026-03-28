@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -242,4 +243,114 @@ func resolveCurrentSprintList(f *cmdutil.Factory) (string, error) {
 	}
 
 	return listID, nil
+}
+
+// resolveListByName searches all lists (folderless + inside folders) in the
+// configured space and returns the list ID matching the given name.
+// Matching is case-insensitive.
+func resolveListByName(f *cmdutil.Factory, name string) (string, error) {
+	cfg, err := f.Config()
+	if err != nil {
+		return "", err
+	}
+
+	spaceID := cfg.Space
+	if spaceID == "" {
+		return "", fmt.Errorf("no space configured. Run 'clickup space select' first")
+	}
+
+	client, err := f.ApiClient()
+	if err != nil {
+		return "", err
+	}
+
+	nameLower := strings.ToLower(name)
+
+	type apiList struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+
+	// Check folderless lists first.
+	if listID, err := findListInURL(client, fmt.Sprintf("https://api.clickup.com/api/v2/space/%s/list", spaceID), nameLower); err != nil {
+		return "", err
+	} else if listID != "" {
+		return listID, nil
+	}
+
+	// Check folders.
+	type apiFolder struct {
+		Lists []apiList `json:"lists"`
+	}
+
+	foldersURL := fmt.Sprintf("https://api.clickup.com/api/v2/space/%s/folder", spaceID)
+	req, err := http.NewRequest(http.MethodGet, foldersURL, nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := client.DoRequest(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("failed to fetch folders: %s", string(body))
+	}
+
+	var foldersResult struct {
+		Folders []apiFolder `json:"folders"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&foldersResult); err != nil {
+		return "", err
+	}
+
+	for _, folder := range foldersResult.Folders {
+		for _, l := range folder.Lists {
+			if strings.ToLower(l.Name) == nameLower {
+				return l.ID, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("list %q not found in space %s. Run 'clickup list ls' to see available lists", name, spaceID)
+}
+
+// findListInURL fetches lists from a ClickUp API URL and returns the ID of
+// the list matching nameLower, or empty string if not found.
+func findListInURL(client *api.Client, url, nameLower string) (string, error) {
+	type apiList struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := client.DoRequest(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("failed to fetch lists: %s", string(body))
+	}
+
+	var result struct {
+		Lists []apiList `json:"lists"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+
+	for _, l := range result.Lists {
+		if strings.ToLower(l.Name) == nameLower {
+			return l.ID, nil
+		}
+	}
+	return "", nil
 }

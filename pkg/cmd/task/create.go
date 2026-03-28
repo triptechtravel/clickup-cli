@@ -17,6 +17,7 @@ const pointsNotSet = -999.0
 
 type createOptions struct {
 	listID              string
+	listName            string
 	currentSprint       bool
 	name                string
 	description         string
@@ -121,8 +122,15 @@ Additional properties can be set with flags:
 				}
 				opts.listID = listID
 			}
+			if opts.listName != "" && opts.listID == "" {
+				listID, err := resolveListByName(f, opts.listName)
+				if err != nil {
+					return err
+				}
+				opts.listID = listID
+			}
 			if opts.listID == "" {
-				return fmt.Errorf("either --list-id or --current is required")
+				return fmt.Errorf("either --list-id, --list-name, or --current is required")
 			}
 			if opts.fromFile != "" {
 				return runBulkCreate(f, opts)
@@ -132,6 +140,7 @@ Additional properties can be set with flags:
 	}
 
 	cmd.Flags().StringVar(&opts.listID, "list-id", "", "ClickUp list ID")
+	cmd.Flags().StringVar(&opts.listName, "list-name", "", "Resolve list by name within the configured space")
 	cmd.Flags().BoolVar(&opts.currentSprint, "current", false, "Create in the current sprint (auto-resolves list ID from sprint folder)")
 	cmd.Flags().StringVar(&opts.name, "name", "", "Task name (convention: [Type] Context — Action (Platform))")
 	cmd.Flags().StringVar(&opts.description, "description", "", "Task description")
@@ -153,7 +162,7 @@ Additional properties can be set with flags:
 	cmd.Flags().StringArrayVar(&opts.fields, "field", nil, `Set a custom field value ("Name=value", repeatable)`)
 	cmd.Flags().StringVar(&opts.fromFile, "from-file", "", "Create tasks from a JSON file (array of task objects)")
 
-	cmd.MarkFlagsMutuallyExclusive("list-id", "current")
+	cmd.MarkFlagsMutuallyExclusive("list-id", "list-name", "current")
 
 	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 

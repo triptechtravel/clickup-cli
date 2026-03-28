@@ -1,82 +1,109 @@
-# @triptechtravel/clickup-cli
+# clickup-cli (nick-preda fork)
 
-A command-line tool for working with ClickUp tasks, comments, and sprints -- designed for developers who live in the terminal and use GitHub.
+A CLI for managing ClickUp from the terminal. Forked from [triptechtravel/clickup-cli](https://github.com/triptechtravel/clickup-cli) with extra features for daily use with AI agents (Claude Code) and automation.
 
-[![Release](https://img.shields.io/github/v/release/triptechtravel/clickup-cli)](https://github.com/triptechtravel/clickup-cli/releases)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![CI](https://github.com/triptechtravel/clickup-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/triptechtravel/clickup-cli/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/triptechtravel/clickup-cli)](https://goreportcard.com/report/github.com/triptechtravel/clickup-cli)
-[![Go Reference](https://pkg.go.dev/badge/github.com/triptechtravel/clickup-cli.svg)](https://pkg.go.dev/github.com/triptechtravel/clickup-cli)
+## What this fork adds
+
+| Feature | Command | Why |
+|---------|---------|-----|
+| **List all lists in a space** | `clickup list ls` | Find list IDs without digging through the UI |
+| **Send messages to Chat channels** | `clickup chat send <channel-id> "msg"` | Post reports, alerts, and notifications to Chat |
+| **Create tasks by list name** | `clickup task create --list-name "Issues"` | No need to look up numeric list IDs |
+| **Search with assignee filter** | `clickup task search "term" --assignee me` | Filter search results by assignee |
+| **Faster search** | Server-side search + parallel space traversal | Upstream only did client-side filtering |
 
 ## Install
 
 ```sh
-# Homebrew
-brew install triptechtravel/tap/clickup
+# From source (recommended for this fork)
+git clone https://github.com/nick-preda/clickup-cli.git
+cd clickup-cli
+make install
 
-# Go
-go install github.com/triptechtravel/clickup-cli/cmd/clickup@latest
-
-# Or download a binary from the releases page
+# Or directly with Go
+go install github.com/nick-preda/clickup-cli/cmd/clickup@latest
 ```
 
 ## Quick start
 
 ```sh
-clickup auth login        # authenticate with your API token
+clickup auth login         # authenticate with your API token
 clickup space select       # choose a default space
-clickup task view          # view the task from your current git branch
-clickup status set "done"  # fuzzy-matched status update
-clickup link pr            # link the current GitHub PR to the task
+clickup list ls            # see all lists and their IDs
+clickup task create --list-name "Issues" --name "Fix the bug" --priority 2
+clickup task search "bug"  # find tasks
+clickup chat send khpgh-10335 "Deploy done"  # post to a Chat channel
 ```
 
-See the [getting started guide](https://triptechtravel.github.io/clickup-cli/getting-started/) for a full walkthrough.
+## Daily workflow
 
-## What it does
+```sh
+# Find where to create a task
+clickup list ls
+# 900601764492  Issues      (no folder)
+# 900401327544  Nanea       (no folder)
+# 901510841332  Task        Gitlab
 
-- **Task management** -- view, create, edit, search, and bulk-edit tasks with custom fields, tags, points, and time estimates
-- **Git integration** -- auto-detects task IDs from branch names and links PRs, branches, and commits to ClickUp
-- **Sprint dashboard** -- `sprint current` shows tasks grouped by status; `task create --current` creates tasks in the active sprint
-- **Time tracking** -- log time, view per-task entries, or query workspace-wide timesheets by date range
-- **Comments & inbox** -- add comments with @mentions, view your recent mentions across the workspace
-- **Fuzzy status matching** -- set statuses with partial input (`"review"` matches `"code review"`)
-- **AI-friendly** -- `--json` output and explicit flags make it easy for AI agents to read and update tasks
-- **CI/CD ready** -- `--with-token`, exit codes, and JSON output for automation; includes GitHub Actions examples
+# Create a task by name (no list-id needed)
+clickup task create --list-name "Issues" \
+  --name "[Bug] Fix login timeout" --priority 2
 
-## Commands
+# Search your tasks
+clickup task search "login" --assignee me
 
-Full command list with flags and examples: **[Command reference](https://triptechtravel.github.io/clickup-cli/commands/)**
+# Add a comment with @mentions
+clickup comment add 86abc123 "@Michela this is ready for review"
 
-| Area | Key commands |
-|------|-------------|
-| **Tasks** | `task view`, `task create`, `task edit`, `task search`, `task recent` |
-| **Time** | `task time log`, `task time list` |
+# Send a report to a Chat channel
+clickup chat send khpgh-10335 "Daily report: all systems green"
+
+# View task from current git branch (auto-detected)
+clickup task view
+```
+
+## All commands
+
+| Area | Commands |
+|------|----------|
+| **Tasks** | `task view`, `task create`, `task edit`, `task search`, `task list`, `task recent`, `task delete` |
+| **Lists** | `list ls` |
+| **Chat** | `chat send` |
+| **Comments** | `comment add`, `comment list`, `comment edit`, `comment delete` |
 | **Status** | `status set`, `status list`, `status add` |
 | **Git** | `link pr`, `link sync`, `link branch`, `link commit` |
 | **Sprints** | `sprint current`, `sprint list` |
-| **Comments** | `comment add`, `comment list` |
-| **Workspace** | `inbox`, `member list`, `space select`, `tag list`, `field list` |
+| **Workspace** | `space list`, `space select`, `member list`, `inbox`, `tag list`, `field list` |
 
-## Documentation
+## Using with AI agents
 
-**[triptechtravel.github.io/clickup-cli](https://triptechtravel.github.io/clickup-cli/)**
+This CLI is designed to work well with Claude Code and other AI agents:
 
-- [Installation](https://triptechtravel.github.io/clickup-cli/installation/) -- Homebrew, Go, binaries, shell completions
-- [Getting started](https://triptechtravel.github.io/clickup-cli/getting-started/) -- first-time setup walkthrough
-- [Configuration](https://triptechtravel.github.io/clickup-cli/configuration/) -- config file, per-directory defaults, aliases
-- [Git integration](https://triptechtravel.github.io/clickup-cli/git-integration/) -- branch naming, GitHub linking strategy
-- [CI usage](https://triptechtravel.github.io/clickup-cli/ci-usage/) -- non-interactive auth, JSON output, scripting
-- [GitHub Actions](https://triptechtravel.github.io/clickup-cli/github-actions/) -- ready-to-use workflow templates
-- [AI agents](https://triptechtravel.github.io/clickup-cli/ai-agents/) -- integration with Claude Code, Copilot, Cursor
-- [Command reference](https://triptechtravel.github.io/clickup-cli/reference/clickup/) -- auto-generated flag and usage docs
+```sh
+# JSON output for programmatic use
+clickup list ls --json
+clickup task search "deploy" --json
 
-## Contributing
+# AI agent can create tasks without knowing list IDs
+clickup task create --list-name "Issues" --name "task name"
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, project structure, and guidelines.
+# AI agent can post to Chat channels
+clickup chat send <channel-id> "automated report here"
+```
 
-## Author
+## Configuration
 
-Created by [Isaac Rowntree](https://github.com/isaacrowntree).
+Config is stored in `~/.config/clickup/config.yml`:
+
+```yaml
+workspace: "20503057"        # your team/workspace ID
+space: "90060297766"         # default space for list ls, task create --list-name
+```
+
+Set per-directory defaults with `directory_defaults` in the config file.
+
+## Upstream docs
+
+For features inherited from upstream, see the [original documentation](https://triptechtravel.github.io/clickup-cli/).
 
 ## License
 
