@@ -17,6 +17,7 @@ func NewCmdComment(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(NewCmdList(f))
 	cmd.AddCommand(NewCmdEdit(f))
 	cmd.AddCommand(NewCmdDelete(f))
+	cmd.AddCommand(NewCmdReply(f))
 
 	return cmd
 }
