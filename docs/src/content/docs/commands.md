@@ -58,6 +58,7 @@ Flag details, examples, and options for each command are in the auto-generated [
 | [`status add`](/clickup-cli/reference/clickup_status_add/) | Add a new status to a space |
 | [`status list`](/clickup-cli/reference/clickup_status_list/) | List available statuses for a space |
 | [`status set`](/clickup-cli/reference/clickup_status_set/) | Set the status of a task |
+| [`tag create`](/clickup-cli/reference/clickup_tag_create/) | Create tags in a space |
 | [`tag list`](/clickup-cli/reference/clickup_tag_list/) | List tags in a space |
 
 ---
@@ -70,6 +71,7 @@ Flag details, examples, and options for each command are in the auto-generated [
 | [`comment delete`](/clickup-cli/reference/clickup_comment_delete/) | Delete a comment |
 | [`comment edit`](/clickup-cli/reference/clickup_comment_edit/) | Edit a comment |
 | [`comment list`](/clickup-cli/reference/clickup_comment_list/) | List comments on a task |
+| [`comment reply`](/clickup-cli/reference/clickup_comment_reply/) | Reply to a comment thread |
 
 ---
 
