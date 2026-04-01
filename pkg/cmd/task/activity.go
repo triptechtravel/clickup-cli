@@ -78,6 +78,8 @@ type comment struct {
 	CommentText string      `json:"comment_text"`
 	User        commentUser `json:"user"`
 	Date        string      `json:"date"`
+	ReplyCount  int         `json:"reply_count"`
+	Replies     []comment   `json:"replies,omitempty"`
 }
 
 // commentsResponse represents the API response from the comments endpoint.
@@ -183,6 +185,53 @@ func fetchComments(client *api.Client, cfg *config.Config, taskID string, isCust
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
+	// Fetch threaded replies for comments that have them.
+	for i, c := range result.Comments {
+		if c.ReplyCount > 0 {
+			replies, err := fetchReplies(client, c.ID)
+			if err != nil {
+				continue // skip replies on error, still show the comment
+			}
+			result.Comments[i].Replies = replies
+		}
+	}
+
+	return result.Comments, nil
+}
+
+// repliesResponse represents the API response from the comment replies endpoint.
+type repliesResponse struct {
+	Comments []comment `json:"comments"`
+	Replies  []comment `json:"replies"`
+}
+
+func fetchReplies(client *api.Client, commentID string) ([]comment, error) {
+	url := fmt.Sprintf("https://api.clickup.com/api/v2/comment/%s/reply", commentID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.DoRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	var result repliesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	// The API may return replies under "comments" or "replies" key.
+	if len(result.Replies) > 0 {
+		return result.Replies, nil
+	}
 	return result.Comments, nil
 }
 
@@ -306,6 +355,24 @@ func printActivity(f *cmdutil.Factory, task *clickup.Task, comments []comment) e
 
 		if c.CommentText != "" {
 			fmt.Fprintf(out, "%s\n", text.IndentLines(c.CommentText, "    "))
+		}
+
+		// Show threaded replies indented under the parent comment.
+		for _, r := range c.Replies {
+			rUsername := r.User.Username
+			if rUsername == "" {
+				rUsername = "Unknown"
+			}
+			var rTimeStr string
+			if t, err := parseUnixMillis(r.Date); err == nil {
+				rTimeStr = fmt.Sprintf("%s (%s)", t.Format("2006-01-02 15:04"), text.RelativeTime(t))
+			} else {
+				rTimeStr = r.Date
+			}
+			fmt.Fprintf(out, "\n    %s %s %s\n", cs.Gray("↳"), cs.Bold(rUsername), cs.Gray(rTimeStr))
+			if r.CommentText != "" {
+				fmt.Fprintf(out, "%s\n", text.IndentLines(r.CommentText, "      "))
+			}
 		}
 
 		// Print a separator between comments (but not after the last one).

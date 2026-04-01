@@ -85,6 +85,7 @@ Flag details, examples, and options for each command are in the auto-generated [
 | [`comment delete`](/clickup-cli/reference/clickup_comment_delete/) | Delete a comment |
 | [`comment edit`](/clickup-cli/reference/clickup_comment_edit/) | Edit a comment |
 | [`comment list`](/clickup-cli/reference/clickup_comment_list/) | List comments on a task |
+| [`comment reply`](/clickup-cli/reference/clickup_comment_reply/) | Reply to a comment thread |
 
 ---
 

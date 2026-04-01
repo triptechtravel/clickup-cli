@@ -22,4 +22,5 @@ Add, list, edit, and delete comments on ClickUp tasks.
 * [clickup comment delete](/clickup-cli/reference/clickup_comment_delete/)	 - Delete a comment
 * [clickup comment edit](/clickup-cli/reference/clickup_comment_edit/)	 - Edit a comment
 * [clickup comment list](/clickup-cli/reference/clickup_comment_list/)	 - List comments on a task
+* [clickup comment reply](/clickup-cli/reference/clickup_comment_reply/)	 - Reply to a comment thread
 

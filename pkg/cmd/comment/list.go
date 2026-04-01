@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/api"
 	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/internal/tableprinter"
 	"github.com/triptechtravel/clickup-cli/internal/text"
@@ -31,7 +32,9 @@ type commentData struct {
 	User        struct {
 		Username string `json:"username"`
 	} `json:"user"`
-	Date string `json:"date"` // unix timestamp in ms as string
+	Date       string        `json:"date"` // unix timestamp in ms as string
+	ReplyCount int           `json:"reply_count"`
+	Replies    []commentData `json:"replies,omitempty"`
 }
 
 // NewCmdList returns the "comment list" command.
@@ -120,6 +123,17 @@ func listRun(opts *listOptions) error {
 		return fmt.Errorf("failed to parse API response: %w", err)
 	}
 
+	// Fetch threaded replies for comments that have them.
+	for i, c := range result.Comments {
+		if c.ReplyCount > 0 {
+			replies, err := fetchCommentReplies(client, c.ID)
+			if err != nil {
+				continue
+			}
+			result.Comments[i].Replies = replies
+		}
+	}
+
 	if opts.jsonFlags.WantsJSON() {
 		return opts.jsonFlags.OutputJSON(ios.Out, result.Comments)
 	}
@@ -137,6 +151,13 @@ func listRun(opts *listOptions) error {
 		tp.AddField(formatCommentDate(c.Date))
 		tp.AddField(text.Truncate(c.CommentText, 80))
 		tp.EndRow()
+
+		for _, r := range c.Replies {
+			tp.AddField("  ↳ " + r.User.Username)
+			tp.AddField(formatCommentDate(r.Date))
+			tp.AddField(text.Truncate(r.CommentText, 80))
+			tp.EndRow()
+		}
 	}
 
 	if err := tp.Render(); err != nil {
@@ -152,6 +173,40 @@ func listRun(opts *listOptions) error {
 	fmt.Fprintf(ios.Out, "  %s  clickup comment list %s --json\n", cs.Gray("JSON:"), taskID)
 
 	return nil
+}
+
+type commentRepliesResponse struct {
+	Comments []commentData `json:"comments"`
+	Replies  []commentData `json:"replies"`
+}
+
+func fetchCommentReplies(client *api.Client, commentID string) ([]commentData, error) {
+	url := fmt.Sprintf("https://api.clickup.com/api/v2/comment/%s/reply", commentID)
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.DoRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	var result commentRepliesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	if len(result.Replies) > 0 {
+		return result.Replies, nil
+	}
+	return result.Comments, nil
 }
 
 // formatCommentDate converts a unix timestamp in milliseconds (as string) to a relative time.
