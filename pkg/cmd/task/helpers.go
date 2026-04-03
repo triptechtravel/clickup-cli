@@ -2,14 +2,13 @@ package task
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"strings"
 	"time"
 
 	"github.com/raksul/go-clickup/clickup"
+	"github.com/triptechtravel/clickup-cli/api/clickupv2"
 	"github.com/triptechtravel/clickup-cli/internal/api"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
 
@@ -32,67 +31,26 @@ func parseDuration(s string) (int, error) {
 	return int(d.Milliseconds()), nil
 }
 
-// setTaskPoints sets sprint/story points on a task via the ClickUp API.
-// The go-clickup library's TaskRequest does not support points, so this
-// makes a raw HTTP PUT request.
+// setTaskPoints sets sprint/story points on a task using the auto-generated
+// UpdateTask wrapper (go-clickup's TaskUpdateRequest doesn't support points).
 func setTaskPoints(client *api.Client, taskID string, points float64) error {
-	body := fmt.Sprintf(`{"points":%g}`, points)
-	req, err := http.NewRequest("PUT", fmt.Sprintf("https://api.clickup.com/api/v2/task/%s", taskID), strings.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := client.DoRequest(req)
-	if err != nil {
-		return err
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to set points: status %d", resp.StatusCode)
-	}
-	return nil
+	p := float32(points)
+	_, err := apiv2.UpdateTask(context.Background(), client, taskID, &clickupv2.UpdateTaskJSONRequest{
+		Points: &p,
+	})
+	return err
 }
 
-// addTaskTag adds a single tag to a task via the ClickUp tag API.
-// The go-clickup library sends tags in the request body which ClickUp ignores;
-// tags must be added via POST /task/{id}/tag/{tag_name}.
+// addTaskTag adds a single tag to a task via POST /task/{id}/tag/{name}.
 func addTaskTag(client *api.Client, taskID, tag string) error {
-	req, err := http.NewRequest("POST",
-		fmt.Sprintf("https://api.clickup.com/api/v2/task/%s/tag/%s", taskID, tag),
-		nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := client.DoRequest(req)
-	if err != nil {
-		return err
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to add tag %q: status %d", tag, resp.StatusCode)
-	}
-	return nil
+	_, err := apiv2.AddTagToTask(context.Background(), client, taskID, tag)
+	return err
 }
 
-// removeTaskTag removes a single tag from a task via the ClickUp tag API.
+// removeTaskTag removes a single tag from a task.
 func removeTaskTag(client *api.Client, taskID, tag string) error {
-	req, err := http.NewRequest("DELETE",
-		fmt.Sprintf("https://api.clickup.com/api/v2/task/%s/tag/%s", taskID, tag),
-		nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := client.DoRequest(req)
-	if err != nil {
-		return err
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to remove tag %q: status %d", tag, resp.StatusCode)
-	}
-	return nil
+	_, err := apiv2.RemoveTagFromTask(context.Background(), client, taskID, tag)
+	return err
 }
 
 // addTaskTags adds multiple tags to a task. Used after task creation.
@@ -148,70 +106,25 @@ func setTaskTags(client *api.Client, taskID string, currentTags, desiredTags []s
 	return nil
 }
 
-// addTaskToList adds a task to an additional list via the ClickUp API.
-// Uses POST /api/v2/list/{list_id}/task/{task_id}.
+// addTaskToList adds a task to an additional list.
 func addTaskToList(client *api.Client, listID, taskID string) error {
-	req, err := http.NewRequest("POST",
-		fmt.Sprintf("https://api.clickup.com/api/v2/list/%s/task/%s", listID, taskID),
-		nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := client.DoRequest(req)
-	if err != nil {
-		return err
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to add task to list: status %d", resp.StatusCode)
-	}
-	return nil
+	_, err := apiv2.AddTaskToList(context.Background(), client, listID, taskID)
+	return err
 }
 
-// removeTaskFromList removes a task from an additional list via the ClickUp API.
-// Uses DELETE /api/v2/list/{list_id}/task/{task_id}.
+// removeTaskFromList removes a task from an additional list.
 func removeTaskFromList(client *api.Client, listID, taskID string) error {
-	req, err := http.NewRequest("DELETE",
-		fmt.Sprintf("https://api.clickup.com/api/v2/list/%s/task/%s", listID, taskID),
-		nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := client.DoRequest(req)
-	if err != nil {
-		return err
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to remove task from list: status %d", resp.StatusCode)
-	}
-	return nil
+	_, err := apiv2.RemoveTaskFromList(context.Background(), client, listID, taskID)
+	return err
 }
 
-// setMarkdownDescription sets the markdown_description field on a task
-// via a raw HTTP PUT request. The go-clickup library's TaskUpdateRequest
-// does not support this field.
+// setMarkdownDescription sets the markdown description on a task using the
+// auto-generated UpdateTask wrapper.
 func setMarkdownDescription(client *api.Client, taskID string, md string) error {
-	payload, err := json.Marshal(map[string]string{"markdown_description": md})
-	if err != nil {
-		return err
-	}
-	req, err := http.NewRequest("PUT", fmt.Sprintf("https://api.clickup.com/api/v2/task/%s", taskID), strings.NewReader(string(payload)))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := client.DoRequest(req)
-	if err != nil {
-		return err
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to set markdown description: status %d", resp.StatusCode)
-	}
-	return nil
+	_, err := apiv2.UpdateTask(context.Background(), client, taskID, &clickupv2.UpdateTaskJSONRequest{
+		MarkdownContent: &md,
+	})
+	return err
 }
 
 // resolveCurrentSprintList resolves the current sprint's list ID from the
