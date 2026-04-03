@@ -373,8 +373,8 @@ func runSearch(opts *searchOptions) error {
 // fetchTeamTasks fetches one page of tasks from the team endpoint with optional extra query params.
 func fetchTeamTasks(ctx context.Context, client *api.Client, teamID string, page int, extraParams string) ([]searchTask, error) {
 	apiURL := fmt.Sprintf(
-		"https://api.clickup.com/api/v2/team/%s/task?include_closed=true&page=%d&order_by=updated&reverse=true",
-		teamID, page,
+		"%s/team/%s/task?include_closed=true&page=%d&order_by=updated&reverse=true",
+		client.BaseURL(), teamID, page,
 	)
 	if extraParams != "" {
 		apiURL += "&" + extraParams
@@ -548,27 +548,54 @@ func filterTasks(query string, tasks []searchTask) (matched []scoredTask, unmatc
 }
 
 // searchTaskComments checks task comments for the query string using the
-// ClickUp API. Returns scored tasks that matched via comments.
+// ClickUp API. Uses bounded concurrency (up to 5 parallel requests) to
+// avoid serial N+1 API calls on large result sets.
 func searchTaskComments(ctx context.Context, client *api.Client, query string, tasks []searchTask) []scoredTask {
-	var results []scoredTask
+	const maxWorkers = 5
+
+	type result struct {
+		task  searchTask
+		match bool
+	}
+
+	// Fan out with bounded concurrency.
+	sem := make(chan struct{}, maxWorkers)
+	resultCh := make(chan result, len(tasks))
+
 	for _, t := range tasks {
 		if ctx.Err() != nil {
 			break
 		}
-		if taskMatchesComment(ctx, client, query, t.ID) {
-			results = append(results, scoredTask{
-				searchTask: t,
+		sem <- struct{}{} // acquire
+		go func(task searchTask) {
+			defer func() { <-sem }() // release
+			match := taskMatchesComment(ctx, client, query, task.ID)
+			resultCh <- result{task: task, match: match}
+		}(t)
+	}
+
+	// Wait for all goroutines to finish.
+	for i := 0; i < cap(sem); i++ {
+		sem <- struct{}{}
+	}
+	close(resultCh)
+
+	var scored []scoredTask
+	for r := range resultCh {
+		if r.match {
+			scored = append(scored, scoredTask{
+				searchTask: r.task,
 				kind:       matchComment,
 			})
 		}
 	}
-	return results
+	return scored
 }
 
 // taskMatchesComment fetches comments for a single task and returns true if
 // any comment text contains the query (case-insensitive substring match).
 func taskMatchesComment(ctx context.Context, client *api.Client, query, taskID string) bool {
-	commentURL := fmt.Sprintf("https://api.clickup.com/api/v2/task/%s/comment", url.PathEscape(taskID))
+	commentURL := client.URL("task/%s/comment", url.PathEscape(taskID))
 	req, err := http.NewRequestWithContext(ctx, "GET", commentURL, nil)
 	if err != nil {
 		return false
@@ -599,31 +626,24 @@ func taskMatchesComment(ctx context.Context, client *api.Client, query, taskID s
 }
 
 // dedupScored deduplicates scored tasks by ID, keeping the entry with the
-// best (lowest) match kind for each task.
+// best (lowest) match kind for each task. Preserves insertion order via
+// index-based tracking (no extra sort pass needed since the caller runs
+// sortScoredTasks immediately after).
 func dedupScored(tasks []scoredTask) []scoredTask {
-	best := make(map[string]scoredTask)
-	order := make(map[string]int) // preserve first-seen order for stability
-	idx := 0
+	bestIdx := make(map[string]int) // ID → index in result
+	result := make([]scoredTask, 0, len(tasks)/2+1)
 	for _, t := range tasks {
-		existing, exists := best[t.ID]
-		if !exists {
-			best[t.ID] = t
-			order[t.ID] = idx
-			idx++
-		} else if t.kind < existing.kind {
-			best[t.ID] = t
-		} else if t.kind == existing.kind && t.kind == matchFuzzy && t.fuzzyRank < existing.fuzzyRank {
-			best[t.ID] = t
+		if idx, exists := bestIdx[t.ID]; exists {
+			existing := result[idx]
+			if t.kind < existing.kind ||
+				(t.kind == existing.kind && t.kind == matchFuzzy && t.fuzzyRank < existing.fuzzyRank) {
+				result[idx] = t
+			}
+		} else {
+			bestIdx[t.ID] = len(result)
+			result = append(result, t)
 		}
 	}
-	result := make([]scoredTask, 0, len(best))
-	for _, t := range best {
-		result = append(result, t)
-	}
-	// Sort by first-seen order to keep stable ordering before relevance sort.
-	sort.Slice(result, func(i, j int) bool {
-		return order[result[i].ID] < order[result[j].ID]
-	})
 	return result
 }
 
@@ -852,7 +872,7 @@ func searchViaSpaces(ctx context.Context, opts *searchOptions) ([]scoredTask, er
 
 		// Also get folderless lists (only if no --folder filter).
 		if opts.folder == "" {
-			folderlessURL := fmt.Sprintf("https://api.clickup.com/api/v2/space/%s/list", url.PathEscape(space.ID))
+			folderlessURL := client.URL("space/%s/list", url.PathEscape(space.ID))
 			req, err := http.NewRequestWithContext(ctx, "GET", folderlessURL, nil)
 			if err == nil {
 				resp, err := client.DoRequest(req)
@@ -881,7 +901,7 @@ func searchViaSpaces(ctx context.Context, opts *searchOptions) ([]scoredTask, er
 				break
 			}
 
-			taskURL := fmt.Sprintf("https://api.clickup.com/api/v2/list/%s/task?include_closed=true&page=0", url.PathEscape(listID))
+			taskURL := fmt.Sprintf("%s/list/%s/task?include_closed=true&page=0", client.BaseURL(), url.PathEscape(listID))
 			req, err := http.NewRequestWithContext(ctx, "GET", taskURL, nil)
 			if err != nil {
 				continue

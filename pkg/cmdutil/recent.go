@@ -168,7 +168,7 @@ type userResp struct {
 }
 
 func GetCurrentUserID(client *api.Client) (int, error) {
-	req, err := http.NewRequest("GET", "https://api.clickup.com/api/v2/user", nil)
+	req, err := http.NewRequest("GET", client.URL("user"), nil)
 	if err != nil {
 		return 0, err
 	}

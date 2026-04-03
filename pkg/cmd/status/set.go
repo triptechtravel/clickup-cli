@@ -109,7 +109,7 @@ func setRun(opts *setOptions) error {
 	}
 
 	// Update the task status.
-	updateURL := fmt.Sprintf("https://api.clickup.com/api/v2/task/%s", task.ID)
+	updateURL := client.URL("task/%s", task.ID)
 	payload := map[string]string{"status": matched}
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {

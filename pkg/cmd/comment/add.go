@@ -124,8 +124,8 @@ func addRun(opts *addOptions) error {
 		return cfgErr
 	}
 
-	url := fmt.Sprintf("https://api.clickup.com/api/v2/task/%s/comment", taskID)
-	url += cmdutil.CustomIDQueryParam(cfg, isCustomID)
+	commentURL := client.URL("task/%s/comment", taskID)
+	commentURL += cmdutil.CustomIDQueryParam(cfg, isCustomID)
 
 	// Build comment payload, resolving @mentions to real ClickUp user tags.
 	var payload []byte
@@ -149,7 +149,7 @@ func addRun(opts *addOptions) error {
 		}
 	}
 
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(payload))
+	req, err := http.NewRequest(http.MethodPost, commentURL, bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}

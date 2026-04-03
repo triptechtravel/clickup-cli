@@ -19,18 +19,24 @@ import (
 func MatchStatus(target string, available []string) (string, error) {
 	targetLower := strings.ToLower(target)
 
+	// Pre-compute lowercased statuses once for all tiers.
+	lowerAvail := make([]string, len(available))
+	for i, s := range available {
+		lowerAvail[i] = strings.ToLower(s)
+	}
+
 	// Tier 1: Exact match (case-insensitive).
-	for _, s := range available {
-		if strings.ToLower(s) == targetLower {
-			return s, nil
+	for i, lower := range lowerAvail {
+		if lower == targetLower {
+			return available[i], nil
 		}
 	}
 
 	// Tier 2: Contains match (case-insensitive).
 	var containsMatches []string
-	for _, s := range available {
-		if strings.Contains(strings.ToLower(s), targetLower) {
-			containsMatches = append(containsMatches, s)
+	for i, lower := range lowerAvail {
+		if strings.Contains(lower, targetLower) {
+			containsMatches = append(containsMatches, available[i])
 		}
 	}
 	if len(containsMatches) == 1 {
@@ -147,7 +153,7 @@ func matchAndReport(status string, statusNames []string, w io.Writer) (string, e
 
 // FetchSpaceStatuses fetches the available status names for a ClickUp space.
 func FetchSpaceStatuses(client *api.Client, spaceID string) ([]string, error) {
-	spaceURL := fmt.Sprintf("https://api.clickup.com/api/v2/space/%s", spaceID)
+	spaceURL := client.URL("space/%s", spaceID)
 
 	req, err := http.NewRequest(http.MethodGet, spaceURL, nil)
 	if err != nil {

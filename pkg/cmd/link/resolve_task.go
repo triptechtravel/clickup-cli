@@ -250,7 +250,7 @@ func searchTasks(f *cmdutil.Factory, query string) ([]resolveSearchTask, error) 
 		}
 
 		apiURL := fmt.Sprintf(
-			"https://api.clickup.com/api/v2/team/%s/task?include_closed=true&page=%d&order_by=updated&reverse=true",
+			client.BaseURL() + "/team/%s/task?include_closed=true&page=%d&order_by=updated&reverse=true",
 			teamID, page,
 		)
 

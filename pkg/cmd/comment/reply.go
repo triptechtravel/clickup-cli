@@ -81,7 +81,7 @@ func replyRun(opts *replyOptions) error {
 		return err
 	}
 
-	url := fmt.Sprintf("https://api.clickup.com/api/v2/comment/%s/reply", opts.commentID)
+	replyURL := client.URL("comment/%s/reply", opts.commentID)
 
 	// Build reply payload, resolving @mentions to real ClickUp user tags.
 	var payload []byte
@@ -105,7 +105,7 @@ func replyRun(opts *replyOptions) error {
 		}
 	}
 
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(payload))
+	req, err := http.NewRequest(http.MethodPost, replyURL, bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
