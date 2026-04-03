@@ -4,8 +4,9 @@ project_name: clickup
 
 before:
   hooks:
+    - go install github.com/oapi-codegen/oapi-codegen-exp/experimental/cmd/oapi-codegen@latest
     - go mod tidy
-    - go generate ./...
+    - make api-gen
 
 builds:
   - main: ./cmd/clickup

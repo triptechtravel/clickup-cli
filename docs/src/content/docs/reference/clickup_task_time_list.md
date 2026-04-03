@@ -55,6 +55,7 @@ clickup task time list [<task-id>] [flags]
       --jq string           Filter JSON output using a jq expression
       --json                Output JSON
       --start-date string   Start date for timesheet mode (YYYY-MM-DD)
+      --tag strings         Filter by task tag(s) — comma-separated or repeated (OR logic, timesheet mode only)
       --template string     Format JSON output using a Go template
 ```
 

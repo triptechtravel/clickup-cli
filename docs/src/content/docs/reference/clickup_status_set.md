@@ -9,7 +9,7 @@ Set the status of a task
 
 Change a task's status using fuzzy matching.
 
-The STATUS argument is matched against available statuses for the task's space.
+The STATUS argument is matched against available statuses for the task's list (or space if the list has no custom statuses).
 Matching priority: exact match, then case-insensitive contains, then fuzzy match.
 
 If TASK is not provided, the task ID is auto-detected from the current git branch.

@@ -18,5 +18,6 @@ View and manage tags available in your ClickUp spaces.
 ### SEE ALSO
 
 * [clickup](/clickup-cli/reference/clickup/)	 - ClickUp CLI - manage tasks from the command line
+* [clickup tag create](/clickup-cli/reference/clickup_tag_create/)	 - Create tags in a space
 * [clickup tag list](/clickup-cli/reference/clickup_tag_list/)	 - List tags in a space
 
