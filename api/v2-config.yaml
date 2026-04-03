@@ -1,0 +1,8 @@
+package: clickupv2
+output: clickupv2/client.gen.go
+generate:
+  models: true
+  client: true
+  embedded-spec: false
+output-options:
+  skip-prune: true
