@@ -44,9 +44,8 @@ func do(ctx context.Context, client *api.Client, method, path string, body any, 
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(respBody))
+	if err := api.HandleErrorResponse(resp); err != nil {
+		return err
 	}
 
 	if result != nil {

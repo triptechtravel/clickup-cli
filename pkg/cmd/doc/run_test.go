@@ -11,8 +11,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/triptechtravel/clickup-cli/internal/apiv3"
+	"github.com/triptechtravel/clickup-cli/internal/config"
 	"github.com/triptechtravel/clickup-cli/internal/iostreams"
 	"github.com/triptechtravel/clickup-cli/internal/testutil"
+	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
 
 // docListResponse matches the response format from SearchDocs.
@@ -322,6 +324,46 @@ func TestRunPageView_ContentFormatQueryParam(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, capturedQuery, "content_format=text%2Fmd")
+}
+
+// TestPrintDocView_Pure tests the pure printDocView function directly.
+func TestPrintDocView_Pure(t *testing.T) {
+	outBuf := &bytes.Buffer{}
+	ios := &iostreams.IOStreams{
+		In:     io.NopCloser(strings.NewReader("")),
+		Out:    outBuf,
+		ErrOut: &bytes.Buffer{},
+	}
+	f := &cmdutil.Factory{IOStreams: ios}
+	f.SetConfig(&config.Config{Workspace: "12345"})
+
+	d := &apiv3.DocCoreResult{
+		ID:          "doc1",
+		Name:        "Project Runbook",
+		Visibility:  "PUBLIC",
+		DateCreated: "1714000000000",
+		DateUpdated: "1714100000000",
+		Creator: apiv3.DocUser{
+			Username: "alice",
+		},
+		Parent: apiv3.DocParent{
+			ID:   "space1",
+			Type: 4,
+		},
+	}
+
+	err := printDocView(f, d)
+	require.NoError(t, err)
+
+	out := outBuf.String()
+	assert.Contains(t, out, "Project Runbook")
+	assert.Contains(t, out, "doc1")
+	assert.Contains(t, out, "public")
+	assert.Contains(t, out, "alice")
+	assert.Contains(t, out, "space1")
+	// Timestamps should be human-readable, not raw numbers.
+	assert.NotContains(t, out, "1714000000000")
+	assert.NotContains(t, out, "1714100000000")
 }
 
 // buildTestPageTree returns a minimal page tree for pure function tests.

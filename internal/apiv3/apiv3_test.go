@@ -251,7 +251,7 @@ func TestGetDoc_APIError(t *testing.T) {
 
 	_, err := apiv3.GetDoc(context.Background(), client, "ws1", "notexist")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "API error (HTTP 404)")
+	assert.Contains(t, err.Error(), "404")
 }
 
 func TestPathEscaping_SpecialChars(t *testing.T) {
