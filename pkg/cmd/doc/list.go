@@ -2,11 +2,13 @@ package doc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/apiv3"
+	"github.com/triptechtravel/clickup-cli/internal/tableprinter"
+	"github.com/triptechtravel/clickup-cli/internal/text"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
 
@@ -44,6 +46,9 @@ Supports filtering by creator, status, parent location, and pagination.`,
   clickup doc list --limit 10 --cursor <cursor>`,
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if opts.parentType != "" && opts.parentID == "" {
+				return fmt.Errorf("--parent-type requires --parent-id")
+			}
 			if opts.parentType != "" {
 				if _, err := parseParentType(opts.parentType); err != nil {
 					return err
@@ -80,48 +85,25 @@ func runList(f *cmdutil.Factory, opts *listOptions) error {
 		return err
 	}
 
-	url := fmt.Sprintf("%s/workspaces/%s/docs", apiBase, workspaceID)
-
-	// Build query params
-	var params []string
-	if opts.deleted {
-		params = append(params, "deleted=true")
-	}
-	if opts.archived {
-		params = append(params, "archived=true")
-	}
-	if opts.creator != 0 {
-		params = append(params, fmt.Sprintf("creator=%d", opts.creator))
+	params := apiv3.SearchDocsParams{
+		Deleted:  opts.deleted,
+		Archived: opts.archived,
+		Creator:  opts.creator,
+		Limit:    opts.limit,
+		Cursor:   opts.cursor,
 	}
 	if opts.parentID != "" {
-		params = append(params, "parent_id="+opts.parentID)
+		params.ParentID = opts.parentID
 		if opts.parentType != "" {
 			pt, _ := parseParentType(opts.parentType)
-			params = append(params, fmt.Sprintf("parent_type=%d", pt))
+			params.ParentType = pt
 		}
-	}
-	if opts.limit > 0 {
-		params = append(params, fmt.Sprintf("limit=%d", opts.limit))
-	}
-	if opts.cursor != "" {
-		params = append(params, "cursor="+opts.cursor)
-	}
-	if len(params) > 0 {
-		url += "?" + strings.Join(params, "&")
 	}
 
 	ctx := context.Background()
-	data, status, err := doRequest(ctx, client, "GET", url, nil)
+	result, err := apiv3.SearchDocs(ctx, client, workspaceID, params)
 	if err != nil {
 		return fmt.Errorf("failed to list docs: %w", err)
-	}
-	if status != 200 {
-		return fmt.Errorf("failed to list docs: status %d: %s", status, string(data))
-	}
-
-	var result docsListResponse
-	if err := json.Unmarshal(data, &result); err != nil {
-		return fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	if opts.jsonFlags.WantsJSON() {
@@ -133,15 +115,25 @@ func runList(f *cmdutil.Factory, opts *listOptions) error {
 		return nil
 	}
 
+	tp := tableprinter.New(ios)
+	tp.SetTruncateColumn(0)
 	for _, d := range result.Docs {
-		status := ""
+		statusLabel := ""
 		if d.Deleted {
-			status = cs.Red(" [deleted]")
+			statusLabel = "[deleted]"
 		} else if d.Archived {
-			status = cs.Gray(" [archived]")
+			statusLabel = "[archived]"
 		}
-		vis := cs.Gray(fmt.Sprintf(" (%s)", strings.ToLower(d.Visibility)))
-		fmt.Fprintf(ios.Out, "%s %s%s%s\n", cs.Bold(d.Name), cs.Gray("#"+d.ID), vis, status)
+		updated := text.FormatUnixMillis(d.DateUpdated)
+		tp.AddField(d.Name)
+		tp.AddField("#" + d.ID)
+		tp.AddField(strings.ToLower(d.Visibility))
+		tp.AddField(updated)
+		tp.AddField(statusLabel)
+		tp.EndRow()
+	}
+	if err := tp.Render(); err != nil {
+		return err
 	}
 
 	if result.NextCursor != "" {

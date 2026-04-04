@@ -2,11 +2,11 @@ package doc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/apiv3"
 	"github.com/triptechtravel/clickup-cli/internal/iostreams"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
@@ -62,23 +62,10 @@ func runPageList(f *cmdutil.Factory, opts *pageListOptions) error {
 		return err
 	}
 
-	url := fmt.Sprintf("%s/workspaces/%s/docs/%s/pages", apiBase, workspaceID, opts.docID)
-	if opts.maxDepth >= 0 {
-		url += fmt.Sprintf("?max_page_depth=%d", opts.maxDepth)
-	}
-
 	ctx := context.Background()
-	data, status, err := doRequest(ctx, client, "GET", url, nil)
+	result, err := apiv3.GetDocPages(ctx, client, workspaceID, opts.docID, opts.maxDepth)
 	if err != nil {
 		return fmt.Errorf("failed to list pages: %w", err)
-	}
-	if status != 200 {
-		return fmt.Errorf("failed to list pages: status %d: %s", status, string(data))
-	}
-
-	var result pagesListResponse
-	if err := json.Unmarshal(data, &result); err != nil {
-		return fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	if opts.jsonFlags.WantsJSON() {
@@ -94,7 +81,7 @@ func runPageList(f *cmdutil.Factory, opts *pageListOptions) error {
 	return nil
 }
 
-func printPageTree(out io.Writer, pages []pageRef, depth int, cs *iostreams.ColorScheme) {
+func printPageTree(out io.Writer, pages []apiv3.PageRef, depth int, cs *iostreams.ColorScheme) {
 	for _, p := range pages {
 		indent := ""
 		for i := 0; i < depth; i++ {

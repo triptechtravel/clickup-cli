@@ -2,21 +2,21 @@ package doc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/apiv3"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
 
 type createOptions struct {
-	name        string
-	parentID    string
-	parentType  string
-	visibility  string
-	createPage  bool
-	jsonFlags   cmdutil.JSONFlags
+	name       string
+	parentID   string
+	parentType string
+	visibility string
+	createPage bool
+	jsonFlags  cmdutil.JSONFlags
 }
 
 // NewCmdCreate returns a command to create a new ClickUp Doc.
@@ -47,6 +47,9 @@ The --create-page flag (default true) creates an initial empty page.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if opts.name == "" {
 				return fmt.Errorf("--name is required")
+			}
+			if opts.parentType != "" && opts.parentID == "" {
+				return fmt.Errorf("--parent-type requires --parent-id")
 			}
 			if opts.parentType != "" {
 				if _, err := parseParentType(opts.parentType); err != nil {
@@ -85,37 +88,27 @@ func runCreate(f *cmdutil.Factory, opts *createOptions) error {
 		return err
 	}
 
-	body := map[string]interface{}{
-		"name":        opts.name,
-		"create_page": opts.createPage,
+	req := &apiv3.CreateDocRequest{
+		Name:       opts.name,
+		CreatePage: opts.createPage,
 	}
 
 	if opts.parentID != "" {
 		pt, _ := parseParentType(opts.parentType)
-		body["parent"] = map[string]interface{}{
-			"id":   opts.parentID,
-			"type": pt,
+		req.Parent = &apiv3.DocParent{
+			ID:   opts.parentID,
+			Type: float32(pt),
 		}
 	}
 
 	if opts.visibility != "" {
-		body["visibility"] = strings.ToUpper(opts.visibility)
+		req.Visibility = strings.ToUpper(opts.visibility)
 	}
-
-	url := fmt.Sprintf("%s/workspaces/%s/docs", apiBase, workspaceID)
 
 	ctx := context.Background()
-	data, status, err := doRequest(ctx, client, "POST", url, body)
+	d, err := apiv3.CreateDoc(ctx, client, workspaceID, req)
 	if err != nil {
 		return fmt.Errorf("failed to create doc: %w", err)
-	}
-	if status != 200 && status != 201 {
-		return fmt.Errorf("failed to create doc: status %d: %s", status, string(data))
-	}
-
-	var d docCore
-	if err := json.Unmarshal(data, &d); err != nil {
-		return fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	if opts.jsonFlags.WantsJSON() {

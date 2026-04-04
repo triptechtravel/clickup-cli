@@ -2,11 +2,11 @@ package doc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/apiv3"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
 
@@ -88,37 +88,27 @@ func runPageEdit(f *cmdutil.Factory, opts *pageEditOptions) error {
 		return err
 	}
 
-	body := map[string]interface{}{}
+	req := &apiv3.EditPageRequest{}
 	if opts.name != "" {
-		body["name"] = opts.name
+		req.Name = opts.name
 	}
 	if opts.subTitle != "" {
-		body["sub_title"] = opts.subTitle
+		req.SubTitle = opts.subTitle
 	}
 	if opts.content != "" {
-		body["content"] = opts.content
+		req.Content = opts.content
 		if opts.contentFormat != "" {
-			body["content_format"] = opts.contentFormat
+			req.ContentFormat = opts.contentFormat
 		}
 		if opts.contentEditMode != "" {
-			body["content_edit_mode"] = strings.ToLower(opts.contentEditMode)
+			req.ContentEditMode = strings.ToLower(opts.contentEditMode)
 		}
 	}
 
-	url := fmt.Sprintf("%s/workspaces/%s/docs/%s/pages/%s", apiBase, workspaceID, opts.docID, opts.pageID)
-
 	ctx := context.Background()
-	data, status, err := doRequest(ctx, client, "PUT", url, body)
+	p, err := apiv3.EditPage(ctx, client, workspaceID, opts.docID, opts.pageID, req)
 	if err != nil {
 		return fmt.Errorf("failed to edit page: %w", err)
-	}
-	if status != 200 {
-		return fmt.Errorf("failed to edit page: status %d: %s", status, string(data))
-	}
-
-	var p pageDetail
-	if err := json.Unmarshal(data, &p); err != nil {
-		return fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	if opts.jsonFlags.WantsJSON() {

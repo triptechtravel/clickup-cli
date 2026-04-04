@@ -2,11 +2,12 @@ package doc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/apiv3"
+	"github.com/triptechtravel/clickup-cli/internal/text"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
 
@@ -66,23 +67,12 @@ func runPageView(f *cmdutil.Factory, opts *pageViewOptions) error {
 		return err
 	}
 
-	url := fmt.Sprintf("%s/workspaces/%s/docs/%s/pages/%s", apiBase, workspaceID, opts.docID, opts.pageID)
-	if opts.contentFormat != "" {
-		url += "?content_format=" + opts.contentFormat
-	}
-
 	ctx := context.Background()
-	data, status, err := doRequest(ctx, client, "GET", url, nil)
+	p, err := apiv3.GetPage(ctx, client, workspaceID, opts.docID, opts.pageID, apiv3.GetPageParams{
+		ContentFormat: opts.contentFormat,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to fetch page: %w", err)
-	}
-	if status != 200 {
-		return fmt.Errorf("failed to fetch page: status %d: %s", status, string(data))
-	}
-
-	var p pageDetail
-	if err := json.Unmarshal(data, &p); err != nil {
-		return fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	if opts.jsonFlags.WantsJSON() {
@@ -98,10 +88,10 @@ func runPageView(f *cmdutil.Factory, opts *pageViewOptions) error {
 		fmt.Fprintf(out, "%s %s\n", cs.Bold("Creator:"), p.Creator.Username)
 	}
 	if p.DateCreated != "" {
-		fmt.Fprintf(out, "%s %s\n", cs.Bold("Created:"), p.DateCreated)
+		fmt.Fprintf(out, "%s %s\n", cs.Bold("Created:"), text.FormatUnixMillis(p.DateCreated))
 	}
 	if p.DateUpdated != "" {
-		fmt.Fprintf(out, "%s %s\n", cs.Bold("Updated:"), p.DateUpdated)
+		fmt.Fprintf(out, "%s %s\n", cs.Bold("Updated:"), text.FormatUnixMillis(p.DateUpdated))
 	}
 
 	if len(p.Pages) > 0 {
