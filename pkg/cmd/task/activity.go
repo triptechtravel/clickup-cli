@@ -161,7 +161,7 @@ func runActivity(f *cmdutil.Factory, opts *activityOptions) error {
 }
 
 func fetchComments(client *api.Client, cfg *config.Config, taskID string, isCustomID bool) ([]comment, error) {
-	url := fmt.Sprintf("https://api.clickup.com/api/v2/task/%s/comment", taskID)
+	url := client.URL("task/%s/comment", taskID)
 	url += cmdutil.CustomIDQueryParam(cfg, isCustomID)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -206,7 +206,7 @@ type repliesResponse struct {
 }
 
 func fetchReplies(client *api.Client, commentID string) ([]comment, error) {
-	url := fmt.Sprintf("https://api.clickup.com/api/v2/comment/%s/reply", commentID)
+	url := client.URL("comment/%s/reply", commentID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {

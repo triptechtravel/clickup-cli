@@ -14,6 +14,11 @@ import (
 type Factory struct {
 	IOStreams *iostreams.IOStreams
 
+	// Test overrides — when set, skip real initialization.
+	apiClientOverride  *api.Client
+	configOverride     *config.Config
+	gitContextOverride *gitpkg.RepoContext
+
 	configOnce sync.Once
 	config     *config.Config
 	configErr  error
@@ -36,6 +41,9 @@ func NewFactory(ios *iostreams.IOStreams) *Factory {
 
 // Config returns the loaded configuration (cached after first call).
 func (f *Factory) Config() (*config.Config, error) {
+	if f.configOverride != nil {
+		return f.configOverride, nil
+	}
 	f.configOnce.Do(func() {
 		f.config, f.configErr = config.Load()
 	})
@@ -44,6 +52,9 @@ func (f *Factory) Config() (*config.Config, error) {
 
 // ApiClient returns an authenticated API client (cached after first call).
 func (f *Factory) ApiClient() (*api.Client, error) {
+	if f.apiClientOverride != nil {
+		return f.apiClientOverride, nil
+	}
 	f.clientOnce.Do(func() {
 		token, err := auth.GetToken()
 		if err != nil {
@@ -57,10 +68,28 @@ func (f *Factory) ApiClient() (*api.Client, error) {
 
 // GitContext returns the detected git context (cached after first call).
 func (f *Factory) GitContext() (*gitpkg.RepoContext, error) {
+	if f.gitContextOverride != nil {
+		return f.gitContextOverride, nil
+	}
 	f.gitOnce.Do(func() {
 		f.gitCtx, f.gitErr = gitpkg.DetectContext()
 	})
 	return f.gitCtx, f.gitErr
+}
+
+// SetAPIClient sets a test override for the API client.
+func (f *Factory) SetAPIClient(c *api.Client) {
+	f.apiClientOverride = c
+}
+
+// SetConfig sets a test override for the configuration.
+func (f *Factory) SetConfig(c *config.Config) {
+	f.configOverride = c
+}
+
+// SetGitContext sets a test override for the git context.
+func (f *Factory) SetGitContext(c *gitpkg.RepoContext) {
+	f.gitContextOverride = c
 }
 
 // GitClient returns a new git client.

@@ -73,7 +73,7 @@ func editRun(opts *editOptions) error {
 		return err
 	}
 
-	url := fmt.Sprintf("https://api.clickup.com/api/v2/comment/%s", opts.commentID)
+	editURL := client.URL("comment/%s", opts.commentID)
 	payload, err := json.Marshal(map[string]string{
 		"comment_text": body,
 	})
@@ -81,7 +81,7 @@ func editRun(opts *editOptions) error {
 		return fmt.Errorf("failed to marshal request body: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(payload))
+	req, err := http.NewRequest(http.MethodPut, editURL, bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}

@@ -302,7 +302,7 @@ func inboxRun(opts *inboxOptions) error {
 }
 
 func getCurrentUser(client *api.Client) (*userResponse, error) {
-	req, err := http.NewRequest("GET", "https://api.clickup.com/api/v2/user", nil)
+	req, err := http.NewRequest("GET", client.URL("user"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -325,8 +325,8 @@ func getCurrentUser(client *api.Client) (*userResponse, error) {
 }
 
 func fetchTaskComments(client *api.Client, taskID string) ([]commentData, error) {
-	url := fmt.Sprintf("https://api.clickup.com/api/v2/task/%s/comment", taskID)
-	req, err := http.NewRequestWithContext(context.Background(), "GET", url, nil)
+	commentURL := client.URL("task/%s/comment", taskID)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", commentURL, nil)
 	if err != nil {
 		return nil, err
 	}

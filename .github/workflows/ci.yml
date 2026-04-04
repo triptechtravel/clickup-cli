@@ -14,6 +14,10 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.25"
+      - name: Install oapi-codegen
+        run: go install github.com/oapi-codegen/oapi-codegen-exp/experimental/cmd/oapi-codegen@latest
+      - name: Generate API clients
+        run: make api-gen
       - run: go test ./...
       - run: go vet ./...
 
@@ -24,4 +28,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.25"
+      - name: Install oapi-codegen
+        run: go install github.com/oapi-codegen/oapi-codegen-exp/experimental/cmd/oapi-codegen@latest
+      - name: Generate API clients
+        run: make api-gen
       - run: go build -o /dev/null ./cmd/clickup

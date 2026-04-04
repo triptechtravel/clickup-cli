@@ -103,7 +103,7 @@ func addRun(opts *addOptions) error {
 	ctx := context.Background()
 
 	// Fetch current space with statuses.
-	spaceURL := fmt.Sprintf("https://api.clickup.com/api/v2/space/%s", spaceID)
+	spaceURL := client.URL("space/%s", spaceID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, spaceURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)

@@ -12,3 +12,11 @@ docs/node_modules/
 docs/dist/
 docs/.astro/
 tmp/
+
+# API specs (fetched on demand) and generated code
+api/specs/
+api/clickupv2/*.gen.go
+api/clickupv3/*.gen.go
+# Note: fixes.gen.go is also generated but kept separate from client.gen.go
+internal/apiv2/operations.gen.go
+internal/apiv3/operations.gen.go

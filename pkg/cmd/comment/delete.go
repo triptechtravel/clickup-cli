@@ -71,8 +71,8 @@ func deleteRun(opts *deleteOptions) error {
 		return err
 	}
 
-	url := fmt.Sprintf("https://api.clickup.com/api/v2/comment/%s", opts.commentID)
-	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	deleteURL := client.URL("comment/%s", opts.commentID)
+	req, err := http.NewRequest(http.MethodDelete, deleteURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}

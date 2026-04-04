@@ -97,3 +97,90 @@ func TestFilterTasks_DescriptionFallback(t *testing.T) {
 	assert.Equal(t, "1", matched[1].ID) // description
 	assert.Equal(t, matchDescription, matched[1].kind)
 }
+
+// ---------------------------------------------------------------------------
+// sortScoredTasks
+// ---------------------------------------------------------------------------
+
+func TestSortScoredTasks_MixedKinds(t *testing.T) {
+	tasks := []scoredTask{
+		{searchTask: searchTask{ID: "1"}, kind: matchComment, fuzzyRank: 0},
+		{searchTask: searchTask{ID: "2"}, kind: matchSubstring, fuzzyRank: 0},
+		{searchTask: searchTask{ID: "3"}, kind: matchDescription, fuzzyRank: 0},
+		{searchTask: searchTask{ID: "4"}, kind: matchFuzzy, fuzzyRank: 5},
+	}
+
+	sortScoredTasks(tasks)
+
+	assert.Equal(t, matchSubstring, tasks[0].kind)
+	assert.Equal(t, "2", tasks[0].ID)
+	assert.Equal(t, matchFuzzy, tasks[1].kind)
+	assert.Equal(t, "4", tasks[1].ID)
+	assert.Equal(t, matchDescription, tasks[2].kind)
+	assert.Equal(t, "3", tasks[2].ID)
+	assert.Equal(t, matchComment, tasks[3].kind)
+	assert.Equal(t, "1", tasks[3].ID)
+}
+
+func TestSortScoredTasks_SameKindFuzzyOrdering(t *testing.T) {
+	tasks := []scoredTask{
+		{searchTask: searchTask{ID: "1"}, kind: matchFuzzy, fuzzyRank: 10},
+		{searchTask: searchTask{ID: "2"}, kind: matchFuzzy, fuzzyRank: 2},
+		{searchTask: searchTask{ID: "3"}, kind: matchFuzzy, fuzzyRank: 5},
+	}
+
+	sortScoredTasks(tasks)
+
+	assert.Equal(t, "2", tasks[0].ID) // rank 2 (best)
+	assert.Equal(t, "3", tasks[1].ID) // rank 5
+	assert.Equal(t, "1", tasks[2].ID) // rank 10 (worst)
+}
+
+// ---------------------------------------------------------------------------
+// dedupScored
+// ---------------------------------------------------------------------------
+
+func TestDedupScored_KeepBestKind(t *testing.T) {
+	tasks := []scoredTask{
+		{searchTask: searchTask{ID: "1"}, kind: matchDescription, fuzzyRank: 0},
+		{searchTask: searchTask{ID: "1"}, kind: matchSubstring, fuzzyRank: 0},
+		{searchTask: searchTask{ID: "2"}, kind: matchComment, fuzzyRank: 0},
+	}
+
+	result := dedupScored(tasks)
+
+	assert.Len(t, result, 2)
+	// ID "1" should keep matchSubstring (lower kind = better)
+	for _, r := range result {
+		if r.ID == "1" {
+			assert.Equal(t, matchSubstring, r.kind)
+		}
+	}
+}
+
+func TestDedupScored_KeepBestFuzzyRankForSameKind(t *testing.T) {
+	tasks := []scoredTask{
+		{searchTask: searchTask{ID: "1"}, kind: matchFuzzy, fuzzyRank: 10},
+		{searchTask: searchTask{ID: "1"}, kind: matchFuzzy, fuzzyRank: 3},
+	}
+
+	result := dedupScored(tasks)
+
+	assert.Len(t, result, 1)
+	assert.Equal(t, 3, result[0].fuzzyRank) // keeps better rank
+}
+
+func TestDedupScored_PreservesOrder(t *testing.T) {
+	tasks := []scoredTask{
+		{searchTask: searchTask{ID: "3"}, kind: matchSubstring},
+		{searchTask: searchTask{ID: "1"}, kind: matchSubstring},
+		{searchTask: searchTask{ID: "2"}, kind: matchSubstring},
+	}
+
+	result := dedupScored(tasks)
+
+	assert.Len(t, result, 3)
+	assert.Equal(t, "3", result[0].ID)
+	assert.Equal(t, "1", result[1].ID)
+	assert.Equal(t, "2", result[2].ID)
+}

@@ -78,3 +78,30 @@ func TestMatchStatus_ListCustomStatuses_NotInSpaceStatuses(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no matching status found")
 }
+
+func TestMatchStatus_EmptyInput(t *testing.T) {
+	_, err := MatchStatus("", []string{"backlog", "in progress", "done"})
+	// Empty string is a substring of everything, so contains-match picks the shortest.
+	require.NoError(t, err)
+}
+
+func TestMatchStatus_UnicodeStatusNames(t *testing.T) {
+	statuses := []string{"待办", "进行中", "已完成"}
+	matched, err := MatchStatus("进行中", statuses)
+	require.NoError(t, err)
+	assert.Equal(t, "进行中", matched)
+}
+
+func TestMatchStatus_SingleCharInput(t *testing.T) {
+	matched, err := MatchStatus("d", []string{"backlog", "in progress", "done"})
+	require.NoError(t, err)
+	assert.Equal(t, "done", matched) // "d" is contained in "done" (shortest containing match)
+}
+
+func TestMatchStatus_AllAmbiguousContainsPicksShortest(t *testing.T) {
+	// "review" matches "review", "peer review", "code review needed"
+	// Should pick "review" as shortest.
+	matched, err := MatchStatus("review", []string{"peer review", "code review needed", "review", "done"})
+	require.NoError(t, err)
+	assert.Equal(t, "review", matched)
+}

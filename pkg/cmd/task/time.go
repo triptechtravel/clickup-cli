@@ -158,17 +158,17 @@ func runTimeLog(f *cmdutil.Factory, opts *timeLogOptions) error {
 		return fmt.Errorf("failed to marshal request body: %w", err)
 	}
 
-	url := fmt.Sprintf("https://api.clickup.com/api/v2/team/%s/time_entries", teamID)
-	req, err := http.NewRequest("POST", url, bytes.NewReader(bodyJSON))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
 	client, err := f.ApiClient()
 	if err != nil {
 		return err
 	}
+
+	timeURL := client.URL("team/%s/time_entries", teamID)
+	req, err := http.NewRequest("POST", timeURL, bytes.NewReader(bodyJSON))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.DoRequest(req)
 	if err != nil {
@@ -352,7 +352,7 @@ func runTimeListPerTask(f *cmdutil.Factory, opts *timeListOptions) error {
 		return err
 	}
 
-	url := fmt.Sprintf("https://api.clickup.com/api/v2/team/%s/time_entries?task_id=%s", teamID, taskID)
+	url := client.URL("team/%s/time_entries", teamID) + "?task_id=" + taskID
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -425,7 +425,7 @@ func runTimeListTimesheet(f *cmdutil.Factory, opts *timeListOptions) error {
 	}
 
 	// Build URL with date range.
-	apiURL := fmt.Sprintf("https://api.clickup.com/api/v2/team/%s/time_entries?start_date=%d&end_date=%d",
+	apiURL := fmt.Sprintf("%s/team/%s/time_entries?start_date=%d&end_date=%d", client.BaseURL(),
 		teamID, startMs, endMs)
 
 	// Resolve assignee filter.
@@ -736,7 +736,7 @@ func runTimeDelete(opts *timeDeleteOptions) error {
 		return err
 	}
 
-	url := fmt.Sprintf("https://api.clickup.com/api/v2/team/%s/time_entries/%s", teamID, opts.entryID)
+	url := client.URL("team/%s/time_entries/%s", teamID, opts.entryID)
 	req, err := http.NewRequest(http.MethodDelete, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)

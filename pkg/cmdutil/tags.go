@@ -19,9 +19,9 @@ type spaceTagsResponse struct {
 
 // FetchSpaceTags fetches the available tag names for a ClickUp space.
 func FetchSpaceTags(client *api.Client, spaceID string) ([]string, error) {
-	url := fmt.Sprintf("https://api.clickup.com/api/v2/space/%s/tag", spaceID)
+	tagURL := client.URL("space/%s/tag", spaceID)
 
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, tagURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -52,10 +52,10 @@ func FetchSpaceTags(client *api.Client, spaceID string) ([]string, error) {
 // CreateSpaceTag creates a new tag in a ClickUp space.
 // POST /api/v2/space/{space_id}/tag with body {"tag":{"name":"tag-name"}}
 func CreateSpaceTag(client *api.Client, spaceID, tagName string) error {
-	url := fmt.Sprintf("https://api.clickup.com/api/v2/space/%s/tag", spaceID)
+	tagURL := client.URL("space/%s/tag", spaceID)
 
 	payload := fmt.Sprintf(`{"tag":{"name":%q}}`, tagName)
-	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(payload))
+	req, err := http.NewRequest(http.MethodPost, tagURL, strings.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}

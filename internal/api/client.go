@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -100,7 +101,46 @@ func (c *Client) Token() string {
 	return c.token
 }
 
+// BaseURL returns the base API URL. For production this is
+// "https://api.clickup.com/api/v2"; for tests it points to httptest.Server.
+func (c *Client) BaseURL() string {
+	return strings.TrimRight(c.Clickup.BaseURL.String(), "/")
+}
+
+// URL builds a full API URL from a relative path.
+// Example: client.URL("task/%s", taskID) → "https://api.clickup.com/api/v2/task/abc123"
+func (c *Client) URL(pathFmt string, args ...any) string {
+	path := fmt.Sprintf(pathFmt, args...)
+	return c.BaseURL() + "/" + strings.TrimLeft(path, "/")
+}
+
 // DoRequest makes a raw HTTP request to the ClickUp API.
 func (c *Client) DoRequest(req *http.Request) (*http.Response, error) {
 	return c.HTTPClient.Do(req)
+}
+
+// NewTestClient creates a Client that routes all requests to the given
+// base URL (typically an httptest.Server). Used in tests to avoid hitting
+// the real ClickUp API.
+func NewTestClient(baseURL string) *Client {
+	rl := NewRateLimiter()
+
+	httpClient := &http.Client{
+		Transport: &authTransport{
+			token: "test-token",
+			base:  http.DefaultTransport,
+			rl:    rl,
+		},
+	}
+
+	clickupClient := clickup.NewClient(httpClient, "test-token")
+	u, _ := url.Parse(baseURL + "/api/v2/")
+	clickupClient.BaseURL = u
+
+	return &Client{
+		Clickup:     clickupClient,
+		HTTPClient:  httpClient,
+		RateLimiter: rl,
+		token:       "test-token",
+	}
 }

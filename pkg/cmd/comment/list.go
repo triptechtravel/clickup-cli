@@ -100,9 +100,9 @@ func listRun(opts *listOptions) error {
 		return cfgErr
 	}
 
-	url := fmt.Sprintf("https://api.clickup.com/api/v2/task/%s/comment", taskID)
-	url += cmdutil.CustomIDQueryParam(cfg, isCustomID)
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	listURL := client.URL("task/%s/comment", taskID)
+	listURL += cmdutil.CustomIDQueryParam(cfg, isCustomID)
+	req, err := http.NewRequest(http.MethodGet, listURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -181,9 +181,9 @@ type commentRepliesResponse struct {
 }
 
 func fetchCommentReplies(client *api.Client, commentID string) ([]commentData, error) {
-	url := fmt.Sprintf("https://api.clickup.com/api/v2/comment/%s/reply", commentID)
+	replyURL := client.URL("comment/%s/reply", commentID)
 
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, replyURL, nil)
 	if err != nil {
 		return nil, err
 	}
