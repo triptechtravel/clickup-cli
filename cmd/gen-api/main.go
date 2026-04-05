@@ -26,12 +26,22 @@ type spec struct {
 }
 
 type operation struct {
-	OperationID string     `json:"operationId"`
-	Summary     string     `json:"summary"`
-	Parameters  []param    `json:"parameters"`
-	RequestBody *struct{}  `json:"requestBody"`
-	Responses   map[string]struct {
-		Content map[string]struct{} `json:"content"`
+	OperationID string    `json:"operationId"`
+	Summary     string    `json:"summary"`
+	Parameters  []param   `json:"parameters"`
+	RequestBody *struct {
+		Content map[string]struct {
+			Schema struct {
+				Ref string `json:"$ref"`
+			} `json:"schema"`
+		} `json:"content"`
+	} `json:"requestBody"`
+	Responses map[string]struct {
+		Content map[string]struct {
+			Schema struct {
+				Ref string `json:"$ref"`
+			} `json:"schema"`
+		} `json:"content"`
 	} `json:"responses"`
 }
 
@@ -41,6 +51,7 @@ type param struct {
 	Required bool   `json:"required"`
 	Schema   struct {
 		Type string `json:"type"`
+		Ref  string `json:"$ref"`
 	} `json:"schema"`
 }
 
@@ -112,6 +123,10 @@ func main() {
 		log.Fatalf("parse spec: %v", err)
 	}
 
+	// Also parse as raw JSON for $ref resolution.
+	var rawSpec map[string]any
+	json.Unmarshal(data, &rawSpec)
+
 	if *typesImp == "" {
 		*typesImp = *module + "/api/" + *typesPkg
 	}
@@ -120,7 +135,7 @@ func main() {
 	typesFile := "api/" + *typesPkg + "/client.gen.go"
 	existingTypes := readExistingTypes(typesFile)
 
-	ops := extractOperations(s, *typesPkg, existingTypes)
+	ops := extractOperations(s, *typesPkg, existingTypes, rawSpec)
 	sort.Slice(ops, func(i, j int) bool { return ops[i].FuncName < ops[j].FuncName })
 
 	if err := writeFile(*outPath, ops); err != nil {
@@ -145,7 +160,7 @@ func readExistingTypes(path string) map[string]bool {
 	return types
 }
 
-func extractOperations(s spec, typesPkg string, existingTypes map[string]bool) []opInfo {
+func extractOperations(s spec, typesPkg string, existingTypes map[string]bool, rawSpec map[string]any) []opInfo {
 	var ops []opInfo
 
 	for path, methods := range s.Paths {
@@ -168,15 +183,25 @@ func extractOperations(s spec, typesPkg string, existingTypes map[string]bool) [
 				HasReqBody: op.RequestBody != nil,
 			}
 
-			// Check if 200 response has JSON content.
-			if resp, ok := op.Responses["200"]; ok {
-				if _, ok := resp.Content["application/json"]; ok {
-					info.HasRespBody = true
+			// Check if 200 or 201 response has JSON content.
+			for _, code := range []string{"200", "201"} {
+				if resp, ok := op.Responses[code]; ok {
+					if _, ok := resp.Content["application/json"]; ok {
+						info.HasRespBody = true
+						break
+					}
 				}
 			}
 
 			// Build path pattern: /v2/task/{task_id} → "task/%s"
-			trimmed := strings.TrimPrefix(path, "/v2/")
+			// Also handle V3 paths: /api/v3/workspaces/{id}/docs → "workspaces/%s/docs"
+			trimmed := path
+			for _, prefix := range []string{"/v2/", "/api/v3/", "/api/v2/"} {
+				if strings.HasPrefix(trimmed, prefix) {
+					trimmed = strings.TrimPrefix(trimmed, prefix)
+					break
+				}
+			}
 			var pathArgs []pathArg
 			pattern := pathParamRe.ReplaceAllStringFunc(trimmed, func(match string) string {
 				name := match[1 : len(match)-1]
@@ -189,49 +214,63 @@ func extractOperations(s spec, typesPkg string, existingTypes map[string]bool) [
 			info.PathPattern = pattern
 			info.PathArgs = pathArgs
 
-			// Extract query params.
+			// Extract query params, resolving $ref for types.
 			for _, p := range op.Parameters {
 				if p.In == "query" {
+					paramType := p.Schema.Type
+					if paramType == "" && p.Schema.Ref != "" && rawSpec != nil {
+						// Follow $ref to component schema to get the type.
+						// e.g., "#/components/schemas/FooQuery" → type alias = float32
+						refName := refToTypeName(p.Schema.Ref)
+						if comps, ok := rawSpec["components"].(map[string]any); ok {
+							if schemas, ok := comps["schemas"].(map[string]any); ok {
+								if schema, ok := schemas[refName].(map[string]any); ok {
+									if t, ok := schema["type"].(string); ok {
+										paramType = t
+									}
+								}
+							}
+						}
+					}
 					info.QueryParams = append(info.QueryParams, queryParam{
 						Name:     toCamelParam(p.Name),
 						SpecName: p.Name,
-						Type:     goType(p.Schema.Type),
+						Type:     goType(paramType),
 						Required: p.Required,
 					})
 				}
 			}
 
-			// Map to auto-gen type names. Look up which name actually exists
-			// in the generated types file (codegen may clean names differently).
+			// Map to auto-gen type names. Strategy:
+			// 1. Try {OperationId}JSONRequest/Response (V2 inline schema pattern)
+			// 2. Follow $ref to components/schemas and use that type name (V3 pattern)
+			// 3. Fall back to skipping request or dropping response
 			cleanedOpID := cleanFuncName(op.OperationID)
 			skip := false
 
 			if info.HasReqBody {
-				reqName := cleanedOpID + "JSONRequest"
-				if existingTypes[reqName] {
-					info.ReqType = typesPkg + "." + reqName
-				} else {
-					// Try original operationId (some have special chars removed differently)
-					altName := op.OperationID + "JSONRequest"
-					if existingTypes[altName] {
-						info.ReqType = typesPkg + "." + altName
-					} else {
-						skip = true // can't find request type
-					}
+				info.ReqType = resolveTypeNameWithTypes(typesPkg, existingTypes, cleanedOpID+"JSONRequest", op.OperationID+"JSONRequest",
+					refToTypeName(op.RequestBody.Content["application/json"].Schema.Ref))
+				if info.ReqType == "" {
+					skip = true
 				}
 			}
 			if info.HasRespBody {
-				respName := cleanedOpID + "JSONResponse"
-				if existingTypes[respName] {
-					info.RespType = typesPkg + "." + respName
-				} else {
-					altName := op.OperationID + "JSONResponse"
-					if existingTypes[altName] {
-						info.RespType = typesPkg + "." + altName
-					} else {
-						// No response type — generate with any as response
-						info.HasRespBody = false
+				var respRef string
+				for _, code := range []string{"200", "201"} {
+					if resp, ok := op.Responses[code]; ok {
+						if ct, ok := resp.Content["application/json"]; ok {
+							if ct.Schema.Ref != "" {
+								respRef = ct.Schema.Ref
+								break
+							}
+						}
 					}
+				}
+				info.RespType = resolveTypeNameWithTypes(typesPkg, existingTypes, cleanedOpID+"JSONResponse", op.OperationID+"JSONResponse",
+					refToTypeName(respRef))
+				if info.RespType == "" {
+					info.HasRespBody = false
 				}
 			}
 
@@ -244,6 +283,30 @@ func extractOperations(s spec, typesPkg string, existingTypes map[string]bool) [
 	}
 
 	return ops
+}
+
+// refToTypeName extracts a Go type name from a $ref like
+// "#/components/schemas/PublicDocsDocCoreDto" → "PublicDocsDocCoreDto"
+func refToTypeName(ref string) string {
+	if ref == "" {
+		return ""
+	}
+	parts := strings.Split(ref, "/")
+	return parts[len(parts)-1]
+}
+
+// resolveTypeNameWithTypes tries candidate names against existingTypes and returns
+// the first match prefixed with the types package.
+func resolveTypeNameWithTypes(typesPkg string, existingTypes map[string]bool, candidates ...string) string {
+	for _, name := range candidates {
+		if name == "" {
+			continue
+		}
+		if existingTypes[name] {
+			return typesPkg + "." + name
+		}
+	}
+	return ""
 }
 
 func cleanFuncName(opID string) string {
@@ -305,7 +368,19 @@ func writeFile(path string, ops []opInfo) error {
 }
 
 var tmpl = template.Must(template.New("").Funcs(template.FuncMap{
-	"upper": strings.ToUpper,
+	"upper":         strings.ToUpper,
+	"hasQueryParams": func(qp []queryParam) bool { return len(qp) > 0 },
+	"exportName": func(s string) string {
+		parts := strings.Split(s, "_")
+		for i := range parts {
+			if len(parts[i]) > 0 {
+				parts[i] = strings.ToUpper(parts[i][:1]) + parts[i][1:]
+			}
+		}
+		r := strings.Join(parts, "")
+		r = strings.ReplaceAll(r, "[]", "")
+		return r
+	},
 }).Parse(`// Code generated by gen-api from OpenAPI spec; DO NOT EDIT.
 
 package {{ .Pkg }}
@@ -313,6 +388,8 @@ package {{ .Pkg }}
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"strconv"
 
 	"github.com/triptechtravel/clickup-cli/internal/api"
 	{{ .TypesPkg }} "{{ .TypesImport }}"
@@ -320,15 +397,44 @@ import (
 
 // Ensure imports are used.
 var _ = fmt.Sprintf
+var _ = url.Values{}
+var _ = strconv.Itoa
 var _ {{ .TypesPkg }}.Nullable[string]
-{{ range .Ops }}
+{{ range .Ops }}{{ if hasQueryParams .QueryParams }}
+// {{ .FuncName }}Params holds optional query parameters for {{ .FuncName }}.
+type {{ .FuncName }}Params struct {
+{{- range .QueryParams }}
+	{{ exportName .SpecName }} {{ .Type }} ` + "`" + `url:"{{ .SpecName }},omitempty"` + "`" + `
+{{- end }}
+}
+
+func (p {{ .FuncName }}Params) encode() string {
+	q := url.Values{}
+{{- range .QueryParams }}
+{{- if eq .Type "string" }}
+	if p.{{ exportName .SpecName }} != "" { q.Set("{{ .SpecName }}", p.{{ exportName .SpecName }}) }
+{{- else if eq .Type "int" }}
+	if p.{{ exportName .SpecName }} != 0 { q.Set("{{ .SpecName }}", strconv.Itoa(p.{{ exportName .SpecName }})) }
+{{- else if eq .Type "float64" }}
+	if p.{{ exportName .SpecName }} != 0 { q.Set("{{ .SpecName }}", fmt.Sprintf("%g", p.{{ exportName .SpecName }})) }
+{{- else if eq .Type "bool" }}
+	if p.{{ exportName .SpecName }} { q.Set("{{ .SpecName }}", "true") }
+{{- else }}
+	if p.{{ exportName .SpecName }} != "" { q.Set("{{ .SpecName }}", fmt.Sprint(p.{{ exportName .SpecName }})) }
+{{- end }}
+{{- end }}
+	if len(q) == 0 { return "" }
+	return "?" + q.Encode()
+}
+{{ end }}
 // {{ .FuncName }} — {{ .Summary }}
-// {{ .Method }} /v2/{{ .PathPattern }}
-func {{ .FuncName }}(ctx context.Context, client *api.Client{{ range .PathArgs }}, {{ .Name }} string{{ end }}{{ if .HasReqBody }}, req *{{ .ReqType }}{{ end }}) {{ if .HasRespBody }}(*{{ .RespType }}, error){{ else }}error{{ end }} {
+// {{ .Method }} /{{ .PathPattern }}
+func {{ .FuncName }}(ctx context.Context, client *api.Client{{ range .PathArgs }}, {{ .Name }} string{{ end }}{{ if .HasReqBody }}, req *{{ .ReqType }}{{ end }}{{ if hasQueryParams .QueryParams }}, opts ...{{ .FuncName }}Params{{ end }}) {{ if .HasRespBody }}(*{{ .RespType }}, error){{ else }}error{{ end }} {
 	{{- if .HasRespBody }}
 	var resp {{ .RespType }}
 	{{- end }}
-	path := {{ if .PathArgs }}fmt.Sprintf("{{ .PathPattern }}"{{ range .PathArgs }}, {{ .Name }}{{ end }}){{ else }}"{{ .PathPattern }}"{{ end }}
+	path := {{ if .PathArgs }}fmt.Sprintf("{{ .PathPattern }}"{{ range .PathArgs }}, {{ .Name }}{{ end }}){{ else }}"{{ .PathPattern }}"{{ end }}{{ if hasQueryParams .QueryParams }}
+	if len(opts) > 0 { path += opts[0].encode() }{{ end }}
 	{{- if .HasRespBody }}
 	if err := do(ctx, client, "{{ .Method }}", path, {{ if .HasReqBody }}req{{ else }}nil{{ end }}, &resp); err != nil {
 		return nil, err
