@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	clickupv3 "github.com/triptechtravel/clickup-cli/api/clickupv3"
 	"github.com/triptechtravel/clickup-cli/internal/apiv3"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
@@ -83,16 +84,25 @@ func runPageCreate(f *cmdutil.Factory, opts *pageCreateOptions) error {
 		return err
 	}
 
-	req := &apiv3.CreatePageRequest{
-		Name:          opts.name,
-		ParentPageID:  opts.parentPageID,
-		SubTitle:      opts.subTitle,
-		Content:       opts.content,
-		ContentFormat: opts.contentFormat,
+	req := &clickupv3.PublicDocsPublicCreatePageOptionsDto{
+		Name: &opts.name,
+	}
+	if opts.parentPageID != "" {
+		req.ParentPageId = &opts.parentPageID
+	}
+	if opts.subTitle != "" {
+		req.SubTitle = &opts.subTitle
+	}
+	if opts.content != "" {
+		req.Content = &opts.content
+	}
+	if opts.contentFormat != "" {
+		cf := clickupv3.PublicDocsPublicCreatePageOptionsDtoContentFormat(opts.contentFormat)
+		req.ContentFormat = &cf
 	}
 
 	ctx := context.Background()
-	p, err := apiv3.CreatePage(ctx, client, workspaceID, opts.docID, req)
+	p, err := apiv3.CreatePagePublic(ctx, client, workspaceID, opts.docID, req)
 	if err != nil {
 		return fmt.Errorf("failed to create page: %w", err)
 	}
@@ -101,13 +111,13 @@ func runPageCreate(f *cmdutil.Factory, opts *pageCreateOptions) error {
 		return opts.jsonFlags.OutputJSON(ios.Out, p)
 	}
 
-	fmt.Fprintf(ios.Out, "%s Created page %s %s\n", cs.Green("!"), cs.Bold(p.Name), cs.Gray("#"+p.ID))
+	fmt.Fprintf(ios.Out, "%s Created page %s %s\n", cs.Green("!"), cs.Bold(p.Name), cs.Gray("#"+p.Id))
 
 	fmt.Fprintln(ios.Out)
 	fmt.Fprintln(ios.Out, cs.Gray("---"))
 	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
-	fmt.Fprintf(ios.Out, "  %s  clickup doc page view %s %s\n", cs.Gray("View:"), opts.docID, p.ID)
-	fmt.Fprintf(ios.Out, "  %s  clickup doc page edit %s %s --content \"...\"\n", cs.Gray("Edit:"), opts.docID, p.ID)
+	fmt.Fprintf(ios.Out, "  %s  clickup doc page view %s %s\n", cs.Gray("View:"), opts.docID, p.Id)
+	fmt.Fprintf(ios.Out, "  %s  clickup doc page edit %s %s --content \"...\"\n", cs.Gray("Edit:"), opts.docID, p.Id)
 
 	return nil
 }

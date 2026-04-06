@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	clickupv3 "github.com/triptechtravel/clickup-cli/api/clickupv3"
 	"github.com/triptechtravel/clickup-cli/internal/apiv3"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
@@ -88,25 +89,30 @@ func runCreate(f *cmdutil.Factory, opts *createOptions) error {
 		return err
 	}
 
-	req := &apiv3.CreateDocRequest{
-		Name:       opts.name,
-		CreatePage: opts.createPage,
+	req := &clickupv3.PublicDocsCreateDocOptionsDto{
+		Name:       &opts.name,
+		CreatePage: &opts.createPage,
 	}
 
 	if opts.parentID != "" {
-		pt, _ := parseParentType(opts.parentType)
-		req.Parent = &apiv3.DocParent{
-			ID:   opts.parentID,
-			Type: float32(pt),
+		ptInt, _ := parseParentType(opts.parentType)
+		req.Parent = &clickupv3.PublicDocsParentDto{
+			Id:   opts.parentID,
+			Type: float32(ptInt),
 		}
 	}
 
 	if opts.visibility != "" {
-		req.Visibility = strings.ToUpper(opts.visibility)
+		vis := clickupv3.PublicDocsCreateDocOptionsDto_Visibility{}
+		v0 := clickupv3.PublicDocsCreateDocOptionsDtoVisibility0(strings.ToUpper(opts.visibility))
+		if err := vis.FromPublicDocsCreateDocOptionsDtoVisibility0(v0); err != nil {
+			return fmt.Errorf("set visibility: %w", err)
+		}
+		req.Visibility = &vis
 	}
 
 	ctx := context.Background()
-	d, err := apiv3.CreateDoc(ctx, client, workspaceID, req)
+	d, err := apiv3.CreateDocPublic(ctx, client, workspaceID, req)
 	if err != nil {
 		return fmt.Errorf("failed to create doc: %w", err)
 	}
@@ -115,14 +121,14 @@ func runCreate(f *cmdutil.Factory, opts *createOptions) error {
 		return opts.jsonFlags.OutputJSON(ios.Out, d)
 	}
 
-	fmt.Fprintf(ios.Out, "%s Created Doc %s %s\n", cs.Green("!"), cs.Bold(d.Name), cs.Gray("#"+d.ID))
+	fmt.Fprintf(ios.Out, "%s Created Doc %s %s\n", cs.Green("!"), cs.Bold(d.Name), cs.Gray("#"+d.Id))
 
 	fmt.Fprintln(ios.Out)
 	fmt.Fprintln(ios.Out, cs.Gray("---"))
 	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
-	fmt.Fprintf(ios.Out, "  %s  clickup doc view %s\n", cs.Gray("View:"), d.ID)
-	fmt.Fprintf(ios.Out, "  %s  clickup doc page list %s\n", cs.Gray("Pages:"), d.ID)
-	fmt.Fprintf(ios.Out, "  %s  clickup doc page create %s --name \"My Page\"\n", cs.Gray("Add page:"), d.ID)
+	fmt.Fprintf(ios.Out, "  %s  clickup doc view %s\n", cs.Gray("View:"), d.Id)
+	fmt.Fprintf(ios.Out, "  %s  clickup doc page list %s\n", cs.Gray("Pages:"), d.Id)
+	fmt.Fprintf(ios.Out, "  %s  clickup doc page create %s --name \"My Page\"\n", cs.Gray("Add page:"), d.Id)
 
 	return nil
 }

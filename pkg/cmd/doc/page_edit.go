@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	clickupv3 "github.com/triptechtravel/clickup-cli/api/clickupv3"
 	"github.com/triptechtravel/clickup-cli/internal/apiv3"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
@@ -88,34 +89,37 @@ func runPageEdit(f *cmdutil.Factory, opts *pageEditOptions) error {
 		return err
 	}
 
-	req := &apiv3.EditPageRequest{}
+	req := &clickupv3.PublicDocsPublicEditPageOptionsDto{}
 	if opts.name != "" {
-		req.Name = opts.name
+		req.Name = &opts.name
 	}
 	if opts.subTitle != "" {
-		req.SubTitle = opts.subTitle
+		req.SubTitle = &opts.subTitle
 	}
 	if opts.content != "" {
-		req.Content = opts.content
+		req.Content = &opts.content
 		if opts.contentFormat != "" {
-			req.ContentFormat = opts.contentFormat
+			cf := clickupv3.PublicDocsPublicEditPageOptionsDtoContentFormat(opts.contentFormat)
+			req.ContentFormat = &cf
 		}
 		if opts.contentEditMode != "" {
-			req.ContentEditMode = strings.ToLower(opts.contentEditMode)
+			mode := clickupv3.PublicDocsPublicEditPageOptionsDtoContentEditMode(strings.ToLower(opts.contentEditMode))
+			req.ContentEditMode = &mode
 		}
 	}
 
 	ctx := context.Background()
-	p, err := apiv3.EditPage(ctx, client, workspaceID, opts.docID, opts.pageID, req)
-	if err != nil {
+	// EditPagePublic returns only an error — the API returns no body on PUT.
+	if err := apiv3.EditPagePublic(ctx, client, workspaceID, opts.docID, opts.pageID, req); err != nil {
 		return fmt.Errorf("failed to edit page: %w", err)
 	}
 
 	if opts.jsonFlags.WantsJSON() {
-		return opts.jsonFlags.OutputJSON(ios.Out, p)
+		// No body returned; output the request we sent so --json is still useful.
+		return opts.jsonFlags.OutputJSON(ios.Out, req)
 	}
 
-	name := p.Name
+	name := opts.name
 	if name == "" {
 		name = opts.pageID
 	}

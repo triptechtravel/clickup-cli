@@ -68,9 +68,11 @@ func runPageView(f *cmdutil.Factory, opts *pageViewOptions) error {
 	}
 
 	ctx := context.Background()
-	p, err := apiv3.GetPage(ctx, client, workspaceID, opts.docID, opts.pageID, apiv3.GetPageParams{
-		ContentFormat: opts.contentFormat,
-	})
+	var params []apiv3.GetPagePublicParams
+	if opts.contentFormat != "" {
+		params = append(params, apiv3.GetPagePublicParams{ContentFormat: opts.contentFormat})
+	}
+	p, err := apiv3.GetPagePublic(ctx, client, workspaceID, opts.docID, opts.pageID, params...)
 	if err != nil {
 		return fmt.Errorf("failed to fetch page: %w", err)
 	}
@@ -80,23 +82,20 @@ func runPageView(f *cmdutil.Factory, opts *pageViewOptions) error {
 	}
 
 	out := ios.Out
-	fmt.Fprintf(out, "%s %s\n", cs.Bold(p.Name), cs.Gray("#"+p.ID))
-	if p.SubTitle != "" {
-		fmt.Fprintf(out, "%s\n", cs.Gray(p.SubTitle))
+	fmt.Fprintf(out, "%s %s\n", cs.Bold(p.Name), cs.Gray("#"+p.Id))
+	if p.SubTitle != nil && *p.SubTitle != "" {
+		fmt.Fprintf(out, "%s\n", cs.Gray(*p.SubTitle))
 	}
-	if p.Creator.Username != "" {
-		fmt.Fprintf(out, "%s %s\n", cs.Bold("Creator:"), p.Creator.Username)
+	if p.DateCreated != 0 {
+		fmt.Fprintf(out, "%s %s\n", cs.Bold("Created:"), text.FormatUnixMillisFloat(p.DateCreated))
 	}
-	if p.DateCreated != "" {
-		fmt.Fprintf(out, "%s %s\n", cs.Bold("Created:"), text.FormatUnixMillis(p.DateCreated))
-	}
-	if p.DateUpdated != "" {
-		fmt.Fprintf(out, "%s %s\n", cs.Bold("Updated:"), text.FormatUnixMillis(p.DateUpdated))
+	if p.DateUpdated != nil && *p.DateUpdated != 0 {
+		fmt.Fprintf(out, "%s %s\n", cs.Bold("Updated:"), text.FormatUnixMillisFloat(*p.DateUpdated))
 	}
 
-	if len(p.Pages) > 0 {
+	if p.Pages != nil && len(*p.Pages) > 0 {
 		fmt.Fprintf(out, "\n%s\n", cs.Bold("Sub-pages:"))
-		printPageTree(out, p.Pages, 1, cs)
+		printPageTree(out, *p.Pages, 1, cs)
 	}
 
 	if p.Content != "" {
@@ -107,8 +106,8 @@ func runPageView(f *cmdutil.Factory, opts *pageViewOptions) error {
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, cs.Gray("---"))
 	fmt.Fprintln(out, cs.Gray("Quick actions:"))
-	fmt.Fprintf(out, "  %s  clickup doc page edit %s %s --content \"...\"\n", cs.Gray("Edit:"), opts.docID, p.ID)
-	fmt.Fprintf(out, "  %s  clickup doc page view %s %s --json\n", cs.Gray("JSON:"), opts.docID, p.ID)
+	fmt.Fprintf(out, "  %s  clickup doc page edit %s %s --content \"...\"\n", cs.Gray("Edit:"), opts.docID, p.Id)
+	fmt.Fprintf(out, "  %s  clickup doc page view %s %s --json\n", cs.Gray("JSON:"), opts.docID, p.Id)
 
 	return nil
 }

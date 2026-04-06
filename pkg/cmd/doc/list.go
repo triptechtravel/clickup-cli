@@ -85,23 +85,29 @@ func runList(f *cmdutil.Factory, opts *listOptions) error {
 		return err
 	}
 
-	params := apiv3.SearchDocsParams{
+	params := apiv3.SearchDocsPublicParams{
 		Deleted:  opts.deleted,
 		Archived: opts.archived,
-		Creator:  opts.creator,
-		Limit:    opts.limit,
-		Cursor:   opts.cursor,
+	}
+	if opts.creator != 0 {
+		params.Creator = float64(opts.creator)
+	}
+	if opts.limit > 0 {
+		params.Limit = float64(opts.limit)
+	}
+	if opts.cursor != "" {
+		params.Cursor = opts.cursor
 	}
 	if opts.parentID != "" {
-		params.ParentID = opts.parentID
+		params.ParentId = opts.parentID
 		if opts.parentType != "" {
-			pt, _ := parseParentType(opts.parentType)
-			params.ParentType = pt
+			// The API accepts the string name directly (e.g. "SPACE", "4").
+			params.ParentType = strings.ToUpper(opts.parentType)
 		}
 	}
 
 	ctx := context.Background()
-	result, err := apiv3.SearchDocs(ctx, client, workspaceID, params)
+	result, err := apiv3.SearchDocsPublic(ctx, client, workspaceID, params)
 	if err != nil {
 		return fmt.Errorf("failed to list docs: %w", err)
 	}
@@ -124,10 +130,17 @@ func runList(f *cmdutil.Factory, opts *listOptions) error {
 		} else if d.Archived {
 			statusLabel = "[archived]"
 		}
-		updated := text.FormatUnixMillis(d.DateUpdated)
+		visibility := "private"
+		if d.Public {
+			visibility = "public"
+		}
+		updated := ""
+		if d.DateUpdated != nil {
+			updated = text.FormatUnixMillisFloat(*d.DateUpdated)
+		}
 		tp.AddField(d.Name)
-		tp.AddField("#" + d.ID)
-		tp.AddField(strings.ToLower(d.Visibility))
+		tp.AddField("#" + d.Id)
+		tp.AddField(visibility)
 		tp.AddField(updated)
 		tp.AddField(statusLabel)
 		tp.EndRow()
@@ -136,8 +149,8 @@ func runList(f *cmdutil.Factory, opts *listOptions) error {
 		return err
 	}
 
-	if result.NextCursor != "" {
-		fmt.Fprintf(ios.Out, "\n%s  clickup doc list --cursor %s\n", cs.Gray("Next page:"), result.NextCursor)
+	if result.NextCursor != nil && *result.NextCursor != "" {
+		fmt.Fprintf(ios.Out, "\n%s  clickup doc list --cursor %s\n", cs.Gray("Next page:"), *result.NextCursor)
 	}
 
 	return nil

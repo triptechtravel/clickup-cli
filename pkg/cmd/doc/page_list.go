@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"github.com/spf13/cobra"
+	clickupv3 "github.com/triptechtravel/clickup-cli/api/clickupv3"
 	"github.com/triptechtravel/clickup-cli/internal/apiv3"
 	"github.com/triptechtravel/clickup-cli/internal/iostreams"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
@@ -13,7 +14,7 @@ import (
 
 type pageListOptions struct {
 	docID     string
-	maxDepth  int
+	maxDepth  float64
 	jsonFlags cmdutil.JSONFlags
 }
 
@@ -41,7 +42,7 @@ func NewCmdPageList(f *cmdutil.Factory) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().IntVar(&opts.maxDepth, "max-depth", -1, "Maximum page nesting depth (-1 for unlimited)")
+	cmd.Flags().Float64Var(&opts.maxDepth, "max-depth", -1, "Maximum page nesting depth (-1 for unlimited)")
 
 	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 
@@ -63,7 +64,11 @@ func runPageList(f *cmdutil.Factory, opts *pageListOptions) error {
 	}
 
 	ctx := context.Background()
-	result, err := apiv3.GetDocPages(ctx, client, workspaceID, opts.docID, opts.maxDepth)
+	var params []apiv3.GetDocPagesPublicParams
+	if opts.maxDepth >= 0 {
+		params = append(params, apiv3.GetDocPagesPublicParams{MaxPageDepth: opts.maxDepth})
+	}
+	result, err := apiv3.GetDocPagesPublic(ctx, client, workspaceID, opts.docID, params...)
 	if err != nil {
 		return fmt.Errorf("failed to list pages: %w", err)
 	}
@@ -72,24 +77,24 @@ func runPageList(f *cmdutil.Factory, opts *pageListOptions) error {
 		return opts.jsonFlags.OutputJSON(ios.Out, result)
 	}
 
-	if len(result.Pages) == 0 {
+	if result == nil || len(*result) == 0 {
 		fmt.Fprintln(ios.Out, cs.Gray("No pages found."))
 		return nil
 	}
 
-	printPageTree(ios.Out, result.Pages, 0, cs)
+	printPageTree(ios.Out, *result, 0, cs)
 	return nil
 }
 
-func printPageTree(out io.Writer, pages []apiv3.PageRef, depth int, cs *iostreams.ColorScheme) {
+func printPageTree(out io.Writer, pages []clickupv3.PublicDocsPageV3Dto, depth int, cs *iostreams.ColorScheme) {
 	for _, p := range pages {
 		indent := ""
 		for i := 0; i < depth; i++ {
 			indent += "  "
 		}
-		fmt.Fprintf(out, "%s%s %s\n", indent, cs.Bold(p.Name), cs.Gray("#"+p.ID))
-		if len(p.Pages) > 0 {
-			printPageTree(out, p.Pages, depth+1, cs)
+		fmt.Fprintf(out, "%s%s %s\n", indent, cs.Bold(p.Name), cs.Gray("#"+p.Id))
+		if p.Pages != nil && len(*p.Pages) > 0 {
+			printPageTree(out, *p.Pages, depth+1, cs)
 		}
 	}
 }

@@ -10,43 +10,44 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/triptechtravel/clickup-cli/internal/apiv3"
+	clickupv3 "github.com/triptechtravel/clickup-cli/api/clickupv3"
 	"github.com/triptechtravel/clickup-cli/internal/config"
 	"github.com/triptechtravel/clickup-cli/internal/iostreams"
 	"github.com/triptechtravel/clickup-cli/internal/testutil"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
 
-// docListResponse matches the response format from SearchDocs.
+// JSON fixtures use the auto-gen clickupv3 field names and types.
+// Note: DateCreated/DateUpdated are float32 (Unix ms) in PublicDocsDocCoreDto.
+// PublicDocsDocCoreDto has no "visibility" field — just "public" bool.
 const docListJSON = `{
 	"docs": [
-		{"id":"doc1","name":"Project Runbook","visibility":"PUBLIC","deleted":false,"archived":false,"date_updated":"1714000000000"},
-		{"id":"doc2","name":"Team Wiki","visibility":"PRIVATE","deleted":false,"archived":false,"date_updated":"1714000000000"}
+		{"id":"doc1","name":"Project Runbook","public":true,"deleted":false,"archived":false,"date_updated":1714000000000,"creator":0,"workspace_id":0,"parent":{"id":"","type":0},"type":0,"date_created":0},
+		{"id":"doc2","name":"Team Wiki","public":false,"deleted":false,"archived":false,"date_updated":1714000000000,"creator":0,"workspace_id":0,"parent":{"id":"","type":0},"type":0,"date_created":0}
 	],
-	"next_cursor": ""
+	"next_cursor": null
 }`
 
 const docSingleJSON = `{
 	"id": "doc1",
 	"name": "Project Runbook",
-	"visibility": "PUBLIC",
+	"public": true,
 	"deleted": false,
 	"archived": false,
-	"date_created": "1714000000000",
-	"date_updated": "1714100000000",
-	"creator": {"id": 42, "username": "alice", "email": "alice@example.com"},
-	"parent": {"id": "", "type": 0},
-	"workspace": {"id": "12345"}
+	"date_created": 1714000000000,
+	"date_updated": 1714100000000,
+	"creator": 42,
+	"parent": {"id": "space1", "type": 4},
+	"workspace_id": 12345,
+	"type": 0
 }`
 
-const pageListJSON = `{
-	"pages": [
-		{"id":"page1","name":"Introduction","doc_id":"doc1","pages":[]},
-		{"id":"page2","name":"Setup","doc_id":"doc1","pages":[
-			{"id":"page3","name":"Advanced","doc_id":"doc1","pages":[]}
-		]}
-	]
-}`
+const pageListJSON = `[
+	{"id":"page1","name":"Introduction","doc_id":"doc1","workspace_id":0,"authors":[]},
+	{"id":"page2","name":"Setup","doc_id":"doc1","workspace_id":0,"authors":[],"pages":[
+		{"id":"page3","name":"Advanced","doc_id":"doc1","workspace_id":0,"authors":[]}
+	]}
+]`
 
 const pageSingleJSON = `{
 	"id": "page1",
@@ -55,11 +56,11 @@ const pageSingleJSON = `{
 	"sub_title": "Getting started",
 	"content": "# Hello\n\nWelcome.",
 	"content_format": "text/md",
-	"order_index": 0,
-	"date_created": "1714000000000",
-	"date_updated": "1714100000000",
-	"creator": {"id": 42, "username": "alice"},
-	"pages": []
+	"date_created": 1714000000000,
+	"date_updated": 1714100000000,
+	"creator_id": 42,
+	"workspace_id": 0,
+	"authors": []
 }`
 
 // v3Path returns the path under /api/v3/ for a given relative path.
@@ -130,7 +131,7 @@ func TestRunList_PassesQueryParams(t *testing.T) {
 	require.NoError(t, err)
 	// Query params should be properly encoded.
 	assert.Contains(t, capturedQuery, "parent_id=sp+ace%2Bid")
-	assert.Contains(t, capturedQuery, "parent_type=4")
+	assert.Contains(t, capturedQuery, "parent_type=SPACE") // string value, not int
 	assert.Contains(t, capturedQuery, "limit=5")
 }
 
@@ -161,8 +162,8 @@ func TestRunView_OutputsDetails(t *testing.T) {
 	out := tf.OutBuf.String()
 	assert.Contains(t, out, "Project Runbook")
 	assert.Contains(t, out, "doc1")
-	assert.Contains(t, out, "public") // visibility lowercased
-	assert.Contains(t, out, "alice")  // creator username
+	assert.Contains(t, out, "public") // Public: true → "public"
+	assert.Contains(t, out, "space1") // Parent ID
 }
 
 // TestRunCreate_SendsCorrectBody verifies the POST body for doc create.
@@ -274,10 +275,9 @@ func TestRunPageEdit_SendsBody(t *testing.T) {
 		}
 		body, _ := io.ReadAll(r.Body)
 		json.Unmarshal(body, &capturedBody)
-		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-RateLimit-Remaining", "99")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"id":"page1","name":"Updated","doc_id":"doc1"}`))
+		// EditPagePublic returns no body (API spec has no 200 response body).
 	})
 
 	cmd := NewCmdPageEdit(tf.Factory)
@@ -304,7 +304,6 @@ func TestRunPageView_OutputsContent(t *testing.T) {
 	assert.Contains(t, out, "Introduction")
 	assert.Contains(t, out, "Getting started")
 	assert.Contains(t, out, "# Hello")
-	assert.Contains(t, out, "alice")
 }
 
 // TestRunPageView_ContentFormatQueryParam verifies content_format is passed.
@@ -337,17 +336,16 @@ func TestPrintDocView_Pure(t *testing.T) {
 	f := &cmdutil.Factory{IOStreams: ios}
 	f.SetConfig(&config.Config{Workspace: "12345"})
 
-	d := &apiv3.DocCoreResult{
-		ID:          "doc1",
+	dateCreated := float32(1714000000000)
+	dateUpdated := float32(1714100000000)
+	d := &clickupv3.PublicDocsDocDto{
+		Id:          "doc1",
 		Name:        "Project Runbook",
-		Visibility:  "PUBLIC",
-		DateCreated: "1714000000000",
-		DateUpdated: "1714100000000",
-		Creator: apiv3.DocUser{
-			Username: "alice",
-		},
-		Parent: apiv3.DocParent{
-			ID:   "space1",
+		Public:      true,
+		DateCreated: dateCreated,
+		DateUpdated: &dateUpdated,
+		Parent: clickupv3.PublicDocsParentDto{
+			Id:   "space1",
 			Type: 4,
 		},
 	}
@@ -359,7 +357,6 @@ func TestPrintDocView_Pure(t *testing.T) {
 	assert.Contains(t, out, "Project Runbook")
 	assert.Contains(t, out, "doc1")
 	assert.Contains(t, out, "public")
-	assert.Contains(t, out, "alice")
 	assert.Contains(t, out, "space1")
 	// Timestamps should be human-readable, not raw numbers.
 	assert.NotContains(t, out, "1714000000000")
@@ -367,14 +364,16 @@ func TestPrintDocView_Pure(t *testing.T) {
 }
 
 // buildTestPageTree returns a minimal page tree for pure function tests.
-func buildTestPageTree() []apiv3.PageRef {
-	return []apiv3.PageRef{
+func buildTestPageTree() []clickupv3.PublicDocsPageV3Dto {
+	child := clickupv3.PublicDocsPageV3Dto{Id: "child1", Name: "Child Page", DocId: "doc1", Authors: []float32{}}
+	children := []clickupv3.PublicDocsPageV3Dto{child}
+	return []clickupv3.PublicDocsPageV3Dto{
 		{
-			ID:   "root1",
-			Name: "Root Page",
-			Pages: []apiv3.PageRef{
-				{ID: "child1", Name: "Child Page"},
-			},
+			Id:      "root1",
+			Name:    "Root Page",
+			DocId:   "doc1",
+			Authors: []float32{},
+			Pages:   &children,
 		},
 	}
 }
