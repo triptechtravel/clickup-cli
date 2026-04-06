@@ -1,16 +1,7 @@
-// Package apiv2 provides typed wrappers for ClickUp API v2 operations that
-// are missing from the go-clickup library.
+// Package apiv3 provides typed wrappers for ClickUp API v3 operations.
 //
-// go-clickup handles most V2 operations correctly. This package fills the
-// gaps documented in api/GO_CLICKUP_GAPS.md:
-//   - UpdateTask with points and markdown_content
-//   - Time entry CRUD
-//   - Comment replies (threaded comments)
-//   - Space tags
-//
-// All wrappers use the existing api.Client for HTTP transport (auth, rate
-// limiting) and auto-generated clickupv2 types for request/response
-// serialization.
+// The do() helper handles auth, rate limiting, and error parsing via api.Client.
+// All operation wrappers live in operations.gen.go (auto-generated).
 package apiv3
 
 import (
@@ -25,8 +16,9 @@ import (
 )
 
 // do is a shared helper that sends a JSON request and decodes the response.
+// path is relative to the v3 base (e.g. "workspaces/123/docs").
 func do(ctx context.Context, client *api.Client, method, path string, body any, result any) error {
-	url := client.BaseURL() + "/" + path
+	rawURL := client.BaseURLV3() + "/" + path
 
 	var reqBody io.Reader
 	if body != nil {
@@ -37,7 +29,7 @@ func do(ctx context.Context, client *api.Client, method, path string, body any, 
 		reqBody = bytes.NewReader(data)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
+	req, err := http.NewRequestWithContext(ctx, method, rawURL, reqBody)
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
@@ -51,9 +43,8 @@ func do(ctx context.Context, client *api.Client, method, path string, body any, 
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(respBody))
+	if err := api.HandleErrorResponse(resp); err != nil {
+		return err
 	}
 
 	if result != nil {

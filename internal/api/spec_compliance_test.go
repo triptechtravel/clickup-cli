@@ -403,3 +403,17 @@ func TestClient_URL(t *testing.T) {
 	assert.Equal(t, server.URL+"/api/v2/task/abc123/tag/bug", client.URL("task/%s/tag/%s", "abc123", "bug"))
 	assert.Equal(t, server.URL+"/api/v2/space/123", client.URL("space/%s", "123"))
 }
+
+// TestClient_BaseURLV3 verifies that BaseURLV3 returns the v3 base derived from the v2 base.
+func TestClient_BaseURLV3(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer server.Close()
+
+	client := NewTestClient(server.URL)
+
+	v2 := client.BaseURL()
+	v3 := client.BaseURLV3()
+
+	assert.Equal(t, server.URL+"/api/v2", v2)
+	assert.Equal(t, server.URL+"/api/v3", v3)
+}

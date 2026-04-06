@@ -23,6 +23,7 @@ Links GitHub PRs, branches, and commits to ClickUp tasks.
 * [clickup auth](/clickup-cli/reference/clickup_auth/)	 - Authenticate with ClickUp
 * [clickup comment](/clickup-cli/reference/clickup_comment/)	 - Manage comments on ClickUp tasks
 * [clickup completion](/clickup-cli/reference/clickup_completion/)	 - Generate shell completion scripts
+* [clickup doc](/clickup-cli/reference/clickup_doc/)	 - Manage ClickUp Docs
 * [clickup field](/clickup-cli/reference/clickup_field/)	 - Manage custom fields
 * [clickup inbox](/clickup-cli/reference/clickup_inbox/)	 - Show recent @mentions
 * [clickup link](/clickup-cli/reference/clickup_link/)	 - Link GitHub objects to ClickUp tasks

@@ -70,7 +70,7 @@ func NewTestFactory(t *testing.T) *TestFactory {
 	}
 }
 
-// Handle registers a handler for the given method + API path.
+// Handle registers a handler for the given method + API v2 path.
 // The path is relative to /api/v2/ (e.g., "task/abc123").
 func (tf *TestFactory) Handle(method, path string, status int, body string) {
 	fullPath := "/api/v2/" + strings.TrimLeft(path, "/")
@@ -86,9 +86,31 @@ func (tf *TestFactory) Handle(method, path string, status int, body string) {
 	})
 }
 
-// HandleFunc registers a custom handler for the given API path.
+// HandleV3 registers a handler for the given method + API v3 path.
+// The path is relative to /api/v3/ (e.g., "workspaces/123/docs").
+func (tf *TestFactory) HandleV3(method, path string, status int, body string) {
+	fullPath := "/api/v3/" + strings.TrimLeft(path, "/")
+	tf.Mux.HandleFunc(fullPath, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != method {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-RateLimit-Remaining", "99")
+		w.WriteHeader(status)
+		w.Write([]byte(body))
+	})
+}
+
+// HandleFunc registers a custom handler for the given API v2 path.
 func (tf *TestFactory) HandleFunc(path string, handler http.HandlerFunc) {
 	fullPath := "/api/v2/" + strings.TrimLeft(path, "/")
+	tf.Mux.HandleFunc(fullPath, handler)
+}
+
+// HandleFuncV3 registers a custom handler for the given API v3 path.
+func (tf *TestFactory) HandleFuncV3(path string, handler http.HandlerFunc) {
+	fullPath := "/api/v3/" + strings.TrimLeft(path, "/")
 	tf.Mux.HandleFunc(fullPath, handler)
 }
 

@@ -1,0 +1,51 @@
+# Create a ClickUp Doc and add a first page with initial content.
+#
+# Requires:
+#   - CLICKUP_TOKEN secret in your repository settings
+#
+# Useful for automatically generating release notes docs, runbooks,
+# or sprint retrospective documents via CI/CD.
+
+name: ClickUp Docs Create
+
+on:
+  workflow_dispatch:
+    inputs:
+      doc_name:
+        description: Name of the Doc to create
+        required: true
+        default: "Release Notes"
+      page_name:
+        description: Name of the first page
+        required: true
+        default: "Overview"
+
+jobs:
+  create-doc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clickup CLI
+        run: |
+          curl -sL https://github.com/triptechtravel/clickup-cli/releases/latest/download/clickup_linux_amd64.tar.gz | tar xz
+          sudo mv clickup /usr/local/bin/
+
+      - name: Authenticate with ClickUp
+        run: echo "${{ secrets.CLICKUP_TOKEN }}" | clickup auth login --with-token
+
+      - name: Create Doc
+        id: create_doc
+        run: |
+          DOC_ID=$(clickup doc create \
+            --name "${{ github.event.inputs.doc_name }}" \
+            --json | jq -r '.id')
+          echo "doc_id=$DOC_ID" >> "$GITHUB_OUTPUT"
+          echo "Created Doc: $DOC_ID"
+
+      - name: Create first page
+        run: |
+          clickup doc page create "${{ steps.create_doc.outputs.doc_id }}" \
+            --name "${{ github.event.inputs.page_name }}" \
+            --content "# ${{ github.event.inputs.page_name }}\n\nCreated automatically by GitHub Actions." \
+            --content-format text/md

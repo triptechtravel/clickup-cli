@@ -1,0 +1,39 @@
+# Append release notes to an existing ClickUp Doc page on every release.
+#
+# Requires:
+#   - CLICKUP_TOKEN secret in your repository settings
+#   - CLICKUP_DOC_ID and CLICKUP_PAGE_ID variables (or secrets) for the
+#     target Doc and page where release notes should be appended.
+#
+# This workflow triggers on GitHub release publications and appends a
+# summary entry to a running release notes page in ClickUp.
+
+name: ClickUp Docs Page Edit
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  append-release-notes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clickup CLI
+        run: |
+          curl -sL https://github.com/triptechtravel/clickup-cli/releases/latest/download/clickup_linux_amd64.tar.gz | tar xz
+          sudo mv clickup /usr/local/bin/
+
+      - name: Authenticate with ClickUp
+        run: echo "${{ secrets.CLICKUP_TOKEN }}" | clickup auth login --with-token
+
+      - name: Append release entry to Doc page
+        run: |
+          CONTENT="## ${{ github.event.release.tag_name }} — $(date -u '+%Y-%m-%d')\n\n${{ github.event.release.body }}\n\n[View release on GitHub](${{ github.event.release.html_url }})"
+          clickup doc page edit \
+            "${{ vars.CLICKUP_DOC_ID }}" \
+            "${{ vars.CLICKUP_PAGE_ID }}" \
+            --content "$CONTENT" \
+            --content-format text/md \
+            --content-edit-mode append

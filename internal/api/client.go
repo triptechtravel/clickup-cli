@@ -107,6 +107,14 @@ func (c *Client) BaseURL() string {
 	return strings.TrimRight(c.Clickup.BaseURL.String(), "/")
 }
 
+// BaseURLV3 returns the base URL for the ClickUp v3 API. For production this
+// is "https://api.clickup.com/api/v3"; for tests it derives from the test
+// server by replacing "/api/v2" with "/api/v3".
+func (c *Client) BaseURLV3() string {
+	base := c.BaseURL()
+	return strings.Replace(base, "/api/v2", "/api/v3", 1)
+}
+
 // URL builds a full API URL from a relative path.
 // Example: client.URL("task/%s", taskID) → "https://api.clickup.com/api/v2/task/abc123"
 func (c *Client) URL(pathFmt string, args ...any) string {

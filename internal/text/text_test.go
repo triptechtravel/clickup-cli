@@ -1,6 +1,7 @@
 package text
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -63,6 +64,28 @@ func TestRelativeTime(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("RelativeTime(%v) = %q, want %q", tt.input, got, tt.want)
 		}
+	}
+}
+
+func TestFormatUnixMillis(t *testing.T) {
+	now := time.Now()
+	// A timestamp 5 minutes ago in milliseconds.
+	millis := now.Add(-5*time.Minute).UnixMilli()
+
+	ms := fmt.Sprintf("%d", millis)
+	got := FormatUnixMillis(ms)
+	if got != "5 minutes ago" {
+		t.Errorf("FormatUnixMillis(%q) = %q, want %q", ms, got, "5 minutes ago")
+	}
+
+	// Empty string should return empty.
+	if got := FormatUnixMillis(""); got != "" {
+		t.Errorf("FormatUnixMillis(\"\") = %q, want \"\"", got)
+	}
+
+	// Invalid string should return the original.
+	if got := FormatUnixMillis("not-a-number"); got != "not-a-number" {
+		t.Errorf("FormatUnixMillis(\"not-a-number\") = %q, want \"not-a-number\"", got)
 	}
 }
 

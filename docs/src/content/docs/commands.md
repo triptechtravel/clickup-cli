@@ -50,6 +50,20 @@ Flag details, examples, and options for each command are in the auto-generated [
 
 ---
 
+## Docs
+
+| Command | Description |
+|---------|-------------|
+| [`doc create`](/clickup-cli/reference/clickup_doc_create/) | Create a new ClickUp Doc |
+| [`doc list`](/clickup-cli/reference/clickup_doc_list/) | List ClickUp Docs in the workspace |
+| [`doc page create`](/clickup-cli/reference/clickup_doc_page_create/) | Create a page in a ClickUp Doc |
+| [`doc page edit`](/clickup-cli/reference/clickup_doc_page_edit/) | Edit a page in a ClickUp Doc |
+| [`doc page list`](/clickup-cli/reference/clickup_doc_page_list/) | List pages in a ClickUp Doc |
+| [`doc page view`](/clickup-cli/reference/clickup_doc_page_view/) | View a page in a ClickUp Doc |
+| [`doc view`](/clickup-cli/reference/clickup_doc_view/) | View a ClickUp Doc |
+
+---
+
 ## Status & fields
 
 | Command | Description |

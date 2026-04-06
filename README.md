@@ -35,6 +35,7 @@ See the [getting started guide](https://triptechtravel.github.io/clickup-cli/get
 ## What it does
 
 - **Task management** -- view, create, edit, search, and bulk-edit tasks with custom fields, tags, points, and time estimates
+- **Docs** -- list, view, create ClickUp Docs and manage their pages (list, view, create, edit) via the v3 API
 - **Git integration** -- auto-detects task IDs from branch names and links PRs, branches, and commits to ClickUp
 - **Sprint dashboard** -- `sprint current` shows tasks grouped by status; `task create --current` creates tasks in the active sprint
 - **Time tracking** -- log time, view per-task entries, or query workspace-wide timesheets by date range
@@ -50,6 +51,7 @@ Full command list with flags and examples: **[Command reference](https://triptec
 | Area | Key commands |
 |------|-------------|
 | **Tasks** | `task view`, `task create`, `task edit`, `task search`, `task recent` |
+| **Docs** | `doc list`, `doc view`, `doc create`, `doc page list`, `doc page view`, `doc page create`, `doc page edit` |
 | **Time** | `task time log`, `task time list` |
 | **Status** | `status set`, `status list`, `status add` |
 | **Git** | `link pr`, `link sync`, `link branch`, `link commit` |

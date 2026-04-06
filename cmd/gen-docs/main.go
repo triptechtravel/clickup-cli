@@ -165,6 +165,7 @@ func collectCategories(rootCmd *cobra.Command) []commandCategory {
 	}
 	catMap := map[string]catDef{
 		"task":       {"Task management", 0},
+		"doc":        {"Docs", 1},
 		"status":     {"Status & fields", 3},
 		"field":      {"Status & fields", 3},
 		"tag":        {"Status & fields", 3},
