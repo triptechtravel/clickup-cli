@@ -138,7 +138,7 @@ func main() {
 	ops := extractOperations(s, *typesPkg, existingTypes, rawSpec)
 	sort.Slice(ops, func(i, j int) bool { return ops[i].FuncName < ops[j].FuncName })
 
-	if err := writeFile(*outPath, ops); err != nil {
+	if err := writeFile(*outPath, ops, existingTypes); err != nil {
 		log.Fatalf("write: %v", err)
 	}
 
@@ -352,7 +352,7 @@ func goType(schemaType string) string {
 	}
 }
 
-func writeFile(path string, ops []opInfo) error {
+func writeFile(path string, ops []opInfo, existingTypes map[string]bool) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -360,10 +360,11 @@ func writeFile(path string, ops []opInfo) error {
 	defer f.Close()
 
 	return tmpl.Execute(f, map[string]any{
-		"Pkg":        *pkg,
-		"TypesPkg":   *typesPkg,
+		"Pkg":         *pkg,
+		"TypesPkg":    *typesPkg,
 		"TypesImport": *typesImp,
-		"Ops":        ops,
+		"Ops":         ops,
+		"HasNullable": existingTypes["Nullable"],
 	})
 }
 
@@ -399,7 +400,9 @@ import (
 var _ = fmt.Sprintf
 var _ = url.Values{}
 var _ = strconv.Itoa
+{{- if .HasNullable }}
 var _ {{ .TypesPkg }}.Nullable[string]
+{{- end }}
 {{ range .Ops }}{{ if hasQueryParams .QueryParams }}
 // {{ .FuncName }}Params holds optional query parameters for {{ .FuncName }}.
 type {{ .FuncName }}Params struct {
