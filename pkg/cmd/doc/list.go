@@ -139,7 +139,7 @@ func runList(f *cmdutil.Factory, opts *listOptions) error {
 			updated = text.FormatUnixMillisFloat(*d.DateUpdated)
 		}
 		tp.AddField(d.Name)
-		tp.AddField("#" + d.Id)
+		tp.AddField("#" + d.ID)
 		tp.AddField(visibility)
 		tp.AddField(updated)
 		tp.AddField(statusLabel)

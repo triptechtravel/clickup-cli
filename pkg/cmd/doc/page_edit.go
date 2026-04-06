@@ -99,11 +99,10 @@ func runPageEdit(f *cmdutil.Factory, opts *pageEditOptions) error {
 	if opts.content != "" {
 		req.Content = &opts.content
 		if opts.contentFormat != "" {
-			cf := clickupv3.PublicDocsPublicEditPageOptionsDtoContentFormat(opts.contentFormat)
-			req.ContentFormat = &cf
+			req.ContentFormat = &opts.contentFormat
 		}
 		if opts.contentEditMode != "" {
-			mode := clickupv3.PublicDocsPublicEditPageOptionsDtoContentEditMode(strings.ToLower(opts.contentEditMode))
+			mode := strings.ToLower(opts.contentEditMode)
 			req.ContentEditMode = &mode
 		}
 	}

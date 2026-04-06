@@ -339,13 +339,13 @@ func TestPrintDocView_Pure(t *testing.T) {
 	dateCreated := float32(1714000000000)
 	dateUpdated := float32(1714100000000)
 	d := &clickupv3.PublicDocsDocDto{
-		Id:          "doc1",
+		ID:          "doc1",
 		Name:        "Project Runbook",
 		Public:      true,
 		DateCreated: dateCreated,
 		DateUpdated: &dateUpdated,
 		Parent: clickupv3.PublicDocsParentDto{
-			Id:   "space1",
+			ID:   "space1",
 			Type: 4,
 		},
 	}
@@ -365,15 +365,15 @@ func TestPrintDocView_Pure(t *testing.T) {
 
 // buildTestPageTree returns a minimal page tree for pure function tests.
 func buildTestPageTree() []clickupv3.PublicDocsPageV3Dto {
-	child := clickupv3.PublicDocsPageV3Dto{Id: "child1", Name: "Child Page", DocId: "doc1", Authors: []float32{}}
+	child := clickupv3.PublicDocsPageV3Dto{ID: "child1", Name: "Child Page", DocID: "doc1", Authors: []float32{}}
 	children := []clickupv3.PublicDocsPageV3Dto{child}
 	return []clickupv3.PublicDocsPageV3Dto{
 		{
-			Id:      "root1",
+			ID:      "root1",
 			Name:    "Root Page",
-			DocId:   "doc1",
+			DocID:   "doc1",
 			Authors: []float32{},
-			Pages:   &children,
+			Pages:   children,
 		},
 	}
 }

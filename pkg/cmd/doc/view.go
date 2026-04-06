@@ -73,7 +73,7 @@ func printDocView(f *cmdutil.Factory, d *clickupv3.PublicDocsDocDto) error {
 	cs := ios.ColorScheme()
 	out := ios.Out
 
-	fmt.Fprintf(out, "%s %s\n", cs.Bold(d.Name), cs.Gray("#"+d.Id))
+	fmt.Fprintf(out, "%s %s\n", cs.Bold(d.Name), cs.Gray("#"+d.ID))
 
 	visibility := "private"
 	if d.Public {
@@ -81,8 +81,8 @@ func printDocView(f *cmdutil.Factory, d *clickupv3.PublicDocsDocDto) error {
 	}
 	fmt.Fprintf(out, "%s %s\n", cs.Bold("Visibility:"), visibility)
 
-	if d.Parent.Id != "" {
-		fmt.Fprintf(out, "%s %s (type %v)\n", cs.Bold("Parent:"), d.Parent.Id, d.Parent.Type)
+	if d.Parent.ID != "" {
+		fmt.Fprintf(out, "%s %s (type %v)\n", cs.Bold("Parent:"), d.Parent.ID, d.Parent.Type)
 	}
 
 	deleted := d.Deleted != nil && *d.Deleted
@@ -104,9 +104,9 @@ func printDocView(f *cmdutil.Factory, d *clickupv3.PublicDocsDocDto) error {
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, cs.Gray("---"))
 	fmt.Fprintln(out, cs.Gray("Quick actions:"))
-	fmt.Fprintf(out, "  %s  clickup doc page list %s\n", cs.Gray("Pages:"), d.Id)
-	fmt.Fprintf(out, "  %s  clickup doc page create %s --name \"My Page\"\n", cs.Gray("Add page:"), d.Id)
-	fmt.Fprintf(out, "  %s  clickup doc view %s --json\n", cs.Gray("JSON:"), d.Id)
+	fmt.Fprintf(out, "  %s  clickup doc page list %s\n", cs.Gray("Pages:"), d.ID)
+	fmt.Fprintf(out, "  %s  clickup doc page create %s --name \"My Page\"\n", cs.Gray("Add page:"), d.ID)
+	fmt.Fprintf(out, "  %s  clickup doc view %s --json\n", cs.Gray("JSON:"), d.ID)
 
 	return nil
 }

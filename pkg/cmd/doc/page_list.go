@@ -92,9 +92,9 @@ func printPageTree(out io.Writer, pages []clickupv3.PublicDocsPageV3Dto, depth i
 		for i := 0; i < depth; i++ {
 			indent += "  "
 		}
-		fmt.Fprintf(out, "%s%s %s\n", indent, cs.Bold(p.Name), cs.Gray("#"+p.Id))
-		if p.Pages != nil && len(*p.Pages) > 0 {
-			printPageTree(out, *p.Pages, depth+1, cs)
+		fmt.Fprintf(out, "%s%s %s\n", indent, cs.Bold(p.Name), cs.Gray("#"+p.ID))
+		if len(p.Pages) > 0 {
+			printPageTree(out, p.Pages, depth+1, cs)
 		}
 	}
 }

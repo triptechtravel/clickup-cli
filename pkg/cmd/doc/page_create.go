@@ -88,7 +88,7 @@ func runPageCreate(f *cmdutil.Factory, opts *pageCreateOptions) error {
 		Name: &opts.name,
 	}
 	if opts.parentPageID != "" {
-		req.ParentPageId = &opts.parentPageID
+		req.ParentPageID = &opts.parentPageID
 	}
 	if opts.subTitle != "" {
 		req.SubTitle = &opts.subTitle
@@ -97,8 +97,7 @@ func runPageCreate(f *cmdutil.Factory, opts *pageCreateOptions) error {
 		req.Content = &opts.content
 	}
 	if opts.contentFormat != "" {
-		cf := clickupv3.PublicDocsPublicCreatePageOptionsDtoContentFormat(opts.contentFormat)
-		req.ContentFormat = &cf
+		req.ContentFormat = &opts.contentFormat
 	}
 
 	ctx := context.Background()
@@ -111,13 +110,13 @@ func runPageCreate(f *cmdutil.Factory, opts *pageCreateOptions) error {
 		return opts.jsonFlags.OutputJSON(ios.Out, p)
 	}
 
-	fmt.Fprintf(ios.Out, "%s Created page %s %s\n", cs.Green("!"), cs.Bold(p.Name), cs.Gray("#"+p.Id))
+	fmt.Fprintf(ios.Out, "%s Created page %s %s\n", cs.Green("!"), cs.Bold(p.Name), cs.Gray("#"+p.ID))
 
 	fmt.Fprintln(ios.Out)
 	fmt.Fprintln(ios.Out, cs.Gray("---"))
 	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
-	fmt.Fprintf(ios.Out, "  %s  clickup doc page view %s %s\n", cs.Gray("View:"), opts.docID, p.Id)
-	fmt.Fprintf(ios.Out, "  %s  clickup doc page edit %s %s --content \"...\"\n", cs.Gray("Edit:"), opts.docID, p.Id)
+	fmt.Fprintf(ios.Out, "  %s  clickup doc page view %s %s\n", cs.Gray("View:"), opts.docID, p.ID)
+	fmt.Fprintf(ios.Out, "  %s  clickup doc page edit %s %s --content \"...\"\n", cs.Gray("Edit:"), opts.docID, p.ID)
 
 	return nil
 }

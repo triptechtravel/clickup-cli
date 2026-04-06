@@ -82,7 +82,7 @@ func runPageView(f *cmdutil.Factory, opts *pageViewOptions) error {
 	}
 
 	out := ios.Out
-	fmt.Fprintf(out, "%s %s\n", cs.Bold(p.Name), cs.Gray("#"+p.Id))
+	fmt.Fprintf(out, "%s %s\n", cs.Bold(p.Name), cs.Gray("#"+p.ID))
 	if p.SubTitle != nil && *p.SubTitle != "" {
 		fmt.Fprintf(out, "%s\n", cs.Gray(*p.SubTitle))
 	}
@@ -93,9 +93,9 @@ func runPageView(f *cmdutil.Factory, opts *pageViewOptions) error {
 		fmt.Fprintf(out, "%s %s\n", cs.Bold("Updated:"), text.FormatUnixMillisFloat(*p.DateUpdated))
 	}
 
-	if p.Pages != nil && len(*p.Pages) > 0 {
+	if len(p.Pages) > 0 {
 		fmt.Fprintf(out, "\n%s\n", cs.Bold("Sub-pages:"))
-		printPageTree(out, *p.Pages, 1, cs)
+		printPageTree(out, p.Pages, 1, cs)
 	}
 
 	if p.Content != "" {
@@ -106,8 +106,8 @@ func runPageView(f *cmdutil.Factory, opts *pageViewOptions) error {
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, cs.Gray("---"))
 	fmt.Fprintln(out, cs.Gray("Quick actions:"))
-	fmt.Fprintf(out, "  %s  clickup doc page edit %s %s --content \"...\"\n", cs.Gray("Edit:"), opts.docID, p.Id)
-	fmt.Fprintf(out, "  %s  clickup doc page view %s %s --json\n", cs.Gray("JSON:"), opts.docID, p.Id)
+	fmt.Fprintf(out, "  %s  clickup doc page edit %s %s --content \"...\"\n", cs.Gray("Edit:"), opts.docID, p.ID)
+	fmt.Fprintf(out, "  %s  clickup doc page view %s %s --json\n", cs.Gray("JSON:"), opts.docID, p.ID)
 
 	return nil
 }

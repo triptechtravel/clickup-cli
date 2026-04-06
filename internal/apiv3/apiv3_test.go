@@ -39,7 +39,7 @@ func TestSearchDocsPublic_ReturnsResults(t *testing.T) {
 	result, err := apiv3.SearchDocsPublic(context.Background(), client, "ws1")
 	require.NoError(t, err)
 	require.Len(t, result.Docs, 1)
-	assert.Equal(t, "doc1", result.Docs[0].Id)
+	assert.Equal(t, "doc1", result.Docs[0].ID)
 	assert.Equal(t, "Runbook", result.Docs[0].Name)
 }
 
@@ -89,7 +89,7 @@ func TestGetDocPublic_ReturnsDoc(t *testing.T) {
 
 	doc, err := apiv3.GetDocPublic(context.Background(), client, "ws1", "doc1")
 	require.NoError(t, err)
-	assert.Equal(t, "doc1", doc.Id)
+	assert.Equal(t, "doc1", doc.ID)
 	assert.Equal(t, "Runbook", doc.Name)
 	assert.True(t, doc.Public)
 }
@@ -114,7 +114,7 @@ func TestCreateDocPublic_SendsBody(t *testing.T) {
 	}
 	doc, err := apiv3.CreateDocPublic(context.Background(), client, "ws1", req)
 	require.NoError(t, err)
-	assert.Equal(t, "newdoc", doc.Id)
+	assert.Equal(t, "newdoc", doc.ID)
 	assert.Equal(t, "My Doc", capturedBody["name"])
 	assert.Equal(t, true, capturedBody["create_page"])
 }
@@ -133,8 +133,8 @@ func TestCreateDocPublic_WithParent(t *testing.T) {
 	name := "My Doc"
 	req := &clickupv3.PublicDocsCreateDocOptionsDto{
 		Name: &name,
-		Parent: &clickupv3.PublicDocsParentDto{
-			Id:   "space123",
+		Parent: &clickupv3.PublicDocsCreateDocOptionsDtoParent{
+			ID:   "space123",
 			Type: 4,
 		},
 	}
@@ -159,10 +159,10 @@ func TestGetDocPagesPublic_ReturnsPagesTree(t *testing.T) {
 	result, err := apiv3.GetDocPagesPublic(context.Background(), client, "ws1", "doc1")
 	require.NoError(t, err)
 	require.Len(t, *result, 2)
-	assert.Equal(t, "p1", (*result)[0].Id)
+	assert.Equal(t, "p1", (*result)[0].ID)
 	require.NotNil(t, (*result)[1].Pages)
-	require.Len(t, *(*result)[1].Pages, 1)
-	assert.Equal(t, "p3", (*(*result)[1].Pages)[0].Id)
+	require.Len(t, (*result)[1].Pages, 1)
+	assert.Equal(t, "p3", ((*result)[1].Pages)[0].ID)
 }
 
 func TestGetDocPagesPublic_PassesMaxDepth(t *testing.T) {
@@ -196,7 +196,7 @@ func TestCreatePagePublic_SendsBody(t *testing.T) {
 
 	name := "Intro"
 	content := "Hello world"
-	cf := clickupv3.PublicDocsPublicCreatePageOptionsDtoContentFormat("text/md")
+	cf := "text/md"
 	req := &clickupv3.PublicDocsPublicCreatePageOptionsDto{
 		Name:          &name,
 		Content:       &content,
@@ -204,7 +204,7 @@ func TestCreatePagePublic_SendsBody(t *testing.T) {
 	}
 	page, err := apiv3.CreatePagePublic(context.Background(), client, "ws1", "doc1", req)
 	require.NoError(t, err)
-	assert.Equal(t, "page1", page.Id)
+	assert.Equal(t, "page1", page.ID)
 	assert.Equal(t, "Intro", capturedBody["name"])
 	assert.Equal(t, "Hello world", capturedBody["content"])
 	assert.Equal(t, "text/md", capturedBody["content_format"])
@@ -224,7 +224,7 @@ func TestEditPagePublic_SendsBody(t *testing.T) {
 	})
 
 	content := "New content"
-	mode := clickupv3.PublicDocsPublicEditPageOptionsDtoContentEditMode("append")
+	mode := "append"
 	req := &clickupv3.PublicDocsPublicEditPageOptionsDto{
 		Content:         &content,
 		ContentEditMode: &mode,
