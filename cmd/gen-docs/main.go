@@ -170,6 +170,7 @@ func collectCategories(rootCmd *cobra.Command) []commandCategory {
 		"field":      {"Status & fields", 3},
 		"tag":        {"Status & fields", 3},
 		"comment":    {"Comments", 4},
+		"attachment": {"Attachments", 4},
 		"link":       {"Git & GitHub integration", 5},
 		"sprint":     {"Sprints", 6},
 		"inbox":      {"Workspace", 7},

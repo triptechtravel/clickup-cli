@@ -57,6 +57,7 @@ Full command list with flags and examples: **[Command reference](https://triptec
 | **Git** | `link pr`, `link sync`, `link branch`, `link commit` |
 | **Sprints** | `sprint current`, `sprint list` |
 | **Comments** | `comment add`, `comment list` |
+| **Attachments** | `attachment list`, `attachment add` |
 | **Workspace** | `inbox`, `member list`, `space select`, `tag list`, `field list` |
 
 ## Documentation

@@ -77,6 +77,15 @@ Flag details, examples, and options for each command are in the auto-generated [
 
 ---
 
+## Attachments
+
+| Command | Description |
+|---------|-------------|
+| [`attachment add`](/clickup-cli/reference/clickup_attachment_add/) | Upload file(s) to a task |
+| [`attachment list`](/clickup-cli/reference/clickup_attachment_list/) | List attachments on a task |
+
+---
+
 ## Comments
 
 | Command | Description |

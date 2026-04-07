@@ -108,6 +108,25 @@ func FormatUnixMillisFloat(ms float32) string {
 	return RelativeTime(t)
 }
 
+// FormatBytes returns a human-readable byte size string (e.g. "1.2 MB").
+func FormatBytes(bytes int) string {
+	const (
+		kb = 1024
+		mb = 1024 * kb
+		gb = 1024 * mb
+	)
+	switch {
+	case bytes >= gb:
+		return fmt.Sprintf("%.1f GB", float64(bytes)/float64(gb))
+	case bytes >= mb:
+		return fmt.Sprintf("%.1f MB", float64(bytes)/float64(mb))
+	case bytes >= kb:
+		return fmt.Sprintf("%.1f KB", float64(bytes)/float64(kb))
+	default:
+		return fmt.Sprintf("%d B", bytes)
+	}
+}
+
 // IndentLines indents each line of text by the given prefix.
 func IndentLines(text, prefix string) string {
 	lines := strings.Split(text, "\n")
