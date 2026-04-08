@@ -35,6 +35,7 @@ clickup task list [flags]
       --json               Output JSON
       --list-id string     ClickUp list ID (required)
       --page int           Page number for pagination (starts at 0)
+  -r, --raw                Output raw strings instead of JSON-encoded (use with --jq)
       --sprint string      Filter by sprint name
       --status strings     Filter by status(es)
       --template string    Format JSON output using a Go template

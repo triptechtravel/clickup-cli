@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -45,6 +46,7 @@ type timeLogOptions struct {
 	date        string
 	assignee    string
 	billable    bool
+	fromFile    string
 }
 
 // NewCmdTimeLog returns a command to log a time entry on a task.
@@ -57,7 +59,11 @@ func NewCmdTimeLog(f *cmdutil.Factory) *cobra.Command {
 		Long: `Log a time entry against a ClickUp task.
 
 If no task ID is provided, the command attempts to auto-detect the task ID
-from the current git branch name.`,
+from the current git branch name.
+
+Use --from-file to bulk log time entries from a JSON file. The file should
+contain an array of objects with task_id, duration, and optionally date,
+description, assignee, and billable fields.`,
 		Example: `  # Log 2 hours to a specific task
   clickup task time log 86a3xrwkp --duration 2h
 
@@ -71,10 +77,16 @@ from the current git branch name.`,
   clickup task time log --duration 3h --billable
 
   # Log time for another team member
-  clickup task time log 86a3xrwkp --duration 2h --assignee 54874661`,
+  clickup task time log 86a3xrwkp --duration 2h --assignee 54874661
+
+  # Bulk log from a JSON file
+  clickup task time log --from-file entries.json`,
 		Args:              cobra.MaximumNArgs(1),
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if opts.fromFile != "" {
+				return runBulkTimeLog(f, opts)
+			}
 			if len(args) > 0 {
 				opts.taskID = args[0]
 			}
@@ -90,8 +102,7 @@ from the current git branch name.`,
 	cmd.Flags().StringVar(&opts.date, "date", "", "Date of the work (YYYY-MM-DD, default today)")
 	cmd.Flags().StringVar(&opts.assignee, "assignee", "", "User ID to log time for (default: current user)")
 	cmd.Flags().BoolVar(&opts.billable, "billable", false, "Mark time entry as billable")
-
-	_ = cmd.MarkFlagRequired("duration")
+	cmd.Flags().StringVar(&opts.fromFile, "from-file", "", "Log time entries from a JSON file (array of entry objects)")
 
 	return cmd
 }
@@ -226,15 +237,173 @@ func runTimeLog(f *cmdutil.Factory, opts *timeLogOptions) error {
 	return nil
 }
 
+// --- time log bulk ---
+
+type timeLogFileEntry struct {
+	TaskID      string `json:"task_id"`
+	Duration    string `json:"duration"`
+	Description string `json:"description"`
+	Date        string `json:"date"`
+	Assignee    string `json:"assignee"`
+	Billable    bool   `json:"billable"`
+}
+
+func runBulkTimeLog(f *cmdutil.Factory, opts *timeLogOptions) error {
+	ios := f.IOStreams
+	cs := ios.ColorScheme()
+
+	data, err := os.ReadFile(opts.fromFile)
+	if err != nil {
+		return fmt.Errorf("failed to read file %s: %w", opts.fromFile, err)
+	}
+
+	var entries []timeLogFileEntry
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	if len(entries) == 0 {
+		return fmt.Errorf("no entries found in %s", opts.fromFile)
+	}
+
+	cfg, err := f.Config()
+	if err != nil {
+		return err
+	}
+	teamID := cfg.Workspace
+	if teamID == "" {
+		return fmt.Errorf("workspace not configured. Run 'clickup config set workspace <id>' first")
+	}
+
+	client, err := f.ApiClient()
+	if err != nil {
+		return err
+	}
+
+	total := len(entries)
+	var logged int
+
+	for i, entry := range entries {
+		if entry.TaskID == "" {
+			fmt.Fprintf(ios.ErrOut, "%s (%d/%d) Skipped: task_id is empty\n", cs.Yellow("!"), i+1, total)
+			continue
+		}
+		if entry.Duration == "" {
+			fmt.Fprintf(ios.ErrOut, "%s (%d/%d) Skipped: duration is empty for task %s\n", cs.Yellow("!"), i+1, total, entry.TaskID)
+			continue
+		}
+
+		d, err := time.ParseDuration(entry.Duration)
+		if err != nil {
+			fmt.Fprintf(ios.ErrOut, "%s (%d/%d) Skipped: invalid duration %q for task %s: %v\n",
+				cs.Red("✗"), i+1, total, entry.Duration, entry.TaskID, err)
+			continue
+		}
+		durationMs := d.Milliseconds()
+
+		// Parse date (default to today).
+		var startDate time.Time
+		if entry.Date != "" {
+			startDate, err = time.ParseInLocation("2006-01-02", entry.Date, time.Local)
+			if err != nil {
+				fmt.Fprintf(ios.ErrOut, "%s (%d/%d) Skipped: invalid date %q for task %s\n",
+					cs.Red("✗"), i+1, total, entry.Date, entry.TaskID)
+				continue
+			}
+		} else {
+			now := time.Now()
+			startDate = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		}
+
+		startTime := time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 9, 0, 0, 0, startDate.Location())
+		startMs := startTime.UnixMilli()
+
+		parsed := git.ParseTaskID(entry.TaskID)
+		taskID := parsed.ID
+
+		body := map[string]interface{}{
+			"description": entry.Description,
+			"start":       startMs,
+			"duration":    durationMs,
+			"billable":    entry.Billable,
+			"tid":         taskID,
+		}
+
+		// Use entry-level assignee, fall back to flag-level.
+		assigneeStr := entry.Assignee
+		if assigneeStr == "" {
+			assigneeStr = opts.assignee
+		}
+		if assigneeStr != "" {
+			assigneeID, err := strconv.Atoi(assigneeStr)
+			if err != nil {
+				fmt.Fprintf(ios.ErrOut, "%s (%d/%d) Skipped: invalid assignee %q for task %s\n",
+					cs.Red("✗"), i+1, total, assigneeStr, entry.TaskID)
+				continue
+			}
+			body["assignee"] = assigneeID
+		}
+
+		bodyJSON, err := json.Marshal(body)
+		if err != nil {
+			fmt.Fprintf(ios.ErrOut, "%s (%d/%d) Skipped: marshal error for task %s: %v\n",
+				cs.Red("✗"), i+1, total, entry.TaskID, err)
+			continue
+		}
+
+		timeURL := client.URL("team/%s/time_entries", teamID)
+		req, err := http.NewRequest("POST", timeURL, bytes.NewReader(bodyJSON))
+		if err != nil {
+			fmt.Fprintf(ios.ErrOut, "%s (%d/%d) Skipped: request error for task %s: %v\n",
+				cs.Red("✗"), i+1, total, entry.TaskID, err)
+			continue
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := client.DoRequest(req)
+		if err != nil {
+			fmt.Fprintf(ios.ErrOut, "%s (%d/%d) Failed: task %s: %v\n",
+				cs.Red("✗"), i+1, total, entry.TaskID, err)
+			continue
+		}
+		resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			fmt.Fprintf(ios.ErrOut, "%s (%d/%d) Failed: task %s: HTTP %d\n",
+				cs.Red("✗"), i+1, total, entry.TaskID, resp.StatusCode)
+			continue
+		}
+
+		logged++
+		fmt.Fprintf(ios.Out, "%s (%d/%d) Logged %s to task %s",
+			cs.Green("✓"), i+1, total,
+			formatDuration(strconv.FormatInt(durationMs, 10)),
+			entry.TaskID,
+		)
+		if entry.Description != "" {
+			desc := entry.Description
+			if len(desc) > 50 {
+				desc = desc[:50] + "..."
+			}
+			fmt.Fprintf(ios.Out, " %s", cs.Gray(desc))
+		}
+		fmt.Fprintln(ios.Out)
+	}
+
+	fmt.Fprintf(ios.Out, "\n%s Logged %d/%d entries\n", cs.Green("!"), logged, total)
+	return nil
+}
+
 // --- time list ---
 
 type timeListOptions struct {
-	taskID    string
-	startDate string
-	endDate   string
-	assignee  string
-	tags      []string
-	jsonFlags cmdutil.JSONFlags
+	taskID      string
+	startDate   string
+	endDate     string
+	assignee    string
+	tags        []string
+	includeTags bool
+	jsonFlags   cmdutil.JSONFlags
 }
 
 // NewCmdTimeList returns a command to list time entries for a task or date range.
@@ -290,6 +459,7 @@ the current user; use --assignee to change.`,
 	cmd.Flags().StringVar(&opts.endDate, "end-date", "", "End date for timesheet mode (YYYY-MM-DD)")
 	cmd.Flags().StringVar(&opts.assignee, "assignee", "", `Filter by user ID(s) — comma-separated, or "all" for everyone (default: current user)`)
 	cmd.Flags().StringSliceVar(&opts.tags, "tag", nil, `Filter by task tag(s) — comma-separated or repeated (OR logic, timesheet mode only)`)
+	cmd.Flags().BoolVar(&opts.includeTags, "include-tags", false, "Include task tags in JSON output (fetches concurrently, timesheet mode only)")
 	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 
 	return cmd
@@ -511,6 +681,14 @@ func runTimeListTimesheet(f *cmdutil.Factory, opts *timeListOptions) error {
 	}
 
 	if opts.jsonFlags.WantsJSON() {
+		// Enrich with tags if requested.
+		if opts.includeTags {
+			enriched, err := enrichTimeEntriesWithTags(client, result.Data)
+			if err != nil {
+				return fmt.Errorf("failed to fetch tags: %w", err)
+			}
+			return opts.jsonFlags.OutputJSON(ios.Out, enriched)
+		}
 		return opts.jsonFlags.OutputJSON(ios.Out, result.Data)
 	}
 
@@ -520,6 +698,88 @@ func runTimeListTimesheet(f *cmdutil.Factory, opts *timeListOptions) error {
 	}
 
 	return printTimesheetTable(f, result.Data, opts.startDate, opts.endDate)
+}
+
+// timeEntryWithTags extends timeEntry with task tag names.
+type timeEntryWithTags struct {
+	timeEntry
+	Tags []string `json:"tags"`
+}
+
+// enrichTimeEntriesWithTags fetches tags for all unique tasks concurrently
+// and returns enriched entries with a "tags" field.
+func enrichTimeEntriesWithTags(client *api.Client, entries []timeEntry) ([]timeEntryWithTags, error) {
+	// Collect unique task IDs.
+	taskIDs := make(map[string]bool)
+	for _, e := range entries {
+		if e.Task != nil {
+			taskIDs[e.Task.ID] = true
+		}
+	}
+
+	// Fetch tags concurrently with bounded parallelism.
+	type tagResult struct {
+		taskID string
+		tags   []string
+		err    error
+	}
+
+	results := make(chan tagResult, len(taskIDs))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 10)
+	ctx := context.Background()
+
+	for tid := range taskIDs {
+		wg.Add(1)
+		go func(taskID string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			task, _, err := client.Clickup.Tasks.GetTask(ctx, taskID, nil)
+			if err != nil {
+				results <- tagResult{taskID, nil, err}
+				return
+			}
+			var tags []string
+			for _, t := range task.Tags {
+				tags = append(tags, t.Name)
+			}
+			results <- tagResult{taskID, tags, nil}
+		}(tid)
+	}
+
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Build lookup.
+	tagLookup := make(map[string][]string)
+	for r := range results {
+		if r.err != nil {
+			// Non-fatal: skip tasks we can't fetch.
+			continue
+		}
+		tagLookup[r.taskID] = r.tags
+	}
+
+	// Enrich entries.
+	enriched := make([]timeEntryWithTags, len(entries))
+	for i, e := range entries {
+		tags := []string{}
+		if e.Task != nil {
+			if t, ok := tagLookup[e.Task.ID]; ok {
+				tags = t
+			}
+		}
+		enriched[i] = timeEntryWithTags{
+			timeEntry: e,
+			Tags:      tags,
+		}
+	}
+
+	return enriched, nil
 }
 
 // fetchTimeEntries performs a single GET request and returns the time entries.

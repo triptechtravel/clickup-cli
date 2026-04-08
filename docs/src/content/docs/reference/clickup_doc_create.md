@@ -42,6 +42,7 @@ clickup doc create [flags]
       --name string          Doc name (required)
       --parent-id string     Parent ID (space, folder, or list)
       --parent-type string   Parent type (SPACE|FOLDER|LIST|WORKSPACE|EVERYTHING)
+  -r, --raw                  Output raw strings instead of JSON-encoded (use with --jq)
       --template string      Format JSON output using a Go template
       --visibility string    Visibility (PUBLIC|PRIVATE|PERSONAL|HIDDEN)
 ```

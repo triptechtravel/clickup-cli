@@ -69,6 +69,7 @@ clickup task edit [<task-id>...] [flags]
       --parent string                 Parent task ID (make this a subtask)
       --points float                  Sprint/story points (-1 to clear) (default -999)
       --priority int                  New task priority (1=Urgent, 2=High, 3=Normal, 4=Low)
+  -r, --raw                           Output raw strings instead of JSON-encoded (use with --jq)
       --remove-assignee ints          Assignee user ID(s) to remove
       --remove-tags strings           Remove specific tags
       --start-date string             Start date (YYYY-MM-DD, or "none" to clear)

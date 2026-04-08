@@ -44,6 +44,7 @@ clickup doc list [flags]
       --limit int            Maximum number of Docs to return
       --parent-id string     Filter by parent ID
       --parent-type string   Parent type (SPACE|FOLDER|LIST|WORKSPACE|EVERYTHING)
+  -r, --raw                  Output raw strings instead of JSON-encoded (use with --jq)
       --template string      Format JSON output using a Go template
 ```
 

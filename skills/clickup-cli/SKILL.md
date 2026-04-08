@@ -322,6 +322,22 @@ clickup task time log --duration 3h --billable
 # Log time for another team member
 clickup task time log 86abc123 --duration 2h --assignee 54874661
 
+# Bulk log from a JSON file
+clickup task time log --from-file entries.json
+```
+
+**Bulk time log file format:**
+
+```json
+[
+  {"task_id": "86abc123", "duration": "2h", "date": "2026-03-15", "description": "Feature work", "assignee": "54874661"},
+  {"task_id": "86abc456", "duration": "1h30m", "date": "2026-03-15", "description": "Code review"}
+]
+```
+
+Each entry supports: `task_id` (required), `duration` (required), `date`, `description`, `assignee`, `billable`. The `--assignee` flag applies as a default for entries without their own assignee.
+
+```bash
 # List time entries for a task
 clickup task time list
 clickup task time list 86abc123
@@ -339,9 +355,14 @@ clickup task time list --start-date 2026-03-01 --end-date 2026-03-31 --assignee 
 
 # Timesheet for all workspace members
 clickup task time list --start-date 2026-02-01 --end-date 2026-02-28 --assignee all
+
+# Include task tags in JSON output (fetches concurrently)
+clickup task time list --start-date 2026-03-01 --end-date 2026-03-31 --include-tags --json
 ```
 
 When `--start-date` and `--end-date` are provided, the command switches to **timesheet mode** — querying all time entries across tasks for the date range, grouped by task. Defaults to the current user; use `--assignee all` for everyone, `--assignee <user-id>` for a specific person, or `--assignee id1,id2,id3` for multiple users (fetched concurrently).
+
+Use `--include-tags` with `--json` to embed task tags in the output — useful for CapEx auditing without a separate bulk-view step.
 
 ## Inbox
 
@@ -462,6 +483,7 @@ clickup doc create --name "Sprint Retro" --json | jq -r '.id'
 |------|-------------|
 | `--json` | Output as JSON |
 | `--jq <expr>` | Filter JSON with jq expression |
+| `--raw`, `-r` | Output raw strings instead of JSON-encoded (use with `--jq`) |
 | `--template <tmpl>` | Format with Go template |
 
 ## Key Behaviors

@@ -12,6 +12,10 @@ Log a time entry against a ClickUp task.
 If no task ID is provided, the command attempts to auto-detect the task ID
 from the current git branch name.
 
+Use --from-file to bulk log time entries from a JSON file. The file should
+contain an array of objects with task_id, duration, and optionally date,
+description, assignee, and billable fields.
+
 ```
 clickup task time log [<task-id>] [flags]
 ```
@@ -33,6 +37,9 @@ clickup task time log [<task-id>] [flags]
 
   # Log time for another team member
   clickup task time log 86a3xrwkp --duration 2h --assignee 54874661
+
+  # Bulk log from a JSON file
+  clickup task time log --from-file entries.json
 ```
 
 ### Options
@@ -43,6 +50,7 @@ clickup task time log [<task-id>] [flags]
       --date string          Date of the work (YYYY-MM-DD, default today)
       --description string   Description of work done
       --duration string      Duration to log (e.g. "2h", "30m", "1h30m")
+      --from-file string     Log time entries from a JSON file (array of entry objects)
   -h, --help                 help for log
 ```
 

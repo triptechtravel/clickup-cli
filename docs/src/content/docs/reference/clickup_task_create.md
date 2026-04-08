@@ -82,6 +82,7 @@ clickup task create [flags]
       --parent string                 Parent task ID (create as subtask)
       --points float                  Sprint/story points (default -999)
       --priority int                  Task priority (1=Urgent, 2=High, 3=Normal, 4=Low)
+  -r, --raw                           Output raw strings instead of JSON-encoded (use with --jq)
       --start-date string             Start date (YYYY-MM-DD)
       --start-date-time               Include time component in start date
       --status string                 Task status

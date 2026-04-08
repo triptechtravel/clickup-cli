@@ -38,6 +38,7 @@ clickup inbox [flags]
       --jq string         Filter JSON output using a jq expression
       --json              Output JSON
       --limit int         Maximum number of tasks to scan for mentions (default 200)
+  -r, --raw               Output raw strings instead of JSON-encoded (use with --jq)
       --template string   Format JSON output using a Go template
 ```
 

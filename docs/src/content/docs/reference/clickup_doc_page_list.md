@@ -33,6 +33,7 @@ clickup doc page list <doc-id> [flags]
       --jq string         Filter JSON output using a jq expression
       --json              Output JSON
       --max-depth float   Maximum page nesting depth (-1 for unlimited) (default -1)
+  -r, --raw               Output raw strings instead of JSON-encoded (use with --jq)
       --template string   Format JSON output using a Go template
 ```
 

@@ -38,6 +38,7 @@ clickup task list-remove <task-id>... --list-id <list-id> [flags]
       --jq string         Filter JSON output using a jq expression
       --json              Output JSON
       --list-id string    List ID to remove from (required)
+  -r, --raw               Output raw strings instead of JSON-encoded (use with --jq)
       --template string   Format JSON output using a Go template
 ```
 

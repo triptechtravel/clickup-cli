@@ -11,17 +11,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// JSONFlags holds the --json, --jq, and --template flags.
+// JSONFlags holds the --json, --jq, --raw, and --template flags.
 type JSONFlags struct {
 	JSON     bool
 	JQ       string
+	Raw      bool
 	Template string
 }
 
-// AddJSONFlags adds --json, --jq, and --template flags to a command.
+// AddJSONFlags adds --json, --jq, --raw, and --template flags to a command.
 func AddJSONFlags(cmd *cobra.Command, flags *JSONFlags) {
 	cmd.Flags().BoolVar(&flags.JSON, "json", false, "Output JSON")
 	cmd.Flags().StringVar(&flags.JQ, "jq", "", "Filter JSON output using a jq expression")
+	cmd.Flags().BoolVarP(&flags.Raw, "raw", "r", false, "Output raw strings instead of JSON-encoded (use with --jq)")
 	cmd.Flags().StringVar(&flags.Template, "template", "", "Format JSON output using a Go template")
 }
 
@@ -33,7 +35,7 @@ func (f *JSONFlags) OutputJSON(w io.Writer, data interface{}) error {
 	}
 
 	if f.JQ != "" {
-		return applyJQ(w, jsonBytes, f.JQ)
+		return applyJQ(w, jsonBytes, f.JQ, f.Raw)
 	}
 
 	if f.Template != "" {
@@ -58,7 +60,7 @@ func (f *JSONFlags) WantsJSON() bool {
 	return f.JSON || f.JQ != "" || f.Template != ""
 }
 
-func applyJQ(w io.Writer, jsonBytes []byte, expr string) error {
+func applyJQ(w io.Writer, jsonBytes []byte, expr string, raw bool) error {
 	query, err := gojq.Parse(expr)
 	if err != nil {
 		return fmt.Errorf("invalid jq expression: %w", err)
@@ -77,6 +79,14 @@ func applyJQ(w io.Writer, jsonBytes []byte, expr string) error {
 		}
 		if err, isErr := v.(error); isErr {
 			return fmt.Errorf("jq error: %w", err)
+		}
+
+		// With --raw/-r, output strings without JSON encoding (like jq -r).
+		if raw {
+			if s, ok := v.(string); ok {
+				fmt.Fprintln(w, s)
+				continue
+			}
 		}
 
 		out, err := json.MarshalIndent(v, "", "  ")

@@ -44,6 +44,7 @@ clickup doc page create <doc-id> [flags]
       --json                    Output JSON
       --name string             Page name (required)
       --parent-page-id string   Parent page ID (for nested pages)
+  -r, --raw                     Output raw strings instead of JSON-encoded (use with --jq)
       --sub-title string        Page subtitle
       --template string         Format JSON output using a Go template
 ```

@@ -68,6 +68,7 @@ clickup task search <query> [flags]
       --jq string         Filter JSON output using a jq expression
       --json              Output JSON
       --pick              Interactively select a task and print its ID
+  -r, --raw               Output raw strings instead of JSON-encoded (use with --jq)
       --space string      Limit search to a specific space (name or ID)
       --template string   Format JSON output using a Go template
 ```

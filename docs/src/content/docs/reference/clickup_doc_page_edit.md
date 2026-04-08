@@ -44,6 +44,7 @@ clickup doc page edit <doc-id> <page-id> [flags]
       --jq string                  Filter JSON output using a jq expression
       --json                       Output JSON
       --name string                New page name
+  -r, --raw                        Output raw strings instead of JSON-encoded (use with --jq)
       --sub-title string           New page subtitle
       --template string            Format JSON output using a Go template
 ```

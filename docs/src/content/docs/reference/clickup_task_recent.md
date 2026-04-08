@@ -46,6 +46,7 @@ clickup task recent [flags]
       --jq string         Filter JSON output using a jq expression
       --json              Output JSON
       --limit int         Maximum number of tasks to show (default 20)
+  -r, --raw               Output raw strings instead of JSON-encoded (use with --jq)
       --sprint            Only show tasks from the current sprint folder
       --template string   Format JSON output using a Go template
 ```

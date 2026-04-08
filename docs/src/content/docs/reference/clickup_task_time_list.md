@@ -55,8 +55,10 @@ clickup task time list [<task-id>] [flags]
       --assignee string     Filter by user ID(s) — comma-separated, or "all" for everyone (default: current user)
       --end-date string     End date for timesheet mode (YYYY-MM-DD)
   -h, --help                help for list
+      --include-tags        Include task tags in JSON output (fetches concurrently, timesheet mode only)
       --jq string           Filter JSON output using a jq expression
       --json                Output JSON
+  -r, --raw                 Output raw strings instead of JSON-encoded (use with --jq)
       --start-date string   Start date for timesheet mode (YYYY-MM-DD)
       --tag strings         Filter by task tag(s) — comma-separated or repeated (OR logic, timesheet mode only)
       --template string     Format JSON output using a Go template
