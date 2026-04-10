@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,14 +22,16 @@ type inboxOptions struct {
 	factory   *cmdutil.Factory
 	days      int
 	limit     int
+	noCache   bool
 	jsonFlags cmdutil.JSONFlags
 }
 
 type mention struct {
 	TaskID        string   `json:"task_id"`
 	TaskName      string   `json:"task_name"`
+	Type          string   `json:"type"`
 	CommentID     string   `json:"comment_id,omitempty"`
-	CommentText   string   `json:"comment_text"`
+	CommentText   string   `json:"comment_text,omitempty"`
 	Attachments   []string `json:"attachments,omitempty"`
 	Author        string   `json:"author"`
 	Date          string   `json:"date"`
@@ -81,17 +82,29 @@ func NewCmdInbox(f *cmdutil.Factory) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "inbox",
-		Short: "Show recent @mentions",
-		Long: `Show recent comments that @mention you across your workspace.
+		Short: "Show recent @mentions and assignments",
+		Long: `Show recent comments that @mention you and tasks newly assigned to you.
 
-Scans recently updated tasks for comments containing your username.
+Combines two scans: a filtered call for tasks where you are an assignee
+(used to detect newly assigned tasks within the lookback window) and a
+workspace-wide scan for cold @mentions on tasks you are not assigned to.
+
+Results from the workspace scan are cached locally at
+~/.config/clickup/inbox_cache.json by task date_updated, so subsequent
+runs only re-fetch comments for tasks that have changed. The cache
+expires after 24 hours; pass --no-cache to force a full rescan (the cache
+is still rewritten after a --no-cache run so subsequent runs are cheap).
+
 Since ClickUp does not provide a public inbox API, this command
-approximates your inbox by searching task comments.`,
-		Example: `  # Show mentions from the last 7 days
+approximates your inbox by combining these two endpoints.`,
+		Example: `  # Show mentions and assignments from the last 7 days
   clickup inbox
 
   # Look back 30 days
   clickup inbox --days 30
+
+  # Force a full rescan, ignoring the cache
+  clickup inbox --no-cache
 
   # JSON output for scripting
   clickup inbox --json`,
@@ -103,6 +116,7 @@ approximates your inbox by searching task comments.`,
 
 	cmd.Flags().IntVar(&opts.days, "days", 7, "How many days back to search")
 	cmd.Flags().IntVar(&opts.limit, "limit", 200, "Maximum number of tasks to scan for mentions")
+	cmd.Flags().BoolVar(&opts.noCache, "no-cache", false, "Bypass the local cache and re-fetch comments for every task")
 	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 
 	return cmd
@@ -117,14 +131,12 @@ func inboxRun(opts *inboxOptions) error {
 		return err
 	}
 
-	// Get current user info.
 	fmt.Fprintln(ios.ErrOut, "Fetching your user info...")
 	user, err := getCurrentUser(client)
 	if err != nil {
 		return fmt.Errorf("failed to get user info: %w", err)
 	}
 
-	// Get workspace ID.
 	cfg, err := opts.factory.Config()
 	if err != nil {
 		return err
@@ -134,57 +146,75 @@ func inboxRun(opts *inboxOptions) error {
 		return fmt.Errorf("workspace ID required. Set with 'clickup auth login' or 'clickup config set workspace <id>'")
 	}
 
-	// Fetch recently updated tasks.
 	cutoff := time.Now().AddDate(0, 0, -opts.days)
+	cutoffMs := cutoff.UnixMilli()
 	cutoffClickup := clickup.NewDate(cutoff)
 
-	fmt.Fprintf(ios.ErrOut, "Scanning tasks updated in the last %s for @%s...\n",
-		text.Pluralize(opts.days, "day"), user.User.Username)
-
 	ctx := context.Background()
-	taskOpts := &clickup.GetTasksOptions{
+
+	// Phase 1: cheap filtered call for tasks where the user is currently an
+	// assignee. Used to detect newly assigned tasks within the lookback window.
+	fmt.Fprintf(ios.ErrOut, "Fetching tasks assigned to @%s...\n", user.User.Username)
+	assignedTasks, err := fetchTeamTasks(ctx, client, teamID, &clickup.GetTasksOptions{
+		DateUpdatedGt: cutoffClickup,
+		Assignees:     []string{strconv.Itoa(user.User.ID)},
+		IncludeClosed: true,
+		Subtasks:      true,
+	}, opts.limit)
+	if err != nil {
+		return fmt.Errorf("failed to fetch assigned tasks: %w", err)
+	}
+
+	// Phase 2: workspace-wide scan for cold mentions. Same call the original
+	// inbox made, capped at opts.limit.
+	fmt.Fprintf(ios.ErrOut, "Scanning tasks updated in the last %s...\n",
+		text.Pluralize(opts.days, "day"))
+	workspaceTasks, err := fetchTeamTasks(ctx, client, teamID, &clickup.GetTasksOptions{
 		DateUpdatedGt: cutoffClickup,
 		IncludeClosed: true,
 		Subtasks:      true,
-		Page:          0,
+	}, opts.limit)
+	if err != nil {
+		return fmt.Errorf("failed to fetch tasks: %w", err)
 	}
 
-	var allTasks []clickup.Task
-	for page := 0; len(allTasks) < opts.limit; page++ {
-		taskOpts.Page = page
-		tasks, _, err := client.Clickup.Tasks.GetFilteredTeamTasks(ctx, teamID, taskOpts)
+	// Phase 3: load cache and diff. A stale or missing cache reverts to a cold
+	// scan automatically; --no-cache forces it.
+	var cache *inboxCache
+	cachePath := inboxCachePath()
+	if !opts.noCache {
+		cache, err = loadInboxCache(cachePath)
 		if err != nil {
-			return fmt.Errorf("failed to fetch tasks: %w", err)
+			fmt.Fprintf(ios.ErrOut, "Warning: failed to load inbox cache: %v\n", err)
+			cache = &inboxCache{Tasks: map[string]inboxCacheEntry{}}
 		}
-		if len(tasks) == 0 {
-			break
+		if !cache.IsFresh(time.Now()) {
+			cache = &inboxCache{Tasks: map[string]inboxCacheEntry{}}
 		}
-		allTasks = append(allTasks, tasks...)
 	}
 
-	if len(allTasks) > opts.limit {
-		allTasks = allTasks[:opts.limit]
+	tasksToScan := cacheDiff(cache, workspaceTasks)
+	if savings := len(workspaceTasks) - len(tasksToScan); savings > 0 {
+		fmt.Fprintf(ios.ErrOut, "Cache hit: skipping %s (%d total, %d to fetch)\n",
+			text.Pluralize(savings, "task"), len(workspaceTasks), len(tasksToScan))
 	}
 
-	if len(allTasks) == 0 {
-		fmt.Fprintln(ios.ErrOut, "No recently updated tasks found.")
-		return nil
+	// Phase 4: fetch comments concurrently for the diff only.
+	if len(tasksToScan) > 0 {
+		fmt.Fprintf(ios.ErrOut, "Checking comments on %s...\n", text.Pluralize(len(tasksToScan), "task"))
 	}
 
-	fmt.Fprintf(ios.ErrOut, "Checking comments on %s...\n", text.Pluralize(len(allTasks), "task"))
-
-	// Fetch comments concurrently with a semaphore.
 	type taskComments struct {
 		task     clickup.Task
 		comments []commentData
 		err      error
 	}
 
-	results := make([]taskComments, len(allTasks))
+	results := make([]taskComments, len(tasksToScan))
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, 5) // max 5 concurrent requests
+	sem := make(chan struct{}, 15)
 
-	for i, t := range allTasks {
+	for i, t := range tasksToScan {
 		wg.Add(1)
 		go func(idx int, task clickup.Task) {
 			defer wg.Done()
@@ -192,38 +222,40 @@ func inboxRun(opts *inboxOptions) error {
 			defer func() { <-sem }()
 
 			comments, err := fetchTaskComments(client, task.ID)
-			results[idx] = taskComments{
-				task:     task,
-				comments: comments,
-				err:      err,
-			}
+			results[idx] = taskComments{task: task, comments: comments, err: err}
 		}(i, t)
 	}
 	wg.Wait()
 
-	// Filter for mentions.
 	username := strings.ToLower(user.User.Username)
-	var mentions []mention
 
+	// Phase 5a: build comment + description mention events from the comment scan.
+	// Track mentions per task so we can persist them in the cache for warm runs.
+	var mentionEvents []mention
+	mentionsByTask := map[string][]mention{}
+	addMention := func(m mention) {
+		mentionEvents = append(mentionEvents, m)
+		mentionsByTask[m.TaskID] = append(mentionsByTask[m.TaskID], m)
+	}
 	for _, r := range results {
 		if r.err != nil {
 			continue
 		}
 
-		// Check task description for @mentions.
 		desc := r.task.TextContent
 		if desc == "" {
 			desc = r.task.Description
 		}
 		if desc != "" && containsMention(desc, username) {
 			ms, _ := strconv.ParseInt(r.task.DateUpdated, 10, 64)
-			mentions = append(mentions, mention{
-				TaskID:      r.task.ID,
-				TaskName:    r.task.Name,
-				CommentText: desc,
-				Author:      r.task.Creator.Username,
-				Date:        r.task.DateUpdated,
-				DateMs:      ms,
+			addMention(mention{
+				TaskID:        r.task.ID,
+				TaskName:      r.task.Name,
+				Type:          eventDescriptionMention,
+				CommentText:   desc,
+				Author:        r.task.Creator.Username,
+				Date:          r.task.DateUpdated,
+				DateMs:        ms,
 				IsDescription: true,
 			})
 		}
@@ -232,9 +264,10 @@ func inboxRun(opts *inboxOptions) error {
 			if containsMention(c.CommentText, username) && strings.ToLower(c.User.Username) != username {
 				ms, _ := strconv.ParseInt(c.Date, 10, 64)
 				attachments := extractAttachmentURLs(c.Comment)
-				mentions = append(mentions, mention{
+				addMention(mention{
 					TaskID:      r.task.ID,
 					TaskName:    r.task.Name,
+					Type:        eventCommentMention,
 					CommentID:   c.ID,
 					CommentText: c.CommentText,
 					Attachments: attachments,
@@ -246,59 +279,116 @@ func inboxRun(opts *inboxOptions) error {
 		}
 	}
 
-	// Sort by date, oldest first (newest at bottom, closest to cursor).
-	sort.Slice(mentions, func(i, j int) bool {
-		return mentions[i].DateMs < mentions[j].DateMs
-	})
+	// Replay mentions stored in the cache for tasks we skipped this run.
+	replayed := cachedMentionsFor(cache, skippedTasks(cache, workspaceTasks))
 
-	if opts.jsonFlags.WantsJSON() {
-		return opts.jsonFlags.OutputJSON(ios.Out, mentions)
+	// Phase 5b: build assignment events from the assigned task list.
+	var assignmentEvents []mention
+	for _, t := range assignedTasks {
+		if !isNewAssignment(t, user.User.ID, cutoffMs) {
+			continue
+		}
+		ms, _ := strconv.ParseInt(t.DateCreated, 10, 64)
+		assignmentEvents = append(assignmentEvents, mention{
+			TaskID:   t.ID,
+			TaskName: t.Name,
+			Type:     eventAssignment,
+			Author:   t.Creator.Username,
+			Date:     t.DateCreated,
+			DateMs:   ms,
+		})
 	}
 
-	if len(mentions) == 0 {
-		fmt.Fprintf(ios.Out, "No @mentions found in the last %s.\n", text.Pluralize(opts.days, "day"))
+	events := mergeEvents(assignmentEvents, mentionEvents, replayed)
+
+	// Phase 6: persist updated cache. We merge replayed mentions back in so
+	// that warm-run skipped tasks retain their mentions on the next save.
+	// --no-cache skips the read but still writes, so the next run benefits.
+	for _, m := range replayed {
+		if _, refreshed := mentionsByTask[m.TaskID]; refreshed {
+			// Task was rescanned this run; trust the fresh data.
+			continue
+		}
+		mentionsByTask[m.TaskID] = append(mentionsByTask[m.TaskID], m)
+	}
+	if cache == nil {
+		cache = &inboxCache{Tasks: map[string]inboxCacheEntry{}}
+	}
+	updateCacheFromTasks(cache, workspaceTasks, mentionsByTask, time.Now())
+	if err := saveInboxCache(cachePath, cache); err != nil {
+		fmt.Fprintf(ios.ErrOut, "Warning: failed to save inbox cache: %v\n", err)
+	}
+
+	if opts.jsonFlags.WantsJSON() {
+		return opts.jsonFlags.OutputJSON(ios.Out, events)
+	}
+
+	if len(events) == 0 {
+		fmt.Fprintf(ios.Out, "No new mentions or assignments in the last %s.\n", text.Pluralize(opts.days, "day"))
 		return nil
 	}
 
 	fmt.Fprintf(ios.ErrOut, "\nShowing %s from the last %s\n\n",
-		text.Pluralize(len(mentions), "mention"),
+		text.Pluralize(len(events), "event"),
 		text.Pluralize(opts.days, "day"))
 
-	for i, m := range mentions {
-		// Header line: author + task ID + time
+	for i, m := range events {
 		action := "commented on"
-		if m.IsDescription {
+		switch m.Type {
+		case eventAssignment:
+			action = "assigned this task to you"
+		case eventDescriptionMention:
 			action = "mentioned you in description of"
 		}
+
 		fmt.Fprintf(ios.Out, "%s %s %s  %s\n",
 			cs.Bold(m.Author),
 			action,
 			cs.Cyan("#"+m.TaskID),
 			cs.Gray(formatMentionDate(m.Date)),
 		)
-		// Task name
 		fmt.Fprintf(ios.Out, "%s\n", m.TaskName)
-		// Comment body, indented
-		fmt.Fprintf(ios.Out, "\n  %s\n", strings.TrimSpace(m.CommentText))
-		// Attachment URLs
+		if m.CommentText != "" {
+			fmt.Fprintf(ios.Out, "\n  %s\n", strings.TrimSpace(m.CommentText))
+		}
 		for _, url := range m.Attachments {
 			fmt.Fprintf(ios.Out, "  %s %s\n", cs.Gray("attachment:"), url)
 		}
-		// Separator between entries
-		if i < len(mentions)-1 {
+		if i < len(events)-1 {
 			fmt.Fprintln(ios.Out)
 		}
 	}
 
-	// Quick actions footer
 	fmt.Fprintln(ios.Out)
 	fmt.Fprintln(ios.Out, cs.Gray("---"))
 	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))
 	fmt.Fprintf(ios.Out, "  %s  clickup comment add <task-id> \"@user text\" (supports @mentions)\n", cs.Gray("Reply:"))
 	fmt.Fprintf(ios.Out, "  %s  clickup task view <task-id>\n", cs.Gray("View:"))
+	fmt.Fprintf(ios.Out, "  %s  clickup inbox --no-cache\n", cs.Gray("Refresh:"))
 	fmt.Fprintf(ios.Out, "  %s  clickup inbox --json\n", cs.Gray("JSON:"))
 
 	return nil
+}
+
+// fetchTeamTasks paginates GetFilteredTeamTasks until it has at least `limit`
+// tasks or the API runs out of pages. Returns at most `limit` tasks.
+func fetchTeamTasks(ctx context.Context, client *api.Client, teamID string, opts *clickup.GetTasksOptions, limit int) ([]clickup.Task, error) {
+	var all []clickup.Task
+	for page := 0; len(all) < limit; page++ {
+		opts.Page = page
+		batch, _, err := client.Clickup.Tasks.GetFilteredTeamTasks(ctx, teamID, opts)
+		if err != nil {
+			return nil, err
+		}
+		if len(batch) == 0 {
+			break
+		}
+		all = append(all, batch...)
+	}
+	if len(all) > limit {
+		all = all[:limit]
+	}
+	return all, nil
 }
 
 func getCurrentUser(client *api.Client) (*userResponse, error) {
