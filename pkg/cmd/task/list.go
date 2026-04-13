@@ -3,6 +3,7 @@ package task
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/raksul/go-clickup/clickup"
@@ -12,12 +13,13 @@ import (
 )
 
 type listOptions struct {
-	listID    string
-	assignee  []string
-	status    []string
-	sprint    string
-	page      int
-	jsonFlags cmdutil.JSONFlags
+	listID        string
+	assignee      []string
+	status        []string
+	sprint        string
+	page          int
+	includeClosed bool
+	jsonFlags     cmdutil.JSONFlags
 }
 
 // NewCmdList returns a command to list ClickUp tasks in a given list.
@@ -39,19 +41,28 @@ Results can be filtered by assignee, status, and sprint.`,
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if opts.listID == "" {
-				return fmt.Errorf("required flag --list-id not set")
+				cfg, err := f.Config()
+				if err != nil {
+					return err
+				}
+
+				cwd, _ := os.Getwd()
+				opts.listID = cfg.ListForDir(cwd)
+
+				if opts.listID == "" {
+					return fmt.Errorf("required flag --list-id not set and no default list configured")
+				}
 			}
 			return runList(f, opts)
 		},
 	}
 
-	cmd.Flags().StringVar(&opts.listID, "list-id", "", "ClickUp list ID (required)")
+	cmd.Flags().StringVar(&opts.listID, "list-id", "", "ClickUp list ID (defaults to configured list)")
 	cmd.Flags().StringSliceVar(&opts.assignee, "assignee", nil, `Filter by assignee ID(s), or "me" for yourself`)
 	cmd.Flags().StringSliceVar(&opts.status, "status", nil, "Filter by status(es)")
 	cmd.Flags().StringVar(&opts.sprint, "sprint", "", "Filter by sprint name")
 	cmd.Flags().IntVar(&opts.page, "page", 0, "Page number for pagination (starts at 0)")
-
-	_ = cmd.MarkFlagRequired("list-id")
+	cmd.Flags().BoolVarP(&opts.includeClosed, "include-closed", "c", false, "Include closed/completed tasks")
 
 	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 
@@ -67,7 +78,8 @@ func runList(f *cmdutil.Factory, opts *listOptions) error {
 	}
 
 	taskOpts := &clickup.GetTasksOptions{
-		Page: opts.page,
+		Page:          opts.page,
+		IncludeClosed: opts.includeClosed,
 	}
 
 	if len(opts.status) > 0 {
@@ -141,7 +153,12 @@ func printTaskTable(f *cmdutil.Factory, tasks []clickup.Task) error {
 		tp.AddField(t.Name)
 
 		statusText := t.Status.Status
-		statusColorFn := cs.StatusColor(strings.ToLower(statusText))
+		var statusColorFn func(string) string
+		if t.Status.Type == "closed" || t.Status.Type == "done" {
+			statusColorFn = cs.Green
+		} else {
+			statusColorFn = cs.StatusColor(strings.ToLower(statusText))
+		}
 		tp.AddField(statusColorFn(statusText))
 
 		tp.AddField(t.Priority.Priority)

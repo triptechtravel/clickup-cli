@@ -12,6 +12,8 @@ type Config struct {
 	Workspace         string                       `yaml:"workspace,omitempty"`
 	Space             string                       `yaml:"space,omitempty"`
 	SprintFolder      string                       `yaml:"sprint_folder,omitempty"`
+	Folder            string                       `yaml:"folder,omitempty"`
+	List              string                       `yaml:"list,omitempty"`
 	Editor            string                       `yaml:"editor,omitempty"`
 	Prompt            string                       `yaml:"prompt,omitempty"`
 	Aliases           map[string]string            `yaml:"aliases,omitempty"`
@@ -20,7 +22,9 @@ type Config struct {
 
 // DirectoryConfig holds per-directory overrides.
 type DirectoryConfig struct {
-	Space string `yaml:"space,omitempty"`
+	Space  string `yaml:"space,omitempty"`
+	Folder string `yaml:"folder,omitempty"`
+	List   string `yaml:"list,omitempty"`
 }
 
 // ConfigDir returns the path to the config directory (~/.config/clickup).
@@ -81,6 +85,26 @@ func (c *Config) SpaceForDir(dir string) string {
 		}
 	}
 	return c.Space
+}
+
+// FolderForDir returns the folder override for a specific directory, falling back to the global default.
+func (c *Config) FolderForDir(dir string) string {
+	if c.DirectoryDefaults != nil {
+		if dc, ok := c.DirectoryDefaults[dir]; ok && dc.Folder != "" {
+			return dc.Folder
+		}
+	}
+	return c.Folder
+}
+
+// ListForDir returns the list override for a specific directory, falling back to the global default.
+func (c *Config) ListForDir(dir string) string {
+	if c.DirectoryDefaults != nil {
+		if dc, ok := c.DirectoryDefaults[dir]; ok && dc.List != "" {
+			return dc.List
+		}
+	}
+	return c.List
 }
 
 // SetDirectoryDefault sets a per-directory config override.
