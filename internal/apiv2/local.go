@@ -121,17 +121,22 @@ func DeleteTaskLocal(ctx context.Context, client *api.Client, taskID, qs string)
 
 // FilteredTeamTasksParams holds parameters for GetFilteredTeamTasksLocal.
 type FilteredTeamTasksParams struct {
-	OrderBy       string
-	Reverse       bool
-	Subtasks      bool
-	Assignees     []string
-	Page          int
-	ListIDs       []string
-	Statuses      []string
-	Tags          []string
-	DateUpdGt     int64
-	DateUpdLt     int64
-	IncludeClosed bool
+	OrderBy        string
+	Reverse        bool
+	Subtasks       bool
+	Assignees      []string
+	Page           int
+	ListIDs        []string
+	Statuses       []string
+	Tags           []string
+	DateUpdGt      int64
+	DateUpdLt      int64
+	DateCreatedGt  int64
+	DateCreatedLt  int64
+	DueDateGt      int64
+	DueDateLt      int64
+	IncludeClosed  bool
+	Archived       bool
 }
 
 // GetFilteredTeamTasksLocal fetches filtered tasks across a team/workspace.
@@ -167,8 +172,23 @@ func GetFilteredTeamTasksLocal(ctx context.Context, client *api.Client, teamID s
 	if params.DateUpdLt > 0 {
 		q.Set("date_updated_lt", fmt.Sprintf("%d", params.DateUpdLt))
 	}
+	if params.DateCreatedGt > 0 {
+		q.Set("date_created_gt", fmt.Sprintf("%d", params.DateCreatedGt))
+	}
+	if params.DateCreatedLt > 0 {
+		q.Set("date_created_lt", fmt.Sprintf("%d", params.DateCreatedLt))
+	}
+	if params.DueDateGt > 0 {
+		q.Set("due_date_gt", fmt.Sprintf("%d", params.DueDateGt))
+	}
+	if params.DueDateLt > 0 {
+		q.Set("due_date_lt", fmt.Sprintf("%d", params.DueDateLt))
+	}
 	if params.IncludeClosed {
 		q.Set("include_closed", "true")
+	}
+	if params.Archived {
+		q.Set("archived", "true")
 	}
 
 	path := fmt.Sprintf("team/%s/task?%s", teamID, q.Encode())
@@ -231,11 +251,11 @@ func GetListsLocal(ctx context.Context, client *api.Client, folderID string, arc
 }
 
 // GetFolderlessListsLocal fetches folderless lists for a space.
-func GetFolderlessListsLocal(ctx context.Context, client *api.Client, spaceID string) ([]clickup.List, error) {
+func GetFolderlessListsLocal(ctx context.Context, client *api.Client, spaceID string, archived bool) ([]clickup.List, error) {
 	var resp struct {
 		Lists []clickup.List `json:"lists"`
 	}
-	path := fmt.Sprintf("space/%s/list", spaceID)
+	path := fmt.Sprintf("space/%s/list?archived=%v", spaceID, archived)
 	if err := do(ctx, client, "GET", path, nil, &resp); err != nil {
 		return nil, err
 	}

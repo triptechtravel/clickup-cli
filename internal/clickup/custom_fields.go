@@ -523,9 +523,13 @@ func getLabelsValue(v, typeConfig interface{}) (LabelsValue, bool) {
 		return LabelsValue{}, false
 	}
 
-	ids := make([]string, len(arr))
-	for i, v := range arr {
-		ids[i] = v.(string)
+	ids := make([]string, 0, len(arr))
+	for _, v := range arr {
+		s, ok := v.(string)
+		if !ok {
+			continue
+		}
+		ids = append(ids, s)
 	}
 
 	tc := LabelsTypeConfig{}

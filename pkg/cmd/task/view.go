@@ -158,7 +158,8 @@ func runView(f *cmdutil.Factory, opts *viewOptions) error {
 
 	// Fetch markdown description and subtasks (the standard GetTask doesn't include these).
 	var extras taskWithExtras
-	extrasPath := fmt.Sprintf("task/%s/?include_markdown_description=true&include_subtasks=true", task.ID)
+	mdqs := cmdutil.CustomIDTaskQueryMD(cfg, isCustomID)
+	extrasPath := fmt.Sprintf("task/%s/%s", task.ID, mdqs)
 	if err := apiv2.Do(ctx, client, "GET", extrasPath, nil, &extras); err == nil {
 		if extras.MarkdownDescription != "" {
 			task.MarkdownDescription = extras.MarkdownDescription
@@ -230,7 +231,7 @@ func runViewBulk(f *cmdutil.Factory, opts *viewOptions, rawIDs []string) error {
 
 			// Fetch subtasks.
 			var extras taskWithExtras
-			extrasPath := fmt.Sprintf("task/%s/?include_markdown_description=true&include_subtasks=true", task.ID)
+			extrasPath := fmt.Sprintf("task/%s/%s", task.ID, apiv2.TaskQueryMD(false, ""))
 			if err := apiv2.Do(ctx, client, "GET", extrasPath, nil, &extras); err == nil {
 				if extras.MarkdownDescription != "" {
 					task.MarkdownDescription = extras.MarkdownDescription
@@ -540,7 +541,7 @@ func fetchSubtasksRecursive(ctx context.Context, client *api.Client, subtasks []
 			defer func() { <-sem }()
 
 			var extras taskWithExtras
-			extrasPath := fmt.Sprintf("task/%s/?include_subtasks=true", subtasks[idx].ID)
+			extrasPath := fmt.Sprintf("task/%s/%s", subtasks[idx].ID, apiv2.TaskQuery(false, "", true))
 			if err := apiv2.Do(ctx, client, "GET", extrasPath, nil, &extras); err != nil {
 				fmt.Fprintf(ios.ErrOut, "%s failed to fetch subtasks for %s: %v\n", cs.Yellow("!"), subtasks[idx].ID, err)
 				return

@@ -619,7 +619,7 @@ func TestGetFolderlessListsLocal(t *testing.T) {
 		w.Write([]byte(`{"lists":[{"id":"l5","name":"Standalone List","orderindex":"0"}]}`))
 	})
 
-	lists, err := GetFolderlessListsLocal(context.Background(), client, "space1")
+	lists, err := GetFolderlessListsLocal(context.Background(), client, "space1", false)
 
 	require.NoError(t, err)
 	assert.Equal(t, "/api/v2/space/space1/list", capturedPath)
