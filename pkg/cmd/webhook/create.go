@@ -26,7 +26,7 @@ func NewCmdWebhookCreate(f *cmdutil.Factory) *cobra.Command {
 
   # Create a webhook for specific events
   clickup webhook create --endpoint https://example.com/hook --events taskCreated --events taskUpdated`,
-		PreRunE: cmdutil.NeedsAuth(f),
+		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if endpoint == "" {
 				return fmt.Errorf("--endpoint is required")

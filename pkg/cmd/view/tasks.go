@@ -30,7 +30,7 @@ func NewCmdViewTasks(f *cmdutil.Factory) *cobra.Command {
   # Output as JSON
   clickup view tasks 3v-abc123 --json`,
 		Args:    cobra.ExactArgs(1),
-		PreRunE: cmdutil.NeedsAuth(f),
+		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			viewID := args[0]
 

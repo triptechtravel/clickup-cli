@@ -26,7 +26,7 @@ This action cannot be undone. A confirmation prompt is shown unless --yes is pas
   # Delete without confirmation
   clickup webhook delete 4b67ac88 --yes`,
 		Args:    cobra.ExactArgs(1),
-		PreRunE: cmdutil.NeedsAuth(f),
+		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			webhookID := args[0]
 			ios := f.IOStreams

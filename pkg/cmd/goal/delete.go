@@ -26,7 +26,7 @@ This action cannot be undone. A confirmation prompt is shown unless --yes is pas
   # Delete without confirmation
   clickup goal delete e53a33d0-2eb2-4664-a4b3-5e1b0df0e912 --yes`,
 		Args:    cobra.ExactArgs(1),
-		PreRunE: cmdutil.NeedsAuth(f),
+		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			goalID := args[0]
 			ios := f.IOStreams

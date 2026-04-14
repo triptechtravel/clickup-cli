@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/triptechtravel/clickup-cli/internal/apiv2"
@@ -15,10 +16,10 @@ import (
 // NewCmdViewList returns the view list command.
 func NewCmdViewList(f *cmdutil.Factory) *cobra.Command {
 	var (
-		spaceID  string
-		folderID string
-		listID   string
-		teamFlag bool
+		spaceID   string
+		folderID  string
+		listID    string
+		teamFlag  string
 		jsonFlags cmdutil.JSONFlags
 	)
 
@@ -40,7 +41,7 @@ Defaults to --team (workspace-level views) if none specified.`,
 
   # List views in a list
   clickup view list --list abc123`,
-		PreRunE: cmdutil.NeedsAuth(f),
+		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := f.ApiClient()
 			if err != nil {
@@ -89,6 +90,9 @@ Defaults to --team (workspace-level views) if none specified.`,
 			default:
 				scope = "team"
 				teamID := cfg.Workspace
+				if strings.TrimSpace(teamFlag) != "" {
+					teamID = strings.TrimSpace(teamFlag)
+				}
 				if teamID == "" {
 					return fmt.Errorf("no workspace configured. Run 'clickup auth' first")
 				}
@@ -138,7 +142,8 @@ Defaults to --team (workspace-level views) if none specified.`,
 	cmd.Flags().StringVar(&spaceID, "space", "", "List views in a space")
 	cmd.Flags().StringVar(&folderID, "folder", "", "List views in a folder")
 	cmd.Flags().StringVar(&listID, "list", "", "List views in a list")
-	cmd.Flags().BoolVar(&teamFlag, "team", false, "List workspace-level views (default)")
+	cmd.Flags().StringVar(&teamFlag, "team", "", "Workspace ID override (or pass without value for default workspace)")
+	cmd.Flags().Lookup("team").NoOptDefVal = " "
 
 	// Default space from config.
 	if s := os.Getenv("CLICKUP_SPACE"); s != "" && spaceID == "" {

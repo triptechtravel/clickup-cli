@@ -1,6 +1,8 @@
 package template
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
 	"testing"
 
@@ -74,6 +76,31 @@ func TestTemplateList_List(t *testing.T) {
 	out := tf.OutBuf.String()
 	assert.Contains(t, out, "Bug Tracker")
 	assert.Contains(t, out, "t-300")
+}
+
+func TestTemplateUse(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+
+	var capturedBody map[string]interface{}
+	tf.HandleFunc("list/list-99/taskTemplate/t-12345", func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "POST", r.Method)
+		body, _ := io.ReadAll(r.Body)
+		json.Unmarshal(body, &capturedBody)
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-RateLimit-Remaining", "99")
+		w.WriteHeader(200)
+		w.Write([]byte(`{}`))
+	})
+
+	cmd := NewCmdTemplateUse(tf.Factory)
+	err := testutil.RunCommand(t, cmd, "t-12345", "--list", "list-99", "--name", "New Bug")
+	require.NoError(t, err)
+
+	assert.Equal(t, "New Bug", capturedBody["name"])
+
+	out := tf.OutBuf.String()
+	assert.Contains(t, out, "New Bug")
+	assert.Contains(t, out, "t-12345")
 }
 
 func TestTemplateList_Empty(t *testing.T) {

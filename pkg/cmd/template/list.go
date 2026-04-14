@@ -41,7 +41,7 @@ Use --type to filter by template type: task (default), folder, or list.`,
 
   # Output as JSON
   clickup template list --json`,
-		PreRunE: cmdutil.NeedsAuth(f),
+		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := f.ApiClient()
 			if err != nil {

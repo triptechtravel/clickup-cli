@@ -251,3 +251,108 @@ func TestChatMessages_RequiresChannelArg(t *testing.T) {
 	assert.Error(t, cmd.Args(cmd, []string{}))
 	assert.NoError(t, cmd.Args(cmd, []string{"chan-id"}))
 }
+
+// ── chat reply ──────────────────────────────────────────────────────
+
+func TestChatReply(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+
+	var capturedBody map[string]interface{}
+	var capturedMethod string
+	var capturedPath string
+
+	tf.HandleFuncV3("workspaces/12345/chat/messages/msg-abc/replies", func(w http.ResponseWriter, r *http.Request) {
+		capturedMethod = r.Method
+		capturedPath = r.URL.Path
+		body, _ := io.ReadAll(r.Body)
+		json.Unmarshal(body, &capturedBody)
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-RateLimit-Remaining", "99")
+		w.WriteHeader(200)
+		w.Write([]byte(`{
+			"content": "Got it!",
+			"type": "message",
+			"date": 1700000000000,
+			"user_id": "user1",
+			"resolved": false,
+			"links": {"reactions": "", "replies": "", "tagged_users": ""},
+			"replies_count": 0
+		}`))
+	})
+
+	cmd := NewCmdReply(tf.Factory)
+	err := testutil.RunCommand(t, cmd, "msg-abc", "Got it!")
+	require.NoError(t, err)
+
+	assert.Equal(t, "POST", capturedMethod)
+	assert.Contains(t, capturedPath, "/workspaces/12345/chat/messages/msg-abc/replies")
+	assert.Equal(t, "message", capturedBody["type"])
+	assert.Equal(t, "Got it!", capturedBody["content"])
+
+	out := tf.OutBuf.String()
+	assert.Contains(t, out, "Reply sent")
+	assert.Contains(t, out, "msg-abc")
+}
+
+// ── chat react ──────────────────────────────────────────────────────
+
+func TestChatReact(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+
+	var capturedBody map[string]interface{}
+	var capturedMethod string
+	var capturedPath string
+
+	tf.HandleFuncV3("workspaces/12345/chat/messages/msg-abc/reactions", func(w http.ResponseWriter, r *http.Request) {
+		capturedMethod = r.Method
+		capturedPath = r.URL.Path
+		body, _ := io.ReadAll(r.Body)
+		json.Unmarshal(body, &capturedBody)
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-RateLimit-Remaining", "99")
+		w.WriteHeader(200)
+		w.Write([]byte(`{}`))
+	})
+
+	cmd := NewCmdReact(tf.Factory)
+	err := testutil.RunCommand(t, cmd, "msg-abc", "rocket")
+	require.NoError(t, err)
+
+	assert.Equal(t, "POST", capturedMethod)
+	assert.Contains(t, capturedPath, "/workspaces/12345/chat/messages/msg-abc/reactions")
+	assert.Equal(t, "rocket", capturedBody["reaction"])
+
+	out := tf.OutBuf.String()
+	assert.Contains(t, out, "Reaction")
+	assert.Contains(t, out, "rocket")
+	assert.Contains(t, out, "msg-abc")
+}
+
+// ── chat delete ─────────────────────────────────────────────────────
+
+func TestChatDelete(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+
+	var capturedMethod string
+	var capturedPath string
+
+	tf.HandleFuncV3("workspaces/12345/chat/messages/msg-del", func(w http.ResponseWriter, r *http.Request) {
+		capturedMethod = r.Method
+		capturedPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-RateLimit-Remaining", "99")
+		w.WriteHeader(200)
+		w.Write([]byte(`{}`))
+	})
+
+	cmd := NewCmdDelete(tf.Factory)
+	err := testutil.RunCommand(t, cmd, "msg-del", "--yes")
+	require.NoError(t, err)
+
+	assert.Equal(t, "DELETE", capturedMethod)
+	assert.Contains(t, capturedPath, "/workspaces/12345/chat/messages/msg-del")
+
+	out := tf.OutBuf.String()
+	assert.Contains(t, out, "deleted")
+	assert.Contains(t, out, "msg-del")
+}

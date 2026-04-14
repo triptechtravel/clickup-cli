@@ -44,6 +44,15 @@ func TestMove_JSON(t *testing.T) {
 	assert.Contains(t, out, "abc123")
 }
 
+func TestMoveTask_Error(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	tf.HandleV3("PUT", "workspaces/12345/tasks/notfound/home_list/list1", 404, `{"err":"Task not found","ECODE":"ITEM_015"}`)
+
+	cmd := NewCmdMove(tf.Factory)
+	err := testutil.RunCommand(t, cmd, "notfound", "--list", "list1")
+	assert.Error(t, err)
+}
+
 func TestMove_RequiresList(t *testing.T) {
 	cmd := NewCmdMove(nil)
 	// --list is a required flag; cobra should reject without it.

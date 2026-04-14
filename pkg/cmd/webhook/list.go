@@ -24,7 +24,7 @@ func NewCmdWebhookList(f *cmdutil.Factory) *cobra.Command {
 
   # Output as JSON
   clickup webhook list --json`,
-		PreRunE: cmdutil.NeedsAuth(f),
+		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := f.ApiClient()
 			if err != nil {

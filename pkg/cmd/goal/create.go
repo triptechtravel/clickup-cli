@@ -28,7 +28,7 @@ func NewCmdGoalCreate(f *cmdutil.Factory) *cobra.Command {
 
   # Create with a due date (Unix timestamp in ms)
   clickup goal create --name "Ship v2" --due-date 1704067200000`,
-		PreRunE: cmdutil.NeedsAuth(f),
+		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if name == "" {
 				return fmt.Errorf("--name is required")
@@ -62,8 +62,17 @@ func NewCmdGoalCreate(f *cmdutil.Factory) *cobra.Command {
 			}
 
 			cs := f.IOStreams.ColorScheme()
-			fmt.Fprintf(f.IOStreams.Out, "%s Goal %s created\n", cs.Green("!"), cs.Bold(name))
-			_ = resp
+			goalID := ""
+			if m, ok := resp.Goal.(map[string]interface{}); ok {
+				if id, ok := m["id"].(string); ok {
+					goalID = id
+				}
+			}
+			if goalID != "" {
+				fmt.Fprintf(f.IOStreams.Out, "%s Goal %s created (id: %s)\n", cs.Green("!"), cs.Bold(name), goalID)
+			} else {
+				fmt.Fprintf(f.IOStreams.Out, "%s Goal %s created\n", cs.Green("!"), cs.Bold(name))
+			}
 
 			return nil
 		},

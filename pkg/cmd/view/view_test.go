@@ -87,6 +87,29 @@ func TestViewTasks(t *testing.T) {
 	assert.Contains(t, out, "Add feature")
 }
 
+func TestViewGet(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	tf.Handle("GET", "view/v1", 200, `{
+		"view": {
+			"id": "v1",
+			"name": "Board View",
+			"type": "board",
+			"parent": {"id":"12345","type":7}
+		}
+	}`)
+
+	cmd := NewCmdViewGet(tf.Factory)
+	err := testutil.RunCommand(t, cmd, "v1")
+	require.NoError(t, err)
+
+	out := tf.OutBuf.String()
+	var parsed map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(out), &parsed), "output should be valid JSON")
+	view := parsed["view"].(map[string]interface{})
+	assert.Equal(t, "v1", view["id"])
+	assert.Equal(t, "Board View", view["name"])
+}
+
 func TestViewTasks_JSON(t *testing.T) {
 	tf := testutil.NewTestFactory(t)
 	tf.HandleFunc("view/v1/task", viewsHandler(sampleViewTasksJSON))

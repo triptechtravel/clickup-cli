@@ -143,4 +143,69 @@ func TestGoalCreate(t *testing.T) {
 	assert.Contains(t, out, "Goal")
 	assert.Contains(t, out, "New Goal")
 	assert.Contains(t, out, "created")
+	assert.Contains(t, out, "goal-new")
+}
+
+var sampleGoalJSON = `{
+	"goal": {
+		"id": "goal-1",
+		"pretty_id": "1",
+		"name": "Q1 Revenue",
+		"team_id": "12345",
+		"creator": 1,
+		"owner": null,
+		"color": "#ff0000",
+		"date_created": "1609459200000",
+		"start_date": null,
+		"due_date": "1617235200000",
+		"description": "Hit revenue target",
+		"private": false,
+		"archived": false,
+		"multiple_owners": false,
+		"folder_id": null,
+		"pinned": false,
+		"owners": [],
+		"key_results": [],
+		"percent_completed": 45,
+		"history": [],
+		"pretty_url": "",
+		"members": []
+	}
+}`
+
+func TestGoalView(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	tf.HandleFunc("goal/goal-1", goalsHandler(sampleGoalJSON))
+
+	cmd := NewCmdGoalView(tf.Factory)
+	err := testutil.RunCommand(t, cmd, "goal-1")
+	require.NoError(t, err)
+
+	out := tf.OutBuf.String()
+	assert.Contains(t, out, "Q1 Revenue")
+	assert.Contains(t, out, "goal-1")
+	assert.Contains(t, out, "Hit revenue target")
+}
+
+func TestGoalDelete(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+
+	var capturedMethod string
+	tf.HandleFunc("goal/goal-1", func(w http.ResponseWriter, r *http.Request) {
+		capturedMethod = r.Method
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-RateLimit-Remaining", "99")
+		w.WriteHeader(200)
+		w.Write([]byte(`{}`))
+	})
+
+	cmd := NewCmdGoalDelete(tf.Factory)
+	err := testutil.RunCommand(t, cmd, "goal-1", "--yes")
+	require.NoError(t, err)
+
+	assert.Equal(t, "DELETE", capturedMethod)
+
+	out := tf.OutBuf.String()
+	assert.Contains(t, out, "Goal deleted")
+	assert.Contains(t, out, "goal-1")
 }

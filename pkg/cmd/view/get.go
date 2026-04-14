@@ -16,14 +16,14 @@ func NewCmdViewGet(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get <view-id>",
 		Short: "Get a view",
-		Long:  "Get detailed information about a ClickUp view.",
-		Example: `  # Get a view
-  clickup view get 3v-abc123
+		Long: `Get detailed information about a ClickUp view.
 
-  # Get as JSON
-  clickup view get 3v-abc123 --json`,
+Output is always JSON because the response is a union type that cannot
+be rendered as a table.`,
+		Example: `  # Get a view
+  clickup view get 3v-abc123`,
 		Args:    cobra.ExactArgs(1),
-		PreRunE: cmdutil.NeedsAuth(f),
+		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			viewID := args[0]
 
@@ -37,12 +37,12 @@ func NewCmdViewGet(f *cmdutil.Factory) *cobra.Command {
 				return fmt.Errorf("failed to fetch view: %w", err)
 			}
 
-			// GetViewJSONResponse is a union type; output as JSON.
+			// Response is a union type — always output as JSON.
 			return jsonFlags.OutputJSON(f.IOStreams.Out, resp)
 		},
 	}
 
-	// Always outputs JSON since the response is a union type.
+	// Keep JSON flags for --jq and --template support; output is always JSON.
 	cmdutil.AddJSONFlags(cmd, &jsonFlags)
 
 	return cmd
