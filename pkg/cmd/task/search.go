@@ -8,13 +8,16 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/lithammer/fuzzysearch/fuzzy"
 	"github.com/spf13/cobra"
 	"github.com/triptechtravel/clickup-cli/internal/api"
 	"github.com/triptechtravel/clickup-cli/internal/apiv2"
+	"github.com/triptechtravel/clickup-cli/internal/clickup"
 	"github.com/triptechtravel/clickup-cli/internal/iostreams"
 	"github.com/triptechtravel/clickup-cli/internal/prompter"
 	"github.com/triptechtravel/clickup-cli/internal/tableprinter"
@@ -26,6 +29,7 @@ type searchOptions struct {
 	query     string
 	space     string
 	folder    string
+	assignee  string
 	pick      bool
 	comments  bool
 	exact     bool
@@ -121,18 +125,19 @@ func NewCmdSearch(f *cmdutil.Factory) *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use:   "search <query>",
+		Use:   "search [query]",
 		Short: "Search tasks by name and description",
 		Long: `Search ClickUp tasks across the workspace by name and description.
 
 Returns tasks whose names or descriptions match the search query. Matching
 priority: name substring > name fuzzy > description substring. When no
 --space or --folder is specified, search uses progressive drill-down:
-sprint tasks first, then your assigned tasks, then configured space, then
-full workspace.
+server-side search first, then sprint tasks, then your assigned tasks,
+then configured space, then full workspace.
 
 Use --space and --folder to narrow the search scope for faster results.
 Use --comments to also search through task comments (slower).
+Use --assignee to filter by team member (name, username, ID, or "me").
 
 In interactive mode (TTY), if many results are found you will be asked
 whether to refine the search. Use --pick to interactively select a single
@@ -155,6 +160,11 @@ recently updated tasks and discover which folders/lists to search in.`,
   # Also search through task comments
   clickup task search "migration issue" --comments
 
+  # Filter by assignee
+  clickup task search --assignee me
+  clickup task search "bug" --assignee "Isaac"
+  clickup task search --assignee 54695018
+
   # Interactively pick a task (prints selected task ID)
   clickup task search geozone --pick
 
@@ -164,16 +174,22 @@ recently updated tasks and discover which folders/lists to search in.`,
 
   # JSON output
   clickup task search geozone --json`,
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.RangeArgs(0, 1),
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.query = args[0]
+			if len(args) > 0 {
+				opts.query = args[0]
+			}
+			if opts.query == "" && opts.assignee == "" {
+				return fmt.Errorf("query or --assignee is required")
+			}
 			return runSearch(opts)
 		},
 	}
 
 	cmd.Flags().StringVar(&opts.space, "space", "", "Limit search to a specific space (name or ID)")
 	cmd.Flags().StringVar(&opts.folder, "folder", "", "Limit search to a specific folder (name, substring match)")
+	cmd.Flags().StringVar(&opts.assignee, "assignee", "", "Filter by assignee (name, username, numeric ID, or \"me\")")
 	cmd.Flags().BoolVar(&opts.pick, "pick", false, "Interactively select a task and print its ID")
 	cmd.Flags().BoolVar(&opts.comments, "comments", false, "Also search through task comments (slower)")
 	cmd.Flags().BoolVar(&opts.exact, "exact", false, "Only show exact substring matches (no fuzzy results)")
@@ -440,6 +456,76 @@ func searchLevel(ctx context.Context, client *api.Client, teamID, query string, 
 	return allScored, nil
 }
 
+// resolveAssignee resolves a user input (name, username, numeric ID, or "me")
+// to a numeric user ID and display name. It uses the workspace members list.
+func resolveAssignee(ctx context.Context, client *api.Client, input string) (int, string, error) {
+	teams, err := apiv2.GetTeamsLocal(ctx, client)
+	if err != nil {
+		return 0, "", fmt.Errorf("failed to fetch workspace members: %w", err)
+	}
+
+	// Collect all members across teams.
+	var members []clickup.TeamUser
+	for _, team := range teams {
+		for _, m := range team.Members {
+			members = append(members, m.User)
+		}
+	}
+
+	// "me" — resolve via current user ID, then look up display name.
+	if strings.EqualFold(input, "me") {
+		userID, err := cmdutil.GetCurrentUserID(client)
+		if err != nil {
+			return 0, "", fmt.Errorf("failed to get current user: %w", err)
+		}
+		for _, m := range members {
+			if m.ID == userID {
+				return userID, m.Username, nil
+			}
+		}
+		return userID, "me", nil
+	}
+
+	// Numeric ID — parse and look up.
+	if id, err := strconv.Atoi(input); err == nil {
+		for _, m := range members {
+			if m.ID == id {
+				return id, m.Username, nil
+			}
+		}
+		return 0, "", fmt.Errorf("no workspace member found with ID %d", id)
+	}
+
+	// Exact username match (case-insensitive).
+	for _, m := range members {
+		if strings.EqualFold(m.Username, input) {
+			return m.ID, m.Username, nil
+		}
+	}
+
+	// Substring match on username.
+	lowerInput := strings.ToLower(input)
+	var matches []clickup.TeamUser
+	for _, m := range members {
+		if strings.Contains(strings.ToLower(m.Username), lowerInput) {
+			matches = append(matches, m)
+		}
+	}
+
+	if len(matches) == 1 {
+		return matches[0].ID, matches[0].Username, nil
+	}
+	if len(matches) > 1 {
+		var names []string
+		for _, m := range matches {
+			names = append(names, fmt.Sprintf("%s (ID: %d)", m.Username, m.ID))
+		}
+		return 0, "", fmt.Errorf("ambiguous match, did you mean: %s", strings.Join(names, ", "))
+	}
+
+	return 0, "", fmt.Errorf("no workspace member found matching %q", input)
+}
+
 // doSearch performs the actual search using progressive drill-down or
 // the space/folder hierarchy (when --space or --folder is specified).
 func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
@@ -460,21 +546,66 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 		return nil, fmt.Errorf("workspace ID required. Set with 'clickup auth login'")
 	}
 
+	// Resolve --assignee to a numeric ID if provided.
+	var assigneeParam string
+	var assigneeName string
+	if opts.assignee != "" {
+		assigneeID, name, err := resolveAssignee(ctx, client, opts.assignee)
+		if err != nil {
+			return nil, err
+		}
+		assigneeParam = fmt.Sprintf("assignees[]=%d", assigneeID)
+		assigneeName = name
+		fmt.Fprintf(ios.ErrOut, "  assignee: %s (ID: %d)\n", assigneeName, assigneeID)
+	}
+
 	// If --space or --folder is specified, go directly to targeted search.
 	if opts.space != "" || opts.folder != "" {
 		return searchViaSpaces(ctx, opts)
 	}
 
+	// If --assignee with no query: fetch all tasks for that assignee.
+	if opts.query == "" && assigneeParam != "" {
+		fmt.Fprintf(ios.ErrOut, "  fetching tasks for %s...\n", assigneeName)
+		tasks, err := fetchTeamTasks(ctx, client, teamID, 0, assigneeParam)
+		if err != nil {
+			return nil, err
+		}
+		var scored []scoredTask
+		for _, t := range tasks {
+			scored = append(scored, scoredTask{searchTask: t, kind: matchSubstring})
+		}
+		return scored, nil
+	}
+
 	query := strings.ToLower(opts.query)
 
-	// Progressive drill-down: sprint → user → space → workspace.
+	// Build extra params combining assignee filter if present.
+	buildParams := func(base string) string {
+		if assigneeParam == "" {
+			return base
+		}
+		if base == "" {
+			return assigneeParam
+		}
+		return base + "&" + assigneeParam
+	}
+
+	// Progressive drill-down: server-side → sprint → user → space → workspace.
+
+	// Level 0: Server-side search (fastest — single API call).
+	fmt.Fprintf(ios.ErrOut, "  searching (server-side)...\n")
+	scored, err := searchLevel(ctx, client, teamID, query, buildParams("search="+url.QueryEscape(opts.query)), 1, opts.comments, ios)
+	if err == nil && len(scored) > 0 {
+		return scored, nil
+	}
 
 	// Level 1: Sprint list (if sprint_folder configured).
 	if cfg.SprintFolder != "" {
 		fmt.Fprintf(ios.ErrOut, "  searching sprint...\n")
 		listID, err := cmdutil.ResolveCurrentSprintListID(ctx, client, cfg.SprintFolder)
 		if err == nil && listID != "" {
-			scored, err := searchLevel(ctx, client, teamID, query, "list_ids[]="+listID, 1, opts.comments, ios)
+			scored, err := searchLevel(ctx, client, teamID, query, buildParams("list_ids[]="+listID), 1, opts.comments, ios)
 			if err != nil {
 				return nil, err
 			}
@@ -488,7 +619,7 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 	fmt.Fprintf(ios.ErrOut, "  searching your tasks...\n")
 	userID, err := cmdutil.GetCurrentUserID(client)
 	if err == nil {
-		scored, err := searchLevel(ctx, client, teamID, query, fmt.Sprintf("assignees[]=%d", userID), 1, opts.comments, ios)
+		scored, err := searchLevel(ctx, client, teamID, query, buildParams(fmt.Sprintf("assignees[]=%d", userID)), 1, opts.comments, ios)
 		if err != nil {
 			return nil, err
 		}
@@ -500,7 +631,7 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 	// Level 3: Configured space.
 	if cfg.Space != "" {
 		fmt.Fprintf(ios.ErrOut, "  searching space...\n")
-		scored, err := searchLevel(ctx, client, teamID, query, "space_ids[]="+cfg.Space, 3, opts.comments, ios)
+		scored, err := searchLevel(ctx, client, teamID, query, buildParams("space_ids[]="+cfg.Space), 3, opts.comments, ios)
 		if err != nil {
 			return nil, err
 		}
@@ -511,7 +642,7 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 
 	// Level 4: Full workspace (up to 10 pages).
 	fmt.Fprintf(ios.ErrOut, "  searching workspace...\n")
-	scored, err := searchLevel(ctx, client, teamID, query, "", 10, opts.comments, ios)
+	scored, err = searchLevel(ctx, client, teamID, query, buildParams(""), 10, opts.comments, ios)
 	if err != nil {
 		return nil, err
 	}
@@ -519,7 +650,7 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 		return scored, nil
 	}
 
-	// If nothing found via pagination, fall back to space traversal.
+	// Level 5: If nothing found via pagination, fall back to space traversal.
 	fmt.Fprintf(ios.ErrOut, "Falling back to space/folder search...\n")
 	return searchViaSpaces(ctx, opts)
 }
@@ -824,14 +955,15 @@ func searchViaSpaces(ctx context.Context, opts *searchOptions) ([]scoredTask, er
 	}
 
 	query := strings.ToLower(opts.query)
-	var results []scoredTask
 
-	for _, space := range spaces {
-		if ctx.Err() != nil {
-			fmt.Fprintf(ios.ErrOut, "Search timed out during space traversal\n")
-			break
-		}
+	// Phase 1: Discover all list IDs across spaces (parallel per space).
+	type spaceListIDs struct {
+		listIDs []string
+	}
+	spaceResults := make([]spaceListIDs, len(spaces))
+	var discoverWg sync.WaitGroup
 
+	for i, space := range spaces {
 		// Filter by --space if provided (match by name or ID).
 		if opts.space != "" {
 			if !strings.EqualFold(space.Name, opts.space) && space.ID != opts.space {
@@ -839,101 +971,144 @@ func searchViaSpaces(ctx context.Context, opts *searchOptions) ([]scoredTask, er
 			}
 		}
 
-		fmt.Fprintf(ios.ErrOut, "  searching space %q...\n", space.Name)
+		discoverWg.Add(1)
+		go func(idx int, sp clickup.Space) {
+			defer discoverWg.Done()
+			fmt.Fprintf(ios.ErrOut, "  searching space %q...\n", sp.Name)
 
-		// Get folders in space.
-		folders, err := apiv2.GetFoldersLocal(ctx, client, space.ID, false)
-		if err != nil {
-			continue
-		}
+			var listIDs []string
 
-		var listIDs []string
+			// Folders and folderless lists concurrently within this space.
+			var innerWg sync.WaitGroup
+			var mu sync.Mutex
 
-		for _, folder := range folders {
-			if ctx.Err() != nil {
-				break
-			}
-
-			// Filter by --folder if provided (substring match, case-insensitive).
-			if opts.folder != "" {
-				if !strings.Contains(strings.ToLower(folder.Name), strings.ToLower(opts.folder)) {
-					continue
+			// Folders.
+			innerWg.Add(1)
+			go func() {
+				defer innerWg.Done()
+				folders, err := apiv2.GetFoldersLocal(ctx, client, sp.ID, false)
+				if err != nil {
+					return
 				}
-			}
-
-			fmt.Fprintf(ios.ErrOut, "    folder %q...\n", folder.Name)
-			lists, err := apiv2.GetListsLocal(ctx, client, folder.ID, false)
-			if err != nil {
-				continue
-			}
-			for _, l := range lists {
-				listIDs = append(listIDs, l.ID)
-			}
-		}
-
-		// Also get folderless lists (only if no --folder filter).
-		if opts.folder == "" {
-			folderlessURL := client.URL("space/%s/list", url.PathEscape(space.ID))
-			req, err := http.NewRequestWithContext(ctx, "GET", folderlessURL, nil)
-			if err == nil {
-				resp, err := client.DoRequest(req)
-				if err == nil {
-					body, _ := io.ReadAll(resp.Body)
-					resp.Body.Close()
-					var listResp struct {
-						Lists []struct {
-							ID string `json:"id"`
-						} `json:"lists"`
-					}
-					if json.Unmarshal(body, &listResp) == nil {
-						for _, l := range listResp.Lists {
-							listIDs = append(listIDs, l.ID)
+				for _, folder := range folders {
+					// Filter by --folder if provided.
+					if opts.folder != "" {
+						if !strings.Contains(strings.ToLower(folder.Name), strings.ToLower(opts.folder)) {
+							continue
 						}
 					}
+					lists, err := apiv2.GetListsLocal(ctx, client, folder.ID, false)
+					if err != nil {
+						continue
+					}
+					mu.Lock()
+					for _, l := range lists {
+						listIDs = append(listIDs, l.ID)
+					}
+					mu.Unlock()
 				}
+			}()
+
+			// Folderless lists (only if no --folder filter).
+			if opts.folder == "" {
+				innerWg.Add(1)
+				go func() {
+					defer innerWg.Done()
+					lists, err := apiv2.GetFolderlessListsLocal(ctx, client, sp.ID, false)
+					if err != nil {
+						return
+					}
+					mu.Lock()
+					for _, l := range lists {
+						listIDs = append(listIDs, l.ID)
+					}
+					mu.Unlock()
+				}()
 			}
-		}
 
-		fmt.Fprintf(ios.ErrOut, "    scanning %d lists...\n", len(listIDs))
+			innerWg.Wait()
+			spaceResults[idx] = spaceListIDs{listIDs: listIDs}
+		}(i, space)
+	}
+	discoverWg.Wait()
 
-		// Search tasks in each list.
-		for _, listID := range listIDs {
-			if ctx.Err() != nil {
-				break
-			}
+	// Collect all list IDs.
+	var allListIDs []string
+	for _, sr := range spaceResults {
+		allListIDs = append(allListIDs, sr.listIDs...)
+	}
 
-			taskURL := fmt.Sprintf("%s/list/%s/task?include_closed=true&page=0", client.BaseURL(), url.PathEscape(listID))
+	fmt.Fprintf(ios.ErrOut, "    scanning %d lists...\n", len(allListIDs))
+
+	// Phase 2: Fetch tasks from each list with bounded parallelism (5 workers).
+	const maxWorkers = 5
+	type listResult struct {
+		scored []scoredTask
+	}
+
+	results := make([]listResult, len(allListIDs))
+	var fetchWg sync.WaitGroup
+	sem := make(chan struct{}, maxWorkers)
+
+	for i, listID := range allListIDs {
+		fetchWg.Add(1)
+		go func(idx int, lid string) {
+			defer fetchWg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			taskURL := fmt.Sprintf("%s/list/%s/task?include_closed=true&page=0", client.BaseURL(), url.PathEscape(lid))
 			req, err := http.NewRequestWithContext(ctx, "GET", taskURL, nil)
 			if err != nil {
-				continue
+				return
 			}
 
 			resp, err := client.DoRequest(req)
 			if err != nil {
-				continue
+				return
 			}
 
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
 
 			var taskResp searchResponse
-			if json.Unmarshal(body, &taskResp) == nil {
-				nameMatched, unmatched := filterTasks(query, taskResp.Tasks)
-				results = append(results, nameMatched...)
-
-				// If --comments is enabled, check comments on unmatched tasks.
-				if opts.comments && len(unmatched) > 0 {
-					limit := len(unmatched)
-					if limit > 100 {
-						limit = 100
-					}
-					fmt.Fprintf(ios.ErrOut, "      checking comments on %d tasks...\n", limit)
-					commentMatches := searchTaskComments(ctx, client, query, unmatched[:limit])
-					results = append(results, commentMatches...)
-				}
+			if json.Unmarshal(body, &taskResp) != nil {
+				return
 			}
-		}
+
+			// If no query (assignee-only mode), return all tasks.
+			if query == "" {
+				var scored []scoredTask
+				for _, t := range taskResp.Tasks {
+					scored = append(scored, scoredTask{searchTask: t, kind: matchSubstring})
+				}
+				results[idx] = listResult{scored: scored}
+				return
+			}
+
+			nameMatched, unmatched := filterTasks(query, taskResp.Tasks)
+			var scored []scoredTask
+			scored = append(scored, nameMatched...)
+
+			// If --comments is enabled, check comments on unmatched tasks.
+			if opts.comments && len(unmatched) > 0 {
+				limit := len(unmatched)
+				if limit > 100 {
+					limit = 100
+				}
+				commentMatches := searchTaskComments(ctx, client, query, unmatched[:limit])
+				scored = append(scored, commentMatches...)
+			}
+			results[idx] = listResult{scored: scored}
+		}(i, listID)
+	}
+	fetchWg.Wait()
+
+	// Collect all results.
+	var allScored []scoredTask
+	for _, r := range results {
+		allScored = append(allScored, r.scored...)
 	}
 
-	return results, nil
+	return allScored, nil
 }

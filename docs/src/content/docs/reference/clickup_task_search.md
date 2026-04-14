@@ -12,11 +12,12 @@ Search ClickUp tasks across the workspace by name and description.
 Returns tasks whose names or descriptions match the search query. Matching
 priority: name substring > name fuzzy > description substring. When no
 --space or --folder is specified, search uses progressive drill-down:
-sprint tasks first, then your assigned tasks, then configured space, then
-full workspace.
+server-side search first, then sprint tasks, then your assigned tasks,
+then configured space, then full workspace.
 
 Use --space and --folder to narrow the search scope for faster results.
 Use --comments to also search through task comments (slower).
+Use --assignee to filter by team member (name, username, ID, or "me").
 
 In interactive mode (TTY), if many results are found you will be asked
 whether to refine the search. Use --pick to interactively select a single
@@ -29,7 +30,7 @@ If search returns no results, use 'clickup task recent' to see your
 recently updated tasks and discover which folders/lists to search in.
 
 ```
-clickup task search <query> [flags]
+clickup task search [query] [flags]
 ```
 
 ### Examples
@@ -47,6 +48,11 @@ clickup task search <query> [flags]
   # Also search through task comments
   clickup task search "migration issue" --comments
 
+  # Filter by assignee
+  clickup task search --assignee me
+  clickup task search "bug" --assignee "Isaac"
+  clickup task search --assignee 54695018
+
   # Interactively pick a task (prints selected task ID)
   clickup task search geozone --pick
 
@@ -61,6 +67,7 @@ clickup task search <query> [flags]
 ### Options
 
 ```
+      --assignee string   Filter by assignee (name, username, numeric ID, or "me")
       --comments          Also search through task comments (slower)
       --exact             Only show exact substring matches (no fuzzy results)
       --folder string     Limit search to a specific folder (name, substring match)
