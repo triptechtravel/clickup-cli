@@ -97,3 +97,157 @@ func TestChatSend_RequiresArgs(t *testing.T) {
 	assert.NoError(t, cmd.Args(cmd, []string{"chan-id", "message"}))
 	assert.Error(t, cmd.Args(cmd, []string{"a", "b", "c"}))
 }
+
+// ── chat list ────────────────────────────────────────────────────────
+
+func TestNewCmdChat_HasAllSubcommands(t *testing.T) {
+	cmd := NewCmdChat(nil)
+
+	for _, name := range []string{"send", "list", "messages", "reply", "react", "delete"} {
+		sub, _, err := cmd.Find([]string{name})
+		require.NoError(t, err)
+		assert.Equal(t, name, sub.Name())
+	}
+}
+
+func TestChatList_ReturnsTable(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+
+	tf.HandleV3("GET", "workspaces/12345/chat/channels", 200, `{
+		"next_cursor": "",
+		"data": [
+			{"id":"ch1","name":"General","type":"PUBLIC","visibility":"PUBLIC","parent":{},"creator":"u1","created_at":"","updated_at":"","workspace_id":"12345","archived":false},
+			{"id":"ch2","name":"Random","type":"DIRECT_MESSAGE","visibility":"PRIVATE","parent":{},"creator":"u2","created_at":"","updated_at":"","workspace_id":"12345","archived":false}
+		]
+	}`)
+
+	cmd := NewCmdList(tf.Factory)
+	err := testutil.RunCommand(t, cmd)
+	require.NoError(t, err)
+
+	out := tf.OutBuf.String()
+	assert.Contains(t, out, "ch1")
+	assert.Contains(t, out, "General")
+	assert.Contains(t, out, "ch2")
+	assert.Contains(t, out, "Random")
+}
+
+func TestChatList_JSONOutput(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+
+	tf.HandleV3("GET", "workspaces/12345/chat/channels", 200, `{
+		"next_cursor": "",
+		"data": [
+			{"id":"ch1","name":"General","type":"PUBLIC","visibility":"PUBLIC","parent":{},"creator":"u1","created_at":"","updated_at":"","workspace_id":"12345","archived":false}
+		]
+	}`)
+
+	cmd := NewCmdList(tf.Factory)
+	err := testutil.RunCommand(t, cmd, "--json")
+	require.NoError(t, err)
+
+	out := tf.OutBuf.String()
+	var parsed map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(out), &parsed))
+	data := parsed["data"].([]interface{})
+	assert.Len(t, data, 1)
+	assert.Equal(t, "General", data[0].(map[string]interface{})["name"])
+}
+
+func TestChatList_EmptyResult(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+
+	tf.HandleV3("GET", "workspaces/12345/chat/channels", 200, `{
+		"next_cursor": "",
+		"data": []
+	}`)
+
+	cmd := NewCmdList(tf.Factory)
+	err := testutil.RunCommand(t, cmd)
+	require.NoError(t, err)
+
+	out := tf.OutBuf.String()
+	assert.Contains(t, out, "No channels found")
+}
+
+// ── chat messages ────────────────────────────────────────────────────
+
+func TestChatMessages_ReturnsTable(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+
+	tf.HandleV3("GET", "workspaces/12345/chat/channels/chan-abc/messages", 200, `{
+		"next_cursor": "",
+		"data": [
+			{
+				"id":"msg1",
+				"user_id":"user1",
+				"content":"Hello world",
+				"date":1700000000000,
+				"type":"message",
+				"parent_channel":"chan-abc",
+				"resolved":false,
+				"links":{"reactions":"","replies":"","tagged_users":""},
+				"replies_count":0
+			},
+			{
+				"id":"msg2",
+				"user_id":"user2",
+				"content":"Goodbye world",
+				"date":1700000001000,
+				"type":"message",
+				"parent_channel":"chan-abc",
+				"resolved":false,
+				"links":{"reactions":"","replies":"","tagged_users":""},
+				"replies_count":0
+			}
+		]
+	}`)
+
+	cmd := NewCmdMessages(tf.Factory)
+	err := testutil.RunCommand(t, cmd, "chan-abc")
+	require.NoError(t, err)
+
+	out := tf.OutBuf.String()
+	assert.Contains(t, out, "msg1")
+	assert.Contains(t, out, "Hello world")
+	assert.Contains(t, out, "msg2")
+	assert.Contains(t, out, "Goodbye world")
+}
+
+func TestChatMessages_JSONOutput(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+
+	tf.HandleV3("GET", "workspaces/12345/chat/channels/chan-abc/messages", 200, `{
+		"next_cursor": "",
+		"data": [
+			{
+				"id":"msg1",
+				"user_id":"user1",
+				"content":"Hello",
+				"date":1700000000000,
+				"type":"message",
+				"parent_channel":"chan-abc",
+				"resolved":false,
+				"links":{"reactions":"","replies":"","tagged_users":""},
+				"replies_count":0
+			}
+		]
+	}`)
+
+	cmd := NewCmdMessages(tf.Factory)
+	err := testutil.RunCommand(t, cmd, "chan-abc", "--json")
+	require.NoError(t, err)
+
+	out := tf.OutBuf.String()
+	var parsed map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(out), &parsed))
+	data := parsed["data"].([]interface{})
+	assert.Len(t, data, 1)
+	assert.Equal(t, "Hello", data[0].(map[string]interface{})["content"])
+}
+
+func TestChatMessages_RequiresChannelArg(t *testing.T) {
+	cmd := NewCmdMessages(nil)
+	assert.Error(t, cmd.Args(cmd, []string{}))
+	assert.NoError(t, cmd.Args(cmd, []string{"chan-id"}))
+}

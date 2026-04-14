@@ -22,6 +22,7 @@ Flag details, examples, and options for each command are in the auto-generated [
 | [`task list`](/clickup-cli/reference/clickup_task_list/) | List tasks in a ClickUp list |
 | [`task list-add`](/clickup-cli/reference/clickup_task_list-add/) | Add tasks to an additional list |
 | [`task list-remove`](/clickup-cli/reference/clickup_task_list-remove/) | Remove tasks from a list |
+| [`task move`](/clickup-cli/reference/clickup_task_move/) | Move a task to a different list |
 | [`task recent`](/clickup-cli/reference/clickup_task_recent/) | Show recently updated tasks |
 | [`task search`](/clickup-cli/reference/clickup_task_search/) | Search tasks by name and description |
 | [`task view`](/clickup-cli/reference/clickup_task_view/) | View one or more ClickUp tasks |
@@ -47,6 +48,9 @@ Flag details, examples, and options for each command are in the auto-generated [
 | [`task time delete`](/clickup-cli/reference/clickup_task_time_delete/) | Delete a time entry |
 | [`task time list`](/clickup-cli/reference/clickup_task_time_list/) | View time entries for a task or date range |
 | [`task time log`](/clickup-cli/reference/clickup_task_time_log/) | Log time to a task |
+| [`task time running`](/clickup-cli/reference/clickup_task_time_running/) | Show the current running timer |
+| [`task time start`](/clickup-cli/reference/clickup_task_time_start/) | Start a time entry timer |
+| [`task time stop`](/clickup-cli/reference/clickup_task_time_stop/) | Stop the running timer |
 
 ---
 
@@ -124,6 +128,8 @@ Flag details, examples, and options for each command are in the auto-generated [
 |---------|-------------|
 | [`inbox`](/clickup-cli/reference/clickup_inbox/) | Show recent @mentions and assignments |
 | [`member list`](/clickup-cli/reference/clickup_member_list/) | List workspace members |
+| [`space create`](/clickup-cli/reference/clickup_space_create/) | Create a new space |
+| [`space delete`](/clickup-cli/reference/clickup_space_delete/) | Delete a space |
 | [`space list`](/clickup-cli/reference/clickup_space_list/) | List spaces in your workspace |
 | [`space select`](/clickup-cli/reference/clickup_space_select/) | Set default space |
 

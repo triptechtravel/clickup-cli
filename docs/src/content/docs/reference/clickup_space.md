@@ -18,6 +18,8 @@ List and select ClickUp spaces in your workspace.
 ### SEE ALSO
 
 * [clickup](/clickup-cli/reference/clickup/)	 - ClickUp CLI - manage tasks from the command line
+* [clickup space create](/clickup-cli/reference/clickup_space_create/)	 - Create a new space
+* [clickup space delete](/clickup-cli/reference/clickup_space_delete/)	 - Delete a space
 * [clickup space list](/clickup-cli/reference/clickup_space_list/)	 - List spaces in your workspace
 * [clickup space select](/clickup-cli/reference/clickup_space_select/)	 - Set default space
 

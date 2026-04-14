@@ -15,6 +15,8 @@ func NewCmdFolder(f *cmdutil.Factory) *cobra.Command {
 
 	cmd.AddCommand(NewCmdFolderList(f))
 	cmd.AddCommand(NewCmdFolderSelect(f))
+	cmd.AddCommand(NewCmdFolderCreate(f))
+	cmd.AddCommand(NewCmdFolderDelete(f))
 
 	return cmd
 }

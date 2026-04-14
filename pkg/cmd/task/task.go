@@ -26,6 +26,7 @@ func NewCmdTask(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(NewCmdRecent(f))
 	cmd.AddCommand(NewCmdListAdd(f))
 	cmd.AddCommand(NewCmdListRemove(f))
+	cmd.AddCommand(NewCmdMove(f))
 
 	return cmd
 }

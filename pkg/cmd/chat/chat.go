@@ -14,6 +14,11 @@ func NewCmdChat(f *cmdutil.Factory) *cobra.Command {
 	}
 
 	cmd.AddCommand(NewCmdSend(f))
+	cmd.AddCommand(NewCmdList(f))
+	cmd.AddCommand(NewCmdMessages(f))
+	cmd.AddCommand(NewCmdReply(f))
+	cmd.AddCommand(NewCmdReact(f))
+	cmd.AddCommand(NewCmdDelete(f))
 
 	return cmd
 }

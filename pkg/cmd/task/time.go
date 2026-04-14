@@ -31,6 +31,9 @@ func NewCmdTime(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(NewCmdTimeLog(f))
 	cmd.AddCommand(NewCmdTimeList(f))
 	cmd.AddCommand(NewCmdTimeDelete(f))
+	cmd.AddCommand(NewCmdTimeStart(f))
+	cmd.AddCommand(NewCmdTimeStop(f))
+	cmd.AddCommand(NewCmdTimeRunning(f))
 
 	return cmd
 }

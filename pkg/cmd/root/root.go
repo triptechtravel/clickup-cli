@@ -10,6 +10,7 @@ import (
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/doc"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/field"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/folder"
+	"github.com/triptechtravel/clickup-cli/pkg/cmd/goal"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/inbox"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/link"
 	listcmd "github.com/triptechtravel/clickup-cli/pkg/cmd/list"
@@ -19,7 +20,10 @@ import (
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/status"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/tag"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/task"
+	"github.com/triptechtravel/clickup-cli/pkg/cmd/template"
+	"github.com/triptechtravel/clickup-cli/pkg/cmd/view"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/version"
+	"github.com/triptechtravel/clickup-cli/pkg/cmd/webhook"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
 
@@ -54,6 +58,10 @@ Links GitHub PRs, branches, and commits to ClickUp tasks.`,
 	cmd.AddCommand(folder.NewCmdFolder(f))
 	cmd.AddCommand(listcmd.NewCmdList(f))
 	cmd.AddCommand(tag.NewCmdTag(f))
+	cmd.AddCommand(goal.NewCmdGoal(f))
+	cmd.AddCommand(view.NewCmdView(f))
+	cmd.AddCommand(webhook.NewCmdWebhook(f))
+	cmd.AddCommand(template.NewCmdTemplate(f))
 
 	// Workspace
 	cmd.AddCommand(member.NewCmdMember(f))
