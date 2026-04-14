@@ -332,6 +332,25 @@ func FetchTeamTasks(ctx context.Context, client *api.Client, teamID string, page
 	return resp.Tasks, nil
 }
 
+// --- User ---
+
+// UserInfo holds the current user's identity from the /user endpoint.
+type UserInfo struct {
+	ID       int    `json:"id"`
+	Username string `json:"username"`
+}
+
+// GetUserLocal fetches the currently authenticated user.
+func GetUserLocal(ctx context.Context, client *api.Client) (*UserInfo, error) {
+	var resp struct {
+		User UserInfo `json:"user"`
+	}
+	if err := do(ctx, client, "GET", "user", nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.User, nil
+}
+
 // Do is a public wrapper around the unexported do() helper, for use by the
 // attachments module.
 func Do(ctx context.Context, client *api.Client, method, path string, body any, result any) error {

@@ -1,15 +1,14 @@
 package comment
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
-	"io"
-	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/triptechtravel/clickup-cli/internal/api"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/internal/tableprinter"
 	"github.com/triptechtravel/clickup-cli/internal/text"
@@ -100,27 +99,11 @@ func listRun(opts *listOptions) error {
 		return cfgErr
 	}
 
-	listURL := client.URL("task/%s/comment", taskID)
-	listURL += cmdutil.CustomIDQueryParam(cfg, isCustomID)
-	req, err := http.NewRequest(http.MethodGet, listURL, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := client.DoRequest(req)
-	if err != nil {
-		return fmt.Errorf("API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(respBody))
-	}
-
+	listPath := fmt.Sprintf("task/%s/comment%s", taskID, cmdutil.CustomIDQueryParam(cfg, isCustomID))
+	ctx := context.Background()
 	var result commentResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to parse API response: %w", err)
+	if err := apiv2.Do(ctx, client, "GET", listPath, nil, &result); err != nil {
+		return fmt.Errorf("API request failed: %w", err)
 	}
 
 	// Fetch threaded replies for comments that have them.
@@ -181,25 +164,9 @@ type commentRepliesResponse struct {
 }
 
 func fetchCommentReplies(client *api.Client, commentID string) ([]commentData, error) {
-	replyURL := client.URL("comment/%s/reply", commentID)
-
-	req, err := http.NewRequest(http.MethodGet, replyURL, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := client.DoRequest(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
-	}
-
+	ctx := context.Background()
 	var result commentRepliesResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := apiv2.Do(ctx, client, "GET", fmt.Sprintf("comment/%s/reply", commentID), nil, &result); err != nil {
 		return nil, err
 	}
 

@@ -2,13 +2,11 @@ package status
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 	"github.com/triptechtravel/clickup-cli/internal/tableprinter"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
@@ -101,26 +99,9 @@ func listRun(opts *listOptions) error {
 	ctx := context.Background()
 
 	// Fetch space with statuses.
-	spaceURL := client.URL("space/%s", spaceID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, spaceURL, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to fetch space: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to fetch space (HTTP %d): %s", resp.StatusCode, string(body))
-	}
-
 	var spaceResp listSpaceResponse
-	if err := json.NewDecoder(resp.Body).Decode(&spaceResp); err != nil {
-		return fmt.Errorf("failed to parse space response: %w", err)
+	if err := apiv2.Do(ctx, client, "GET", fmt.Sprintf("space/%s", spaceID), nil, &spaceResp); err != nil {
+		return fmt.Errorf("failed to fetch space: %w", err)
 	}
 
 	if len(spaceResp.Statuses) == 0 {

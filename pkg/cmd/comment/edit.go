@@ -1,13 +1,11 @@
 package comment
 
 import (
-	"bytes"
-	"encoding/json"
+	"context"
 	"fmt"
-	"io"
-	"net/http"
 
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 	"github.com/triptechtravel/clickup-cli/internal/prompter"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
@@ -73,29 +71,10 @@ func editRun(opts *editOptions) error {
 		return err
 	}
 
-	editURL := client.URL("comment/%s", opts.commentID)
-	payload, err := json.Marshal(map[string]string{
-		"comment_text": body,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to marshal request body: %w", err)
-	}
-
-	req, err := http.NewRequest(http.MethodPut, editURL, bytes.NewReader(payload))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.DoRequest(req)
-	if err != nil {
+	ctx := context.Background()
+	payload := map[string]string{"comment_text": body}
+	if err := apiv2.Do(ctx, client, "PUT", fmt.Sprintf("comment/%s", opts.commentID), payload, nil); err != nil {
 		return fmt.Errorf("API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(respBody))
 	}
 
 	fmt.Fprintf(ios.Out, "%s Comment %s updated\n", cs.Green("!"), cs.Bold(opts.commentID))

@@ -2,10 +2,8 @@ package cmdutil
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"strings"
 
 	"github.com/lithammer/fuzzysearch/fuzzy"
@@ -154,27 +152,9 @@ func matchAndReport(status string, statusNames []string, w io.Writer) (string, e
 
 // FetchSpaceStatuses fetches the available status names for a ClickUp space.
 func FetchSpaceStatuses(client *api.Client, spaceID string) ([]string, error) {
-	spaceURL := client.URL("space/%s", spaceID)
-
-	req, err := http.NewRequest(http.MethodGet, spaceURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch space statuses: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to fetch space statuses (HTTP %d): %s", resp.StatusCode, string(body))
-	}
-
 	var spaceResp spaceStatusResponse
-	if err := json.NewDecoder(resp.Body).Decode(&spaceResp); err != nil {
-		return nil, fmt.Errorf("failed to parse space response: %w", err)
+	if err := apiv2.Do(context.Background(), client, "GET", fmt.Sprintf("space/%s", spaceID), nil, &spaceResp); err != nil {
+		return nil, fmt.Errorf("failed to fetch space statuses: %w", err)
 	}
 
 	statusNames := make([]string, len(spaceResp.Statuses))

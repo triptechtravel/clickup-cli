@@ -2,10 +2,7 @@ package task
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -162,28 +159,12 @@ func runActivity(f *cmdutil.Factory, opts *activityOptions) error {
 }
 
 func fetchComments(client *api.Client, cfg *config.Config, taskID string, isCustomID bool) ([]comment, error) {
-	url := client.URL("task/%s/comment", taskID)
-	url += cmdutil.CustomIDQueryParam(cfg, isCustomID)
-
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := client.DoRequest(req)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
-	}
+	ctx := context.Background()
+	path := fmt.Sprintf("task/%s/comment%s", taskID, cmdutil.CustomIDQueryParam(cfg, isCustomID))
 
 	var result commentsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	if err := apiv2.Do(ctx, client, "GET", path, nil, &result); err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
 	}
 
 	// Fetch threaded replies for comments that have them.
@@ -207,25 +188,9 @@ type repliesResponse struct {
 }
 
 func fetchReplies(client *api.Client, commentID string) ([]comment, error) {
-	url := client.URL("comment/%s/reply", commentID)
-
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := client.DoRequest(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
-	}
-
+	ctx := context.Background()
 	var result repliesResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := apiv2.Do(ctx, client, "GET", fmt.Sprintf("comment/%s/reply", commentID), nil, &result); err != nil {
 		return nil, err
 	}
 

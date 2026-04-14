@@ -1,12 +1,8 @@
 package comment
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"sort"
 	"strings"
 
@@ -125,46 +121,27 @@ func addRun(opts *addOptions) error {
 		return cfgErr
 	}
 
-	commentURL := client.URL("task/%s/comment", taskID)
-	commentURL += cmdutil.CustomIDQueryParam(cfg, isCustomID)
+	commentPath := fmt.Sprintf("task/%s/comment%s", taskID, cmdutil.CustomIDQueryParam(cfg, isCustomID))
 
 	// Build comment payload, resolving @mentions to real ClickUp user tags.
-	var payload []byte
+	var payload interface{}
 	if strings.Contains(body, "@") {
 		if members, mErr := fetchWorkspaceMembers(opts.factory, client); mErr == nil && len(members) > 0 {
 			if blocks, resolved := buildCommentBlocks(body, members); len(resolved) > 0 {
 				for _, name := range resolved {
 					fmt.Fprintf(ios.ErrOut, "Mentioning %s\n", cs.Bold("@"+name))
 				}
-				payload, err = json.Marshal(map[string]interface{}{"comment": blocks})
-				if err != nil {
-					return fmt.Errorf("failed to marshal comment: %w", err)
-				}
+				payload = map[string]interface{}{"comment": blocks}
 			}
 		}
 	}
 	if payload == nil {
-		payload, err = json.Marshal(map[string]string{"comment_text": body})
-		if err != nil {
-			return fmt.Errorf("failed to marshal comment: %w", err)
-		}
+		payload = map[string]string{"comment_text": body}
 	}
 
-	req, err := http.NewRequest(http.MethodPost, commentURL, bytes.NewReader(payload))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.DoRequest(req)
-	if err != nil {
+	ctx := context.Background()
+	if err := apiv2.Do(ctx, client, "POST", commentPath, payload, nil); err != nil {
 		return fmt.Errorf("API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(respBody))
 	}
 
 	fmt.Fprintf(ios.Out, "%s Comment added to task %s\n", cs.Green("!"), cs.Bold(taskID))

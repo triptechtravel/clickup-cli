@@ -1,12 +1,8 @@
 package status
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -110,28 +106,9 @@ func setRun(opts *setOptions) error {
 	}
 
 	// Update the task status.
-	updateURL := client.URL("task/%s", task.ID)
 	payload := map[string]string{"status": matched}
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal update payload: %w", err)
-	}
-
-	updateReq, err := http.NewRequestWithContext(ctx, http.MethodPut, updateURL, bytes.NewReader(payloadBytes))
-	if err != nil {
-		return fmt.Errorf("failed to create update request: %w", err)
-	}
-	updateReq.Header.Set("Content-Type", "application/json")
-
-	updateResp, err := client.HTTPClient.Do(updateReq)
-	if err != nil {
+	if err := apiv2.Do(ctx, client, "PUT", fmt.Sprintf("task/%s", task.ID), payload, nil); err != nil {
 		return fmt.Errorf("failed to update task status: %w", err)
-	}
-	defer updateResp.Body.Close()
-
-	if updateResp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(updateResp.Body)
-		return fmt.Errorf("failed to update task status (HTTP %d): %s", updateResp.StatusCode, string(body))
 	}
 
 	// Report success.

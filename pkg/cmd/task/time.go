@@ -1,12 +1,9 @@
 package task
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -177,40 +174,20 @@ func runTimeLog(f *cmdutil.Factory, opts *timeLogOptions) error {
 		}
 		body["assignee"] = assigneeID
 	}
-	bodyJSON, err := json.Marshal(body)
-	if err != nil {
-		return fmt.Errorf("failed to marshal request body: %w", err)
-	}
-
 	client, err := f.ApiClient()
 	if err != nil {
 		return err
 	}
 
-	timeURL := client.URL("team/%s/time_entries", teamID)
-	req, err := http.NewRequest("POST", timeURL, bytes.NewReader(bodyJSON))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.DoRequest(req)
-	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(respBody))
-	}
-
+	ctx := context.Background()
 	var logResult struct {
 		Data struct {
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	_ = json.NewDecoder(resp.Body).Decode(&logResult)
+	if err := apiv2.Do(ctx, client, "POST", fmt.Sprintf("team/%s/time_entries", teamID), body, &logResult); err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
 	entryID := logResult.Data.ID
 
 	fmt.Fprintf(ios.Out, "%s Logged %s to task %s",
@@ -344,33 +321,10 @@ func runBulkTimeLog(f *cmdutil.Factory, opts *timeLogOptions) error {
 			body["assignee"] = assigneeID
 		}
 
-		bodyJSON, err := json.Marshal(body)
-		if err != nil {
-			fmt.Fprintf(ios.ErrOut, "%s (%d/%d) Skipped: marshal error for task %s: %v\n",
-				cs.Red("✗"), i+1, total, entry.TaskID, err)
-			continue
-		}
-
-		timeURL := client.URL("team/%s/time_entries", teamID)
-		req, err := http.NewRequest("POST", timeURL, bytes.NewReader(bodyJSON))
-		if err != nil {
-			fmt.Fprintf(ios.ErrOut, "%s (%d/%d) Skipped: request error for task %s: %v\n",
-				cs.Red("✗"), i+1, total, entry.TaskID, err)
-			continue
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := client.DoRequest(req)
-		if err != nil {
+		ctx := context.Background()
+		if err := apiv2.Do(ctx, client, "POST", fmt.Sprintf("team/%s/time_entries", teamID), body, nil); err != nil {
 			fmt.Fprintf(ios.ErrOut, "%s (%d/%d) Failed: task %s: %v\n",
 				cs.Red("✗"), i+1, total, entry.TaskID, err)
-			continue
-		}
-		resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			fmt.Fprintf(ios.ErrOut, "%s (%d/%d) Failed: task %s: HTTP %d\n",
-				cs.Red("✗"), i+1, total, entry.TaskID, resp.StatusCode)
 			continue
 		}
 
@@ -538,26 +492,10 @@ func runTimeListPerTask(f *cmdutil.Factory, opts *timeListOptions) error {
 		return err
 	}
 
-	url := client.URL("team/%s/time_entries", teamID) + "?task_id=" + taskID
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := client.DoRequest(req)
-	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
+	ctx := context.Background()
 	var result timeEntryResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
+	if err := apiv2.Do(ctx, client, "GET", fmt.Sprintf("team/%s/time_entries?task_id=%s", teamID, taskID), nil, &result); err != nil {
+		return fmt.Errorf("request failed: %w", err)
 	}
 
 	if opts.jsonFlags.WantsJSON() {
@@ -625,15 +563,15 @@ func runTimeListTimesheet(f *cmdutil.Factory, opts *timeListOptions) error {
 	}
 
 	// Fetch time entries — one request per assignee (or one unfiltered for "all").
+	ctx := context.Background()
 	var result timeEntryResponse
 	if len(assigneeIDs) <= 1 {
 		// Single assignee or "all" — one API call.
-		apiURL := fmt.Sprintf("%s/team/%s/time_entries?start_date=%d&end_date=%d", client.BaseURL(),
-			teamID, startMs, endMs)
+		path := fmt.Sprintf("team/%s/time_entries?start_date=%d&end_date=%d", teamID, startMs, endMs)
 		if len(assigneeIDs) == 1 {
-			apiURL += fmt.Sprintf("&assignee=%s", assigneeIDs[0])
+			path += fmt.Sprintf("&assignee=%s", assigneeIDs[0])
 		}
-		entries, err := fetchTimeEntries(client, apiURL)
+		entries, err := fetchTimeEntries(ctx, client, path)
 		if err != nil {
 			return err
 		}
@@ -655,9 +593,9 @@ func runTimeListTimesheet(f *cmdutil.Factory, opts *timeListOptions) error {
 				sem <- struct{}{}
 				defer func() { <-sem }()
 
-				apiURL := fmt.Sprintf("%s/team/%s/time_entries?start_date=%d&end_date=%d&assignee=%s",
-					client.BaseURL(), teamID, startMs, endMs, assignee)
-				entries, err := fetchTimeEntries(client, apiURL)
+				path := fmt.Sprintf("team/%s/time_entries?start_date=%d&end_date=%d&assignee=%s",
+					teamID, startMs, endMs, assignee)
+				entries, err := fetchTimeEntries(ctx, client, path)
 				results[idx] = fetchResult{entries, err}
 			}(i, aid)
 		}
@@ -783,28 +721,11 @@ func enrichTimeEntriesWithTags(client *api.Client, entries []timeEntry) ([]timeE
 }
 
 // fetchTimeEntries performs a single GET request and returns the time entries.
-func fetchTimeEntries(client *api.Client, apiURL string) ([]timeEntry, error) {
-	req, err := http.NewRequest("GET", apiURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := client.DoRequest(req)
-	if err != nil {
+func fetchTimeEntries(ctx context.Context, client *api.Client, path string) ([]timeEntry, error) {
+	var result timeEntryResponse
+	if err := apiv2.Do(ctx, client, "GET", path, nil, &result); err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var result timeEntryResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
 	return result.Data, nil
 }
 
@@ -1063,21 +984,9 @@ func runTimeDelete(opts *timeDeleteOptions) error {
 		return err
 	}
 
-	url := client.URL("team/%s/time_entries/%s", teamID, opts.entryID)
-	req, err := http.NewRequest(http.MethodDelete, url, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := client.DoRequest(req)
-	if err != nil {
+	ctx := context.Background()
+	if err := apiv2.Do(ctx, client, "DELETE", fmt.Sprintf("team/%s/time_entries/%s", teamID, opts.entryID), nil, nil); err != nil {
 		return fmt.Errorf("API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(respBody))
 	}
 
 	fmt.Fprintf(ios.Out, "%s Time entry %s deleted\n", cs.Green("!"), cs.Bold(opts.entryID))

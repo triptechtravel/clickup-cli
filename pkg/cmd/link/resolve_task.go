@@ -2,13 +2,11 @@ package link
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"time"
 
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/internal/prompter"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
@@ -249,34 +247,12 @@ func searchTasks(f *cmdutil.Factory, query string) ([]resolveSearchTask, error) 
 			break
 		}
 
-		apiURL := fmt.Sprintf(
-			client.BaseURL() + "/team/%s/task?include_closed=true&page=%d&order_by=updated&reverse=true",
-			teamID, page,
-		)
-
-		req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
-		if err != nil {
-			return nil, err
-		}
-
-		resp, err := client.DoRequest(req)
-		if err != nil {
-			return nil, fmt.Errorf("API request failed: %w", err)
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if err != nil {
-			return nil, err
-		}
-
-		if resp.StatusCode != 200 {
-			break
-		}
+		path := fmt.Sprintf("team/%s/task?include_closed=true&page=%d&order_by=updated&reverse=true",
+			teamID, page)
 
 		var result resolveSearchResponse
-		if err := json.Unmarshal(body, &result); err != nil {
-			return nil, err
+		if err := apiv2.Do(ctx, client, "GET", path, nil, &result); err != nil {
+			return nil, fmt.Errorf("API request failed: %w", err)
 		}
 
 		if len(result.Tasks) == 0 {

@@ -1,13 +1,13 @@
 package cmdutil
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
 	"io"
-	"net/http"
 	"strings"
 
 	"github.com/triptechtravel/clickup-cli/internal/api"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 )
 
 // spaceTagsResponse represents the response from GET /space/{id}/tag.
@@ -19,27 +19,9 @@ type spaceTagsResponse struct {
 
 // FetchSpaceTags fetches the available tag names for a ClickUp space.
 func FetchSpaceTags(client *api.Client, spaceID string) ([]string, error) {
-	tagURL := client.URL("space/%s/tag", spaceID)
-
-	req, err := http.NewRequest(http.MethodGet, tagURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch space tags: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to fetch space tags (HTTP %d): %s", resp.StatusCode, string(body))
-	}
-
 	var tagsResp spaceTagsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tagsResp); err != nil {
-		return nil, fmt.Errorf("failed to parse tags response: %w", err)
+	if err := apiv2.Do(context.Background(), client, "GET", fmt.Sprintf("space/%s/tag", spaceID), nil, &tagsResp); err != nil {
+		return nil, fmt.Errorf("failed to fetch space tags: %w", err)
 	}
 
 	names := make([]string, len(tagsResp.Tags))
@@ -52,26 +34,12 @@ func FetchSpaceTags(client *api.Client, spaceID string) ([]string, error) {
 // CreateSpaceTag creates a new tag in a ClickUp space.
 // POST /api/v2/space/{space_id}/tag with body {"tag":{"name":"tag-name"}}
 func CreateSpaceTag(client *api.Client, spaceID, tagName string) error {
-	tagURL := client.URL("space/%s/tag", spaceID)
-
-	payload := fmt.Sprintf(`{"tag":{"name":%q}}`, tagName)
-	req, err := http.NewRequest(http.MethodPost, tagURL, strings.NewReader(payload))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+	body := map[string]interface{}{
+		"tag": map[string]string{"name": tagName},
 	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
+	if err := apiv2.Do(context.Background(), client, "POST", fmt.Sprintf("space/%s/tag", spaceID), body, nil); err != nil {
 		return fmt.Errorf("failed to create tag: %w", err)
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to create tag (HTTP %d): %s", resp.StatusCode, string(body))
-	}
-
 	return nil
 }
 

@@ -2,10 +2,7 @@ package inbox
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -392,47 +389,16 @@ func fetchTeamTasksLocal(ctx context.Context, client *api.Client, teamID string,
 }
 
 func getCurrentUser(client *api.Client) (*userResponse, error) {
-	req, err := http.NewRequest("GET", client.URL("user"), nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := client.DoRequest(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
-	}
-
 	var result userResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := apiv2.Do(context.Background(), client, "GET", "user", nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 func fetchTaskComments(client *api.Client, taskID string) ([]commentData, error) {
-	commentURL := client.URL("task/%s/comment", taskID)
-	req, err := http.NewRequestWithContext(context.Background(), "GET", commentURL, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := client.DoRequest(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
-
 	var result commentResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := apiv2.Do(context.Background(), client, "GET", fmt.Sprintf("task/%s/comment", taskID), nil, &result); err != nil {
 		return nil, err
 	}
 	return result.Comments, nil

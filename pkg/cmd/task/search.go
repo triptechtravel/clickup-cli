@@ -2,10 +2,7 @@ package task
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
@@ -389,37 +386,15 @@ func runSearch(opts *searchOptions) error {
 
 // fetchTeamTasks fetches one page of tasks from the team endpoint with optional extra query params.
 func fetchTeamTasks(ctx context.Context, client *api.Client, teamID string, page int, extraParams string) ([]searchTask, error) {
-	apiURL := fmt.Sprintf(
-		"%s/team/%s/task?include_closed=true&page=%d&order_by=updated&reverse=true",
-		client.BaseURL(), teamID, page,
-	)
+	path := fmt.Sprintf("team/%s/task?include_closed=true&page=%d&order_by=updated&reverse=true",
+		teamID, page)
 	if extraParams != "" {
-		apiURL += "&" + extraParams
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := client.DoRequest(req)
-	if err != nil {
-		return nil, fmt.Errorf("API request failed: %w", err)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, nil
+		path += "&" + extraParams
 	}
 
 	var result searchResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, err
+	if err := apiv2.Do(ctx, client, "GET", path, nil, &result); err != nil {
+		return nil, fmt.Errorf("API request failed: %w", err)
 	}
 
 	return result.Tasks, nil
@@ -728,24 +703,8 @@ func searchTaskComments(ctx context.Context, client *api.Client, query string, t
 // taskMatchesComment fetches comments for a single task and returns true if
 // any comment text contains the query (case-insensitive substring match).
 func taskMatchesComment(ctx context.Context, client *api.Client, query, taskID string) bool {
-	commentURL := client.URL("task/%s/comment", url.PathEscape(taskID))
-	req, err := http.NewRequestWithContext(ctx, "GET", commentURL, nil)
-	if err != nil {
-		return false
-	}
-
-	resp, err := client.DoRequest(req)
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return false
-	}
-
 	var result commentSearchResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := apiv2.Do(ctx, client, "GET", fmt.Sprintf("task/%s/comment", url.PathEscape(taskID)), nil, &result); err != nil {
 		return false
 	}
 
@@ -1046,22 +1005,9 @@ func searchViaSpaces(ctx context.Context, opts *searchOptions) ([]scoredTask, er
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			taskURL := fmt.Sprintf("%s/list/%s/task?include_closed=true&page=0", client.BaseURL(), url.PathEscape(lid))
-			req, err := http.NewRequestWithContext(ctx, "GET", taskURL, nil)
-			if err != nil {
-				return
-			}
-
-			resp, err := client.DoRequest(req)
-			if err != nil {
-				return
-			}
-
-			body, _ := io.ReadAll(resp.Body)
-			resp.Body.Close()
-
+			taskPath := fmt.Sprintf("list/%s/task?include_closed=true&page=0", url.PathEscape(lid))
 			var taskResp searchResponse
-			if json.Unmarshal(body, &taskResp) != nil {
+			if err := apiv2.Do(ctx, client, "GET", taskPath, nil, &taskResp); err != nil {
 				return
 			}
 

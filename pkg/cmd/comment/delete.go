@@ -1,11 +1,11 @@
 package comment
 
 import (
+	"context"
 	"fmt"
-	"io"
-	"net/http"
 
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 	"github.com/triptechtravel/clickup-cli/internal/prompter"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
@@ -71,21 +71,9 @@ func deleteRun(opts *deleteOptions) error {
 		return err
 	}
 
-	deleteURL := client.URL("comment/%s", opts.commentID)
-	req, err := http.NewRequest(http.MethodDelete, deleteURL, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := client.DoRequest(req)
-	if err != nil {
+	ctx := context.Background()
+	if err := apiv2.Do(ctx, client, "DELETE", fmt.Sprintf("comment/%s", opts.commentID), nil, nil); err != nil {
 		return fmt.Errorf("API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(respBody))
 	}
 
 	fmt.Fprintf(ios.Out, "%s Comment %s deleted\n", cs.Green("!"), cs.Bold(opts.commentID))

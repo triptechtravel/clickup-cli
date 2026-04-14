@@ -22,9 +22,33 @@ go vet ./...
 
 Requires Go 1.25 or later.
 
-## API codegen pipeline
+## Architecture
 
-The CLI uses auto-generated Go types and wrapper functions from the official ClickUp OpenAPI specs. Generated code is gitignored — you must run `make api-gen` after cloning.
+All ClickUp API calls go through a single code path:
+
+```
+CLI command (pkg/cmd/*)
+  → apiv2/local.go wrappers (typed, decode into internal/clickup types)
+  → apiv2.do() helper (JSON marshal, HTTP transport, error handling)
+  → api.Client.DoRequest() (auth header, rate limiting, 429 retry)
+```
+
+### Key packages
+
+| Package | Purpose |
+|---------|---------|
+| `internal/clickup/` | Local type definitions (Task, List, Folder, etc.) with stable JSON tags |
+| `internal/apiv2/local.go` | Typed wrappers that decode API responses into local types |
+| `internal/apiv2/operations.gen.go` | Auto-generated wrappers using codegen types (used for tag/checklist/time operations) |
+| `internal/apiv3/operations.gen.go` | Auto-generated V3 wrappers (chat, docs, audit) |
+| `api/clickupv2/`, `api/clickupv3/` | Auto-generated request/response types from OpenAPI specs |
+| `internal/api/` | HTTP client with auth, rate limiting, error handling |
+| `pkg/cmd/*/` | CLI commands (cobra) |
+| `pkg/cmdutil/` | Shared helpers (config, custom IDs, sprint resolution) |
+
+### API codegen pipeline
+
+Generated code is gitignored — run `make api-gen` after cloning.
 
 ```
 make api-gen
@@ -34,19 +58,27 @@ make api-gen
 └── gen-api → typed wrapper functions (internal/apiv2/, internal/apiv3/)
 ```
 
-- `api/clickupv2/` — auto-gen types for all 137 V2 operations
-- `api/clickupv3/` — auto-gen types for 18 V3 operations (chat, docs, audit logs)
-- `internal/apiv2/` — typed wrappers using auto-gen types + `api.Client` transport
-- `internal/apiv3/` — same for V3
-- `cmd/gen-api/` — the code generator (reads spec, emits Go)
+### When to use which layer
 
-go-clickup (`raksul/go-clickup`) is kept for operations it handles correctly. The auto-gen layer fills gaps documented in `api/GO_CLICKUP_GAPS.md`.
+- **New commands** that need task/list/folder/space/team data: use `apiv2.*Local` wrappers in `local.go` — they decode into `internal/clickup` types
+- **Operations already covered by generated wrappers** (tags, checklists, time entries): use `apiv2.*` from `operations.gen.go` with `clickupv2.*` request types
+- **V3 API** (chat, docs): use `apiv3.*` from `operations.gen.go`
+- **New API endpoints not yet generated**: add to `local.go` using the `do()` helper
+
+### Adding a new command
+
+1. Create `pkg/cmd/<group>/<command>.go`
+2. Use `apiv2.*Local` for API calls (see `pkg/cmd/folder/list.go` for a clean example)
+3. Register in `pkg/cmd/root/root.go`
+4. Add tests in `pkg/cmd/<group>/<command>_test.go` (use `internal/testutil/`)
+5. Run `go run ./cmd/gen-docs` to regenerate reference docs
+6. Update `skills/clickup-cli/SKILL.md` with usage examples
 
 ## Submitting changes
 
 1. Fork the repository and create your branch from `main`
 2. Make your changes and add tests for new functionality
-3. Run `make api-gen && go test ./... && go vet ./...`
+3. Run `make api-gen && go build ./... && go test ./... && go vet ./...`
 4. Submit a pull request with a clear description
 
 ## Release process
@@ -57,6 +89,8 @@ Releases use [GoReleaser](https://goreleaser.com/) via GitHub Actions:
 2. Push the tag: `git push origin v0.x.0`
 3. GitHub Actions runs `make api-gen`, builds, and publishes binaries
 4. Homebrew formula is auto-updated in `triptechtravel/homebrew-tap`
+
+Install: `brew install triptechtravel/tap/clickup`
 
 ## License
 

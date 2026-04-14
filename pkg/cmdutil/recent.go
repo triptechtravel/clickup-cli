@@ -2,10 +2,7 @@ package cmdutil
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strconv"
 	"strings"
 
@@ -167,23 +164,8 @@ type userResp struct {
 }
 
 func GetCurrentUserID(client *api.Client) (int, error) {
-	req, err := http.NewRequest("GET", client.URL("user"), nil)
-	if err != nil {
-		return 0, err
-	}
-	resp, err := client.DoRequest(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return 0, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
-	}
-
 	var result userResp
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := apiv2.Do(context.Background(), client, "GET", "user", nil, &result); err != nil {
 		return 0, err
 	}
 	return result.User.ID, nil

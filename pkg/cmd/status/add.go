@@ -1,15 +1,12 @@
 package status
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
 
@@ -103,26 +100,9 @@ func addRun(opts *addOptions) error {
 	ctx := context.Background()
 
 	// Fetch current space with statuses.
-	spaceURL := client.URL("space/%s", spaceID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, spaceURL, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to fetch space: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to fetch space (HTTP %d): %s", resp.StatusCode, string(body))
-	}
-
 	var space spaceResponse
-	if err := json.NewDecoder(resp.Body).Decode(&space); err != nil {
-		return fmt.Errorf("failed to parse space response: %w", err)
+	if err := apiv2.Do(ctx, client, "GET", fmt.Sprintf("space/%s", spaceID), nil, &space); err != nil {
+		return fmt.Errorf("failed to fetch space: %w", err)
 	}
 
 	// Check if status already exists.
@@ -216,26 +196,8 @@ func addRun(opts *addOptions) error {
 	payload := map[string]interface{}{
 		"statuses": updatedStatuses,
 	}
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal payload: %w", err)
-	}
-
-	putReq, err := http.NewRequestWithContext(ctx, http.MethodPut, spaceURL, bytes.NewReader(payloadBytes))
-	if err != nil {
-		return fmt.Errorf("failed to create update request: %w", err)
-	}
-	putReq.Header.Set("Content-Type", "application/json")
-
-	putResp, err := client.HTTPClient.Do(putReq)
-	if err != nil {
-		return fmt.Errorf("failed to update space: %w", err)
-	}
-	defer putResp.Body.Close()
-
-	if putResp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(putResp.Body)
-		return fmt.Errorf("failed to update space statuses (HTTP %d): %s", putResp.StatusCode, string(body))
+	if err := apiv2.Do(ctx, client, "PUT", fmt.Sprintf("space/%s", spaceID), payload, nil); err != nil {
+		return fmt.Errorf("failed to update space statuses: %w", err)
 	}
 
 	fmt.Fprintf(ios.Out, "\n%s Added status %s to space %s\n", cs.Green("!"), cs.Bold(opts.name), cs.Bold(space.Name))
