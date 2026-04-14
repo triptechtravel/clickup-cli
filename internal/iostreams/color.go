@@ -87,7 +87,7 @@ func (c *ColorScheme) StatusColor(status string) func(string) string {
 		return c.Gray
 	case "in progress", "in review":
 		return c.Blue
-	case "done", "complete", "closed":
+	case "done", "complete", "completed", "closed":
 		return c.Green
 	default:
 		return c.Yellow

@@ -12,13 +12,18 @@ clickup task checklist item add <checklist-id> <item-name> [flags]
 ### Examples
 
 ```
+  # Add an item
   clickup task checklist item add b955c4dc-example "Run migrations"
+
+  # Add an item assigned to a user (use 'clickup member list' to find IDs)
+  clickup task checklist item add b955c4dc-example "Run migrations" --assignee 54874661
 ```
 
 ### Options
 
 ```
-  -h, --help   help for add
+      --assignee int   User ID to assign the item to (see 'clickup member list')
+  -h, --help           help for add
 ```
 
 ### SEE ALSO

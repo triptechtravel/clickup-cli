@@ -8,8 +8,10 @@ import (
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/completion"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/doc"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/field"
+	"github.com/triptechtravel/clickup-cli/pkg/cmd/folder"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/inbox"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/link"
+	listcmd "github.com/triptechtravel/clickup-cli/pkg/cmd/list"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/member"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/space"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/sprint"
@@ -48,6 +50,8 @@ Links GitHub PRs, branches, and commits to ClickUp tasks.`,
 	cmd.AddCommand(sprint.NewCmdSprint(f))
 	cmd.AddCommand(space.NewCmdSpace(f))
 	cmd.AddCommand(field.NewCmdField(f))
+	cmd.AddCommand(folder.NewCmdFolder(f))
+	cmd.AddCommand(listcmd.NewCmdList(f))
 	cmd.AddCommand(tag.NewCmdTag(f))
 
 	// Workspace

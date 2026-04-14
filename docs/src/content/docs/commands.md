@@ -17,7 +17,7 @@ Flag details, examples, and options for each command are in the auto-generated [
 |---------|-------------|
 | [`task activity`](/clickup-cli/reference/clickup_task_activity/) | View a task's details and comment history |
 | [`task create`](/clickup-cli/reference/clickup_task_create/) | Create a new ClickUp task |
-| [`task delete`](/clickup-cli/reference/clickup_task_delete/) | Delete a task |
+| [`task delete`](/clickup-cli/reference/clickup_task_delete/) | Delete one or more tasks |
 | [`task edit`](/clickup-cli/reference/clickup_task_edit/) | Edit a ClickUp task |
 | [`task list`](/clickup-cli/reference/clickup_task_list/) | List tasks in a ClickUp list |
 | [`task list-add`](/clickup-cli/reference/clickup_task_list-add/) | Add tasks to an additional list |
@@ -122,7 +122,7 @@ Flag details, examples, and options for each command are in the auto-generated [
 
 | Command | Description |
 |---------|-------------|
-| [`inbox`](/clickup-cli/reference/clickup_inbox/) | Show recent @mentions |
+| [`inbox`](/clickup-cli/reference/clickup_inbox/) | Show recent @mentions and assignments |
 | [`member list`](/clickup-cli/reference/clickup_member_list/) | List workspace members |
 | [`space list`](/clickup-cli/reference/clickup_space_list/) | List spaces in your workspace |
 | [`space select`](/clickup-cli/reference/clickup_space_select/) | Set default space |

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -14,12 +15,13 @@ import (
 )
 
 type listOptions struct {
-	listID    string
-	assignee  []string
-	status    []string
-	sprint    string
-	page      int
-	jsonFlags cmdutil.JSONFlags
+	listID        string
+	assignee      []string
+	status        []string
+	sprint        string
+	page          int
+	includeClosed bool
+	jsonFlags     cmdutil.JSONFlags
 }
 
 // NewCmdList returns a command to list ClickUp tasks in a given list.
@@ -31,29 +33,43 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 		Short: "List tasks in a ClickUp list",
 		Long: `List tasks from a ClickUp list with optional filters.
 
-The --list-id flag is required to specify which ClickUp list to query.
-Results can be filtered by assignee, status, and sprint.`,
-		Example: `  # List tasks in a ClickUp list
+If --list-id is not provided, the configured default list is used
+(set via 'clickup list select'). Results can be filtered by assignee,
+status, and sprint.`,
+		Example: `  # List tasks using your configured default list
+  clickup task list
+
+  # List tasks in a specific ClickUp list
   clickup task list --list-id 12345
 
   # Filter by assignee and status
-  clickup task list --list-id 12345 --assignee me --status "in progress"`,
+  clickup task list --list-id 12345 --assignee me --status "in progress"
+
+  # Include closed tasks
+  clickup task list --list-id 12345 --include-closed`,
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if opts.listID == "" {
-				return fmt.Errorf("required flag --list-id not set")
+				cfg, err := f.Config()
+				if err != nil {
+					return err
+				}
+				dir, _ := os.Getwd()
+				opts.listID = cfg.ListForDir(dir)
+			}
+			if opts.listID == "" {
+				return fmt.Errorf("no list specified. Use --list-id or run 'clickup list select' to set a default")
 			}
 			return runList(f, opts)
 		},
 	}
 
-	cmd.Flags().StringVar(&opts.listID, "list-id", "", "ClickUp list ID (required)")
+	cmd.Flags().StringVar(&opts.listID, "list-id", "", "ClickUp list ID (defaults to configured list)")
 	cmd.Flags().StringSliceVar(&opts.assignee, "assignee", nil, `Filter by assignee ID(s), or "me" for yourself`)
 	cmd.Flags().StringSliceVar(&opts.status, "status", nil, "Filter by status(es)")
 	cmd.Flags().StringVar(&opts.sprint, "sprint", "", "Filter by sprint name")
 	cmd.Flags().IntVar(&opts.page, "page", 0, "Page number for pagination (starts at 0)")
-
-	_ = cmd.MarkFlagRequired("list-id")
+	cmd.Flags().BoolVarP(&opts.includeClosed, "include-closed", "c", false, "Include closed/completed tasks")
 
 	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 
@@ -80,6 +96,9 @@ func runList(f *cmdutil.Factory, opts *listOptions) error {
 	}
 	if opts.sprint != "" {
 		q.Add("tags[]", opts.sprint)
+	}
+	if opts.includeClosed {
+		q.Set("include_closed", "true")
 	}
 
 	qs := ""

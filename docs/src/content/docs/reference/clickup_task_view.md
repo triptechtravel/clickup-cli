@@ -36,6 +36,9 @@ clickup task view [<task-id>...] [flags]
   # Output as JSON (includes subtasks with IDs, dates, and statuses)
   clickup task view 86a3xrwkp --json
 
+  # View with recursive subtasks (fetches all descendants)
+  clickup task view 86a3xrwkp --recursive --json
+
   # Bulk fetch multiple tasks as JSON array
   clickup task view 86abc1 86abc2 86abc3 --json
 
@@ -53,6 +56,7 @@ clickup task view [<task-id>...] [flags]
       --jq string         Filter JSON output using a jq expression
       --json              Output JSON
   -r, --raw               Output raw strings instead of JSON-encoded (use with --jq)
+      --recursive         Recursively fetch all descendant subtasks
       --template string   Format JSON output using a Go template
 ```
 
