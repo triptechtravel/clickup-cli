@@ -3,10 +3,12 @@ package task
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 
-	"github.com/raksul/go-clickup/clickup"
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
+	"github.com/triptechtravel/clickup-cli/internal/clickup"
 	"github.com/triptechtravel/clickup-cli/internal/tableprinter"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
@@ -66,25 +68,27 @@ func runList(f *cmdutil.Factory, opts *listOptions) error {
 		return err
 	}
 
-	taskOpts := &clickup.GetTasksOptions{
-		Page: opts.page,
+	q := url.Values{}
+	if opts.page > 0 {
+		q.Set("page", fmt.Sprintf("%d", opts.page))
 	}
-
-	if len(opts.status) > 0 {
-		taskOpts.Statuses = opts.status
+	for _, s := range opts.status {
+		q.Add("statuses[]", s)
 	}
-
-	if len(opts.assignee) > 0 {
-		taskOpts.Assignees = opts.assignee
+	for _, a := range opts.assignee {
+		q.Add("assignees[]", a)
 	}
-
 	if opts.sprint != "" {
-		// Sprint filtering is handled via tags in ClickUp.
-		taskOpts.Tags = []string{opts.sprint}
+		q.Add("tags[]", opts.sprint)
+	}
+
+	qs := ""
+	if len(q) > 0 {
+		qs = "?" + q.Encode()
 	}
 
 	ctx := context.Background()
-	tasks, _, err := client.Clickup.Tasks.GetTasks(ctx, opts.listID, taskOpts)
+	tasks, err := apiv2.GetTasksLocal(ctx, client, opts.listID, qs)
 	if err != nil {
 		return fmt.Errorf("failed to list tasks: %w", err)
 	}

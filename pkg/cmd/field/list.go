@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/raksul/go-clickup/clickup"
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
+	"github.com/triptechtravel/clickup-cli/internal/clickup"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
 
@@ -58,7 +59,7 @@ func runFieldList(f *cmdutil.Factory, opts *listOptions) error {
 	}
 
 	ctx := context.Background()
-	fields, _, err := client.Clickup.CustomFields.GetAccessibleCustomFields(ctx, opts.listID)
+	fields, err := apiv2.GetAccessibleCustomFieldsLocal(ctx, client, opts.listID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch custom fields: %w", err)
 	}

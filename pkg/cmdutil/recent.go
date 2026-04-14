@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/raksul/go-clickup/clickup"
 	"github.com/triptechtravel/clickup-cli/internal/api"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 )
 
 // RecentTask represents a recently updated task with location context.
@@ -77,17 +77,16 @@ func FetchRecentTeamTasks(f *Factory, limit int) ([]RecentTask, error) {
 func fetchRecentTeamTasks(client *api.Client, teamID string, assignees []string, limit int) ([]RecentTask, error) {
 	ctx := context.Background()
 
-	taskOpts := &clickup.GetTasksOptions{
-		OrderBy:       "updated",
-		Reverse:       true,
-		IncludeClosed: false,
-		Subtasks:      true,
+	params := apiv2.FilteredTeamTasksParams{
+		OrderBy:  "updated",
+		Reverse:  true,
+		Subtasks: true,
 	}
 	if len(assignees) > 0 {
-		taskOpts.Assignees = assignees
+		params.Assignees = assignees
 	}
 
-	tasks, _, err := client.Clickup.Tasks.GetFilteredTeamTasks(ctx, teamID, taskOpts)
+	tasks, err := apiv2.GetFilteredTeamTasksLocal(ctx, client, teamID, params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch tasks: %w", err)
 	}

@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/raksul/go-clickup/clickup"
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
+	"github.com/triptechtravel/clickup-cli/internal/clickup"
 	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
@@ -82,7 +83,7 @@ func runDependencyAdd(f *cmdutil.Factory, taskID string, opts *dependencyAddOpti
 		req.DependencyOf = git.ParseTaskID(opts.blocks).ID
 	}
 
-	_, err = client.Clickup.Dependencies.AddDependency(ctx, taskID, req, nil)
+	err = apiv2.AddDependencyLocal(ctx, client, taskID, req, "")
 	if err != nil {
 		return fmt.Errorf("failed to add dependency: %w", err)
 	}
@@ -147,16 +148,18 @@ func runDependencyRemove(f *cmdutil.Factory, taskID string, opts *dependencyRemo
 	}
 
 	ctx := context.Background()
-	deleteOpts := &clickup.DeleteDependencyOptions{}
 
+	dependsOn := ""
+	dependencyOf := ""
 	if opts.dependsOn != "" {
-		deleteOpts.DependsOn = git.ParseTaskID(opts.dependsOn).ID
+		dependsOn = git.ParseTaskID(opts.dependsOn).ID
 	}
 	if opts.blocks != "" {
-		deleteOpts.DependencyOf = git.ParseTaskID(opts.blocks).ID
+		dependencyOf = git.ParseTaskID(opts.blocks).ID
 	}
 
-	_, err = client.Clickup.Dependencies.DeleteDependency(ctx, taskID, deleteOpts)
+	qs := apiv2.DependencyQuery(dependsOn, dependencyOf, false, "")
+	err = apiv2.DeleteDependencyLocal(ctx, client, taskID, qs)
 	if err != nil {
 		return fmt.Errorf("failed to remove dependency: %w", err)
 	}

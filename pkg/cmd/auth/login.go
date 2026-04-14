@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/triptechtravel/clickup-cli/internal/api"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 	"github.com/triptechtravel/clickup-cli/internal/auth"
 	"github.com/triptechtravel/clickup-cli/internal/browser"
 	"github.com/triptechtravel/clickup-cli/internal/prompter"
@@ -164,7 +165,7 @@ func selectWorkspace(opts *loginOptions, token string) error {
 	// the Factory's cached client because it was initialised before authentication.
 	client := api.NewClient(token)
 
-	teams, _, err := client.Clickup.Teams.GetTeams(context.Background())
+	teams, err := apiv2.GetTeamsLocal(context.Background(), client)
 	if err != nil {
 		return fmt.Errorf("failed to list workspaces: %w", err)
 	}

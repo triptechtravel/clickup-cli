@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 	"github.com/triptechtravel/clickup-cli/internal/tableprinter"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
@@ -33,7 +34,7 @@ func NewCmdSpaceList(f *cmdutil.Factory) *cobra.Command {
 				return fmt.Errorf("no workspace configured. Run 'clickup auth login' first")
 			}
 
-			spaces, _, err := client.Clickup.Spaces.GetSpaces(context.Background(), teamID, false)
+			spaces, err := apiv2.GetSpacesLocal(context.Background(), client, teamID, false)
 			if err != nil {
 				return fmt.Errorf("failed to fetch spaces: %w", err)
 			}

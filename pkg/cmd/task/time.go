@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/raksul/go-clickup/clickup"
 	"github.com/spf13/cobra"
 	"github.com/triptechtravel/clickup-cli/internal/api"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/internal/prompter"
 	"github.com/triptechtravel/clickup-cli/internal/tableprinter"
@@ -736,7 +736,7 @@ func enrichTimeEntriesWithTags(client *api.Client, entries []timeEntry) ([]timeE
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			task, _, err := client.Clickup.Tasks.GetTask(ctx, taskID, nil)
+			task, err := apiv2.GetTaskLocal(ctx, client, taskID, "")
 			if err != nil {
 				results <- tagResult{taskID, nil, err}
 				return
@@ -832,12 +832,12 @@ func filterTimeEntriesByTags(client *api.Client, entries []timeEntry, tags []str
 	for listID := range listIDs {
 		page := 0
 		for {
-			taskOpts := &clickup.GetTasksOptions{
-				Tags:          tags,
-				Page:          page,
-				IncludeClosed: true,
+			q := "?include_closed=true"
+			q += fmt.Sprintf("&page=%d", page)
+			for _, tag := range tags {
+				q += "&tags[]=" + tag
 			}
-			tasks, _, err := client.Clickup.Tasks.GetTasks(ctx, listID, taskOpts)
+			tasks, err := apiv2.GetTasksLocal(ctx, client, listID, q)
 			if err != nil {
 				// If we get a permission error for a list, skip it rather than failing.
 				if strings.Contains(err.Error(), "401") || strings.Contains(err.Error(), "ECODE") {

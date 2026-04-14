@@ -7,8 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/raksul/go-clickup/clickup"
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
+	"github.com/triptechtravel/clickup-cli/internal/clickup"
 	"github.com/triptechtravel/clickup-cli/internal/tableprinter"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
@@ -87,7 +88,7 @@ func runSprintList(f *cmdutil.Factory, folderID string, jsonFlags *cmdutil.JSONF
 			return fmt.Errorf("no space configured. Run 'clickup space select' first")
 		}
 
-		folders, _, err := client.Clickup.Folders.GetFolders(ctx, spaceID, false)
+		folders, err := apiv2.GetFoldersLocal(ctx, client, spaceID, false)
 		if err != nil {
 			return fmt.Errorf("failed to list folders: %w", err)
 		}
@@ -120,7 +121,7 @@ func runSprintList(f *cmdutil.Factory, folderID string, jsonFlags *cmdutil.JSONF
 	}
 
 	// Get lists (sprints) in the folder.
-	lists, _, err := client.Clickup.Lists.GetLists(ctx, folderID, false)
+	lists, err := apiv2.GetListsLocal(ctx, client, folderID, false)
 	if err != nil {
 		return fmt.Errorf("failed to list sprints: %w", err)
 	}

@@ -7,8 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/raksul/go-clickup/clickup"
+	"net/url"
+
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
+	"github.com/triptechtravel/clickup-cli/internal/clickup"
 	"github.com/triptechtravel/clickup-cli/internal/tableprinter"
 	"github.com/triptechtravel/clickup-cli/internal/text"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
@@ -92,7 +95,7 @@ func runSprintCurrent(f *cmdutil.Factory, folderID string, jsonFlags *cmdutil.JS
 			return fmt.Errorf("no space configured. Run 'clickup space select' first")
 		}
 
-		folders, _, err := client.Clickup.Folders.GetFolders(ctx, spaceID, false)
+		folders, err := apiv2.GetFoldersLocal(ctx, client, spaceID, false)
 		if err != nil {
 			return fmt.Errorf("failed to list folders: %w", err)
 		}
@@ -123,12 +126,12 @@ func runSprintCurrent(f *cmdutil.Factory, folderID string, jsonFlags *cmdutil.JS
 	}
 
 	// Find the current sprint (list with dates containing today).
-	currentListID, err := cmdutil.ResolveCurrentSprintListID(ctx, client.Clickup, folderID)
+	currentListID, err := cmdutil.ResolveCurrentSprintListID(ctx, client, folderID)
 	if err != nil {
 		return fmt.Errorf("failed to list sprints: %w", err)
 	}
 
-	lists, _, err := client.Clickup.Lists.GetLists(ctx, folderID, false)
+	lists, err := apiv2.GetListsLocal(ctx, client, folderID, false)
 	if err != nil {
 		return fmt.Errorf("failed to list sprints: %w", err)
 	}
@@ -173,15 +176,13 @@ func runSprintCurrent(f *cmdutil.Factory, folderID string, jsonFlags *cmdutil.JS
 	)
 
 	// Fetch tasks in the sprint.
-	taskOpts := &clickup.GetTasksOptions{
-		IncludeClosed: true,
-		Subtasks:      true,
-	}
-
 	var allTasks []clickup.Task
 	for page := 0; ; page++ {
-		taskOpts.Page = page
-		tasks, _, err := client.Clickup.Tasks.GetTasks(ctx, currentList.ID, taskOpts)
+		q := url.Values{}
+		q.Set("include_closed", "true")
+		q.Set("subtasks", "true")
+		q.Set("page", strconv.Itoa(page))
+		tasks, err := apiv2.GetTasksLocal(ctx, client, currentList.ID, "?"+q.Encode())
 		if err != nil {
 			return fmt.Errorf("failed to fetch sprint tasks: %w", err)
 		}

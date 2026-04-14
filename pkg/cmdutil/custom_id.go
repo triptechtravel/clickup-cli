@@ -2,42 +2,39 @@ package cmdutil
 
 import (
 	"fmt"
-	"strconv"
 
-	"github.com/raksul/go-clickup/clickup"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 	"github.com/triptechtravel/clickup-cli/internal/config"
 )
 
-// CustomIDTaskOptions returns GetTaskOptions configured for custom task ID
-// resolution. When isCustomID is true, the options include both the
-// CustomTaskIDs flag and the TeamID from the workspace config, which the
-// ClickUp API requires together.
-//
-// Returns nil when isCustomID is false (standard task IDs need no options).
-func CustomIDTaskOptions(cfg *config.Config, isCustomID bool) *clickup.GetTaskOptions {
-	if !isCustomID {
-		return nil
+// CustomIDTaskQuery returns a query string for task endpoints supporting
+// custom task IDs. Returns "" when isCustomID is false.
+func CustomIDTaskQuery(cfg *config.Config, isCustomID bool) string {
+	teamID := ""
+	if cfg != nil {
+		teamID = cfg.Workspace
 	}
-	opts := &clickup.GetTaskOptions{
-		CustomTaskIDs: true,
-	}
-	if cfg != nil && cfg.Workspace != "" {
-		if tid, err := strconv.Atoi(cfg.Workspace); err == nil {
-			opts.TeamID = tid
-		}
-	}
-	return opts
+	return apiv2.TaskQuery(isCustomID, teamID, false)
 }
 
-// CustomIDTaskOptionsWithSubtasks returns GetTaskOptions for custom task ID
-// resolution with subtask inclusion enabled.
-func CustomIDTaskOptionsWithSubtasks(cfg *config.Config, isCustomID bool) *clickup.GetTaskOptions {
-	opts := CustomIDTaskOptions(cfg, isCustomID)
-	if opts == nil {
-		opts = &clickup.GetTaskOptions{}
+// CustomIDTaskQueryWithSubtasks returns a query string for task endpoints
+// supporting custom task IDs with subtask inclusion enabled.
+func CustomIDTaskQueryWithSubtasks(cfg *config.Config, isCustomID bool) string {
+	teamID := ""
+	if cfg != nil {
+		teamID = cfg.Workspace
 	}
-	opts.IncludeSubTasks = true
-	return opts
+	return apiv2.TaskQuery(isCustomID, teamID, true)
+}
+
+// CustomIDTaskQueryMD returns a query string for task endpoints supporting
+// custom task IDs with markdown description and subtask inclusion.
+func CustomIDTaskQueryMD(cfg *config.Config, isCustomID bool) string {
+	teamID := ""
+	if cfg != nil {
+		teamID = cfg.Workspace
+	}
+	return apiv2.TaskQueryMD(isCustomID, teamID)
 }
 
 // CustomIDQueryParam returns the URL query string fragment for custom task

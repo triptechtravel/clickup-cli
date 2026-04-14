@@ -11,9 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/raksul/go-clickup/clickup"
 	"github.com/spf13/cobra"
 	"github.com/triptechtravel/clickup-cli/internal/api"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
+	"github.com/triptechtravel/clickup-cli/internal/clickup"
 	"github.com/triptechtravel/clickup-cli/internal/config"
 	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/internal/text"
@@ -128,12 +129,12 @@ func runActivity(f *cmdutil.Factory, opts *activityOptions) error {
 		return err
 	}
 
-	getOpts := cmdutil.CustomIDTaskOptions(cfg, isCustomID)
+	qs := cmdutil.CustomIDTaskQuery(cfg, isCustomID)
 
 	ctx := context.Background()
 
 	// Fetch task details.
-	task, _, err := client.Clickup.Tasks.GetTask(ctx, taskID, getOpts)
+	task, err := apiv2.GetTaskLocal(ctx, client, taskID, qs)
 	if err != nil {
 		return fmt.Errorf("failed to fetch task %s: %w", taskID, err)
 	}

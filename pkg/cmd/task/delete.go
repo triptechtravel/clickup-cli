@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/internal/prompter"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
@@ -71,8 +72,8 @@ func runDelete(f *cmdutil.Factory, opts *deleteOptions) error {
 			msg = fmt.Sprintf("Delete %d tasks?", len(opts.taskIDs))
 		} else {
 			parsed := git.ParseTaskID(opts.taskIDs[0])
-			getOpts := cmdutil.CustomIDTaskOptions(cfg, parsed.IsCustomID)
-			task, _, fetchErr := client.Clickup.Tasks.GetTask(ctx, parsed.ID, getOpts)
+			qs := cmdutil.CustomIDTaskQuery(cfg, parsed.IsCustomID)
+			task, fetchErr := apiv2.GetTaskLocal(ctx, client, parsed.ID, qs)
 			if fetchErr == nil {
 				msg = fmt.Sprintf("Delete task %s (%s)?", cs.Bold(task.Name), parsed.ID)
 			} else {
@@ -95,18 +96,18 @@ func runDelete(f *cmdutil.Factory, opts *deleteOptions) error {
 	for i, rawID := range opts.taskIDs {
 		parsed := git.ParseTaskID(rawID)
 		taskID := parsed.ID
-		getOpts := cmdutil.CustomIDTaskOptions(cfg, parsed.IsCustomID)
+		qs := cmdutil.CustomIDTaskQuery(cfg, parsed.IsCustomID)
 
 		// Fetch name for the output message (skip in bulk to halve API calls).
 		name := taskID
 		if !bulk {
-			task, _, fetchErr := client.Clickup.Tasks.GetTask(ctx, taskID, getOpts)
+			task, fetchErr := apiv2.GetTaskLocal(ctx, client, taskID, qs)
 			if fetchErr == nil {
 				name = task.Name
 			}
 		}
 
-		_, err := client.Clickup.Tasks.DeleteTask(ctx, taskID, getOpts)
+		err := apiv2.DeleteTaskLocal(ctx, client, taskID, qs)
 		if err != nil {
 			if bulk {
 				fmt.Fprintf(ios.ErrOut, "%s (%d/%d) failed to delete %s: %v\n", cs.Red("✗"), i+1, total, rawID, err)

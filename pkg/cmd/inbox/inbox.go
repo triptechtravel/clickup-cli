@@ -11,9 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/raksul/go-clickup/clickup"
 	"github.com/spf13/cobra"
 	"github.com/triptechtravel/clickup-cli/internal/api"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
+	"github.com/triptechtravel/clickup-cli/internal/clickup"
 	"github.com/triptechtravel/clickup-cli/internal/text"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
@@ -148,15 +149,14 @@ func inboxRun(opts *inboxOptions) error {
 
 	cutoff := time.Now().AddDate(0, 0, -opts.days)
 	cutoffMs := cutoff.UnixMilli()
-	cutoffClickup := clickup.NewDate(cutoff)
 
 	ctx := context.Background()
 
 	// Phase 1: cheap filtered call for tasks where the user is currently an
 	// assignee. Used to detect newly assigned tasks within the lookback window.
 	fmt.Fprintf(ios.ErrOut, "Fetching tasks assigned to @%s...\n", user.User.Username)
-	assignedTasks, err := fetchTeamTasks(ctx, client, teamID, &clickup.GetTasksOptions{
-		DateUpdatedGt: cutoffClickup,
+	assignedTasks, err := fetchTeamTasksLocal(ctx, client, teamID, apiv2.FilteredTeamTasksParams{
+		DateUpdGt:     cutoffMs,
 		Assignees:     []string{strconv.Itoa(user.User.ID)},
 		IncludeClosed: true,
 		Subtasks:      true,
@@ -169,8 +169,8 @@ func inboxRun(opts *inboxOptions) error {
 	// inbox made, capped at opts.limit.
 	fmt.Fprintf(ios.ErrOut, "Scanning tasks updated in the last %s...\n",
 		text.Pluralize(opts.days, "day"))
-	workspaceTasks, err := fetchTeamTasks(ctx, client, teamID, &clickup.GetTasksOptions{
-		DateUpdatedGt: cutoffClickup,
+	workspaceTasks, err := fetchTeamTasksLocal(ctx, client, teamID, apiv2.FilteredTeamTasksParams{
+		DateUpdGt:     cutoffMs,
 		IncludeClosed: true,
 		Subtasks:      true,
 	}, opts.limit)
@@ -370,13 +370,13 @@ func inboxRun(opts *inboxOptions) error {
 	return nil
 }
 
-// fetchTeamTasks paginates GetFilteredTeamTasks until it has at least `limit`
+// fetchTeamTasksLocal paginates GetFilteredTeamTasksLocal until it has at least `limit`
 // tasks or the API runs out of pages. Returns at most `limit` tasks.
-func fetchTeamTasks(ctx context.Context, client *api.Client, teamID string, opts *clickup.GetTasksOptions, limit int) ([]clickup.Task, error) {
+func fetchTeamTasksLocal(ctx context.Context, client *api.Client, teamID string, params apiv2.FilteredTeamTasksParams, limit int) ([]clickup.Task, error) {
 	var all []clickup.Task
 	for page := 0; len(all) < limit; page++ {
-		opts.Page = page
-		batch, _, err := client.Clickup.Tasks.GetFilteredTeamTasks(ctx, teamID, opts)
+		params.Page = page
+		batch, err := apiv2.GetFilteredTeamTasksLocal(ctx, client, teamID, params)
 		if err != nil {
 			return nil, err
 		}

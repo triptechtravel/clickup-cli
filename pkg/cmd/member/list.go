@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 	"github.com/triptechtravel/clickup-cli/internal/tableprinter"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
@@ -82,7 +83,7 @@ func runMemberList(f *cmdutil.Factory, jsonFlags *cmdutil.JSONFlags) error {
 		return fmt.Errorf("no workspace configured. Run 'clickup auth login' first")
 	}
 
-	teams, _, err := client.Clickup.Teams.GetTeams(ctx)
+	teams, err := apiv2.GetTeamsLocal(ctx, client)
 	if err != nil {
 		return fmt.Errorf("failed to list workspaces: %w", err)
 	}

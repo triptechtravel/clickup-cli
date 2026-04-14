@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/raksul/go-clickup/clickup"
+	"github.com/triptechtravel/clickup-cli/internal/clickup"
 	"github.com/triptechtravel/clickup-cli/internal/config"
 )
 

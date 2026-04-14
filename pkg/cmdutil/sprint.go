@@ -5,13 +5,15 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/raksul/go-clickup/clickup"
+	"github.com/triptechtravel/clickup-cli/internal/api"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
+	"github.com/triptechtravel/clickup-cli/internal/clickup"
 )
 
 // ResolveCurrentSprintListID finds the current sprint's list ID in the given folder.
 // Returns ("", nil) if no sprint matches today's date.
-func ResolveCurrentSprintListID(ctx context.Context, clickupClient *clickup.Client, folderID string) (string, error) {
-	lists, _, err := clickupClient.Lists.GetLists(ctx, folderID, false)
+func ResolveCurrentSprintListID(ctx context.Context, client *api.Client, folderID string) (string, error) {
+	lists, err := apiv2.GetListsLocal(ctx, client, folderID, false)
 	if err != nil {
 		return "", err
 	}

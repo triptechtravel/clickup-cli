@@ -14,6 +14,7 @@ import (
 	"github.com/lithammer/fuzzysearch/fuzzy"
 	"github.com/spf13/cobra"
 	"github.com/triptechtravel/clickup-cli/internal/api"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 	"github.com/triptechtravel/clickup-cli/internal/iostreams"
 	"github.com/triptechtravel/clickup-cli/internal/prompter"
 	"github.com/triptechtravel/clickup-cli/internal/tableprinter"
@@ -471,7 +472,7 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 	// Level 1: Sprint list (if sprint_folder configured).
 	if cfg.SprintFolder != "" {
 		fmt.Fprintf(ios.ErrOut, "  searching sprint...\n")
-		listID, err := cmdutil.ResolveCurrentSprintListID(ctx, client.Clickup, cfg.SprintFolder)
+		listID, err := cmdutil.ResolveCurrentSprintListID(ctx, client, cfg.SprintFolder)
 		if err == nil && listID != "" {
 			scored, err := searchLevel(ctx, client, teamID, query, "list_ids[]="+listID, 1, opts.comments, ios)
 			if err != nil {
@@ -817,7 +818,7 @@ func searchViaSpaces(ctx context.Context, opts *searchOptions) ([]scoredTask, er
 	teamID := cfg.Workspace
 
 	// Get spaces.
-	spaces, _, err := client.Clickup.Spaces.GetSpaces(ctx, teamID, false)
+	spaces, err := apiv2.GetSpacesLocal(ctx, client, teamID, false)
 	if err != nil {
 		return nil, err
 	}
@@ -841,7 +842,7 @@ func searchViaSpaces(ctx context.Context, opts *searchOptions) ([]scoredTask, er
 		fmt.Fprintf(ios.ErrOut, "  searching space %q...\n", space.Name)
 
 		// Get folders in space.
-		folders, _, err := client.Clickup.Folders.GetFolders(ctx, space.ID, false)
+		folders, err := apiv2.GetFoldersLocal(ctx, client, space.ID, false)
 		if err != nil {
 			continue
 		}
@@ -861,7 +862,7 @@ func searchViaSpaces(ctx context.Context, opts *searchOptions) ([]scoredTask, er
 			}
 
 			fmt.Fprintf(ios.ErrOut, "    folder %q...\n", folder.Name)
-			lists, _, err := client.Clickup.Lists.GetLists(ctx, folder.ID, false)
+			lists, err := apiv2.GetListsLocal(ctx, client, folder.ID, false)
 			if err != nil {
 				continue
 			}

@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 
-	"github.com/raksul/go-clickup/clickup"
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/internal/text"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
@@ -95,17 +94,11 @@ func addRun(opts *addOptions) error {
 		return err
 	}
 
-	// Build custom task ID options for the v2 API.
-	var attachOpts *clickup.TaskAttachementOptions
+	// Build custom task ID params for the attachment upload.
+	var attachParams apiv2.CreateTaskAttachmentParams
 	if isCustomID {
-		attachOpts = &clickup.TaskAttachementOptions{
-			CustomTaskIDs: true,
-		}
-		if cfg.Workspace != "" {
-			if tid, err := strconv.Atoi(cfg.Workspace); err == nil {
-				attachOpts.TeamID = tid
-			}
-		}
+		attachParams.CustomTaskIDs = true
+		attachParams.TeamID = cfg.Workspace
 	}
 
 	ctx := context.Background()
@@ -122,12 +115,12 @@ func addRun(opts *addOptions) error {
 			return fmt.Errorf("failed to stat %s: %w", filePath, err)
 		}
 
-		attachment := &clickup.Attachment{
-			FileName: filepath.Base(filePath),
-			Reader:   f,
+		var resp *apiv2.AttachmentResponse
+		if isCustomID {
+			resp, err = apiv2.CreateTaskAttachment(ctx, client, taskID, filepath.Base(filePath), f, attachParams)
+		} else {
+			resp, err = apiv2.CreateTaskAttachment(ctx, client, taskID, filepath.Base(filePath), f)
 		}
-
-		resp, _, err := client.Clickup.Attachments.CreateTaskAttachment(ctx, taskID, attachOpts, attachment)
 		f.Close()
 		if err != nil {
 			return fmt.Errorf("failed to upload %s: %w", filepath.Base(filePath), err)

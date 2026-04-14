@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/raksul/go-clickup/clickup"
+	"github.com/triptechtravel/clickup-cli/internal/api"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
+	"github.com/triptechtravel/clickup-cli/internal/clickup"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
 
@@ -40,7 +42,7 @@ func upsertDescriptionLinks(f *cmdutil.Factory, taskID string, entry linkEntry) 
 	ctx := context.Background()
 
 	// Fetch task with include_markdown_description=true to get the markdown source.
-	desc, err := fetchMarkdownDescription(ctx, client.Clickup, taskID)
+	desc, err := fetchMarkdownDescription(ctx, client, taskID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch task for description update: %w", err)
 	}
@@ -49,13 +51,7 @@ func upsertDescriptionLinks(f *cmdutil.Factory, taskID string, entry linkEntry) 
 
 	// Write via markdown_description so ClickUp renders markdown as rich text.
 	body := &markdownDescUpdate{MarkdownDescription: newDesc}
-	req, err := client.Clickup.NewRequest("PUT", fmt.Sprintf("task/%s/", taskID), body)
-	if err != nil {
-		return fmt.Errorf("failed to create update request: %w", err)
-	}
-
-	_, err = client.Clickup.Do(ctx, req, nil)
-	if err != nil {
+	if err := apiv2.Do(ctx, client, "PUT", fmt.Sprintf("task/%s/", taskID), body, nil); err != nil {
 		return fmt.Errorf("failed to update task description: %w", err)
 	}
 
@@ -64,14 +60,10 @@ func upsertDescriptionLinks(f *cmdutil.Factory, taskID string, entry linkEntry) 
 
 // fetchMarkdownDescription fetches the task with include_markdown_description=true
 // and returns the markdown description (falling back to plain description).
-func fetchMarkdownDescription(ctx context.Context, c *clickup.Client, taskID string) (string, error) {
+func fetchMarkdownDescription(ctx context.Context, c *api.Client, taskID string) (string, error) {
 	var task clickup.Task
-	req, err := c.NewRequest("GET", fmt.Sprintf("task/%s/?include_markdown_description=true", taskID), nil)
-	if err != nil {
-		return "", err
-	}
-	_, err = c.Do(ctx, req, &task)
-	if err != nil {
+	path := fmt.Sprintf("task/%s/?include_markdown_description=true", taskID)
+	if err := apiv2.Do(ctx, c, "GET", path, nil, &task); err != nil {
 		return "", err
 	}
 	if task.MarkdownDescription != "" {

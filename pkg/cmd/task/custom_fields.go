@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/raksul/go-clickup/clickup"
+	"github.com/triptechtravel/clickup-cli/internal/clickup"
 )
 
 // resolveFieldByName finds a custom field by name (case-insensitive) in a list

@@ -10,6 +10,7 @@ import (
 
 	"github.com/lithammer/fuzzysearch/fuzzy"
 	"github.com/triptechtravel/clickup-cli/internal/api"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 )
 
 // MatchStatus finds the best matching status from available statuses using a tiered strategy:
@@ -186,7 +187,7 @@ func FetchSpaceStatuses(client *api.Client, spaceID string) ([]string, error) {
 // FetchListStatuses fetches the available status names for a ClickUp list.
 // Returns nil if the list doesn't have custom status overrides.
 func FetchListStatuses(client *api.Client, listID string) ([]string, error) {
-	list, _, err := client.Clickup.Lists.GetList(context.Background(), listID)
+	list, err := apiv2.GetListLocal(context.Background(), client, listID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch list statuses: %w", err)
 	}

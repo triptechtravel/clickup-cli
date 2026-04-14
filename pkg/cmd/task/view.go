@@ -9,9 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/raksul/go-clickup/clickup"
 	"github.com/spf13/cobra"
 	"github.com/triptechtravel/clickup-cli/internal/api"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
+	"github.com/triptechtravel/clickup-cli/internal/clickup"
 	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/internal/iostreams"
 	"github.com/triptechtravel/clickup-cli/internal/text"
@@ -147,22 +148,20 @@ func runView(f *cmdutil.Factory, opts *viewOptions) error {
 		return err
 	}
 
-	getOpts := cmdutil.CustomIDTaskOptionsWithSubtasks(cfg, isCustomID)
+	qs := cmdutil.CustomIDTaskQueryWithSubtasks(cfg, isCustomID)
 
 	ctx := context.Background()
-	task, _, err := client.Clickup.Tasks.GetTask(ctx, taskID, getOpts)
+	task, err := apiv2.GetTaskLocal(ctx, client, taskID, qs)
 	if err != nil {
 		return fmt.Errorf("failed to fetch task %s: %w", taskID, err)
 	}
 
 	// Fetch markdown description and subtasks (the standard GetTask doesn't include these).
 	var extras taskWithExtras
-	extrasReq, err := client.Clickup.NewRequest("GET", fmt.Sprintf("task/%s/?include_markdown_description=true&include_subtasks=true", task.ID), nil)
-	if err == nil {
-		if _, err := client.Clickup.Do(ctx, extrasReq, &extras); err == nil {
-			if extras.MarkdownDescription != "" {
-				task.MarkdownDescription = extras.MarkdownDescription
-			}
+	extrasPath := fmt.Sprintf("task/%s/?include_markdown_description=true&include_subtasks=true", task.ID)
+	if err := apiv2.Do(ctx, client, "GET", extrasPath, nil, &extras); err == nil {
+		if extras.MarkdownDescription != "" {
+			task.MarkdownDescription = extras.MarkdownDescription
 		}
 	}
 
@@ -222,8 +221,8 @@ func runViewBulk(f *cmdutil.Factory, opts *viewOptions, rawIDs []string) error {
 
 			results[idx].ID = taskID
 
-			getOpts := cmdutil.CustomIDTaskOptionsWithSubtasks(cfg, isCustomID)
-			task, _, err := client.Clickup.Tasks.GetTask(ctx, taskID, getOpts)
+			qs := cmdutil.CustomIDTaskQueryWithSubtasks(cfg, isCustomID)
+			task, err := apiv2.GetTaskLocal(ctx, client, taskID, qs)
 			if err != nil {
 				results[idx].Err = err
 				return
@@ -231,12 +230,10 @@ func runViewBulk(f *cmdutil.Factory, opts *viewOptions, rawIDs []string) error {
 
 			// Fetch subtasks.
 			var extras taskWithExtras
-			extrasReq, err := client.Clickup.NewRequest("GET", fmt.Sprintf("task/%s/?include_markdown_description=true&include_subtasks=true", task.ID), nil)
-			if err == nil {
-				if _, err := client.Clickup.Do(ctx, extrasReq, &extras); err == nil {
-					if extras.MarkdownDescription != "" {
-						task.MarkdownDescription = extras.MarkdownDescription
-					}
+			extrasPath := fmt.Sprintf("task/%s/?include_markdown_description=true&include_subtasks=true", task.ID)
+			if err := apiv2.Do(ctx, client, "GET", extrasPath, nil, &extras); err == nil {
+				if extras.MarkdownDescription != "" {
+					task.MarkdownDescription = extras.MarkdownDescription
 				}
 			}
 
@@ -543,12 +540,8 @@ func fetchSubtasksRecursive(ctx context.Context, client *api.Client, subtasks []
 			defer func() { <-sem }()
 
 			var extras taskWithExtras
-			req, err := client.Clickup.NewRequest("GET", fmt.Sprintf("task/%s/?include_subtasks=true", subtasks[idx].ID), nil)
-			if err != nil {
-				fmt.Fprintf(ios.ErrOut, "%s failed to fetch subtasks for %s: %v\n", cs.Yellow("!"), subtasks[idx].ID, err)
-				return
-			}
-			if _, err := client.Clickup.Do(ctx, req, &extras); err != nil {
+			extrasPath := fmt.Sprintf("task/%s/?include_subtasks=true", subtasks[idx].ID)
+			if err := apiv2.Do(ctx, client, "GET", extrasPath, nil, &extras); err != nil {
 				fmt.Fprintf(ios.ErrOut, "%s failed to fetch subtasks for %s: %v\n", cs.Yellow("!"), subtasks[idx].ID, err)
 				return
 			}
@@ -605,7 +598,7 @@ func findTaskViaPR(f *cmdutil.Factory, ios *iostreams.IOStreams) (string, bool, 
 	var levels []level
 
 	if cfg.SprintFolder != "" {
-		listID, err := cmdutil.ResolveCurrentSprintListID(ctx, client.Clickup, cfg.SprintFolder)
+		listID, err := cmdutil.ResolveCurrentSprintListID(ctx, client, cfg.SprintFolder)
 		if err == nil && listID != "" {
 			levels = append(levels, level{"sprint", "list_ids[]=" + listID, 1})
 		}
@@ -627,7 +620,7 @@ func findTaskViaPR(f *cmdutil.Factory, ios *iostreams.IOStreams) (string, bool, 
 		}
 		fmt.Fprintf(ios.ErrOut, "  searching %s for PR #%d...\n", lvl.label, prNum)
 		for page := 0; page < lvl.maxPages; page++ {
-			tasks, err := fetchTeamTasks(ctx, client, teamID, page, lvl.extraParams)
+			tasks, err := apiv2.FetchTeamTasks(ctx, client, teamID, page, lvl.extraParams)
 			if err != nil || len(tasks) == 0 {
 				break
 			}

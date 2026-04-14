@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
@@ -94,8 +95,8 @@ func setRun(opts *setOptions) error {
 	ctx := context.Background()
 
 	// Fetch the task to determine its space.
-	getOpts := cmdutil.CustomIDTaskOptions(cfg, isCustomID)
-	task, _, err := client.Clickup.Tasks.GetTask(ctx, taskID, getOpts)
+	qs := cmdutil.CustomIDTaskQuery(cfg, isCustomID)
+	task, err := apiv2.GetTaskLocal(ctx, client, taskID, qs)
 	if err != nil {
 		return fmt.Errorf("failed to get task %s: %w", taskID, err)
 	}

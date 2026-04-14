@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/triptechtravel/clickup-cli/internal/api"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/internal/prompter"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
@@ -209,7 +210,7 @@ func fetchWorkspaceMembers(f *cmdutil.Factory, client *api.Client) (map[string]w
 	}
 
 	ctx := context.Background()
-	teams, _, err := client.Clickup.Teams.GetTeams(ctx)
+	teams, err := apiv2.GetTeamsLocal(ctx, client)
 	if err != nil {
 		return nil, err
 	}

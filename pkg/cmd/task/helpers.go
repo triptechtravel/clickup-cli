@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/raksul/go-clickup/clickup"
 	"github.com/triptechtravel/clickup-cli/api/clickupv2"
 	"github.com/triptechtravel/clickup-cli/internal/api"
 	"github.com/triptechtravel/clickup-cli/internal/apiv2"
+	"github.com/triptechtravel/clickup-cli/internal/clickup"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
 
@@ -146,7 +146,7 @@ func resolveCurrentSprintList(f *cmdutil.Factory) (string, error) {
 		return "", err
 	}
 
-	listID, err := cmdutil.ResolveCurrentSprintListID(context.Background(), client.Clickup, folderID)
+	listID, err := cmdutil.ResolveCurrentSprintListID(context.Background(), client, folderID)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve current sprint: %w", err)
 	}

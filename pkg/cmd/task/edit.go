@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/raksul/go-clickup/clickup"
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
+	"github.com/triptechtravel/clickup-cli/internal/clickup"
 	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
@@ -185,8 +186,8 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 	var spaceID, listID string
 	if cmd.Flags().Changed("status") || cmd.Flags().Changed("tags") || cmd.Flags().Changed("add-tags") {
 		parsed := git.ParseTaskID(taskIDs[0])
-		getOpts := cmdutil.CustomIDTaskOptions(cfg, parsed.IsCustomID)
-		fetchTask, _, fetchErr := client.Clickup.Tasks.GetTask(context.Background(), parsed.ID, getOpts)
+		qs := cmdutil.CustomIDTaskQuery(cfg, parsed.IsCustomID)
+		fetchTask, fetchErr := apiv2.GetTaskLocal(context.Background(), client, parsed.ID, qs)
 		if fetchErr == nil && fetchTask.Space.ID != "" {
 			spaceID = fetchTask.Space.ID
 			listID = fetchTask.List.ID
@@ -297,9 +298,9 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 	for i, rawID := range taskIDs {
 		parsed := git.ParseTaskID(rawID)
 		taskID := parsed.ID
-		getOpts := cmdutil.CustomIDTaskOptions(cfg, parsed.IsCustomID)
+		qs := cmdutil.CustomIDTaskQuery(cfg, parsed.IsCustomID)
 
-		task, _, err := client.Clickup.Tasks.UpdateTask(context.Background(), taskID, getOpts, updateReq)
+		task, err := apiv2.UpdateTaskLocal(context.Background(), client, taskID, updateReq, qs)
 		if err != nil {
 			if bulk {
 				fmt.Fprintf(ios.ErrOut, "%s (%d/%d) %s: %v\n", cs.Yellow("!"), i+1, total, rawID, err)
@@ -397,7 +398,7 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 					continue
 				}
 
-				_, err = client.Clickup.CustomFields.SetCustomFieldValue(context.Background(), task.ID, cf.ID, map[string]interface{}{"value": parsed}, nil)
+				err = apiv2.SetCustomFieldValueLocal(context.Background(), client, task.ID, cf.ID, parsed, "")
 				if err != nil {
 					if bulk {
 						fmt.Fprintf(ios.ErrOut, "%s (%d/%d) %s: failed to set custom field %q: %v\n", cs.Yellow("!"), i+1, total, rawID, fieldName, err)
@@ -420,7 +421,7 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 					continue
 				}
 
-				_, err = client.Clickup.CustomFields.RemoveCustomFieldValue(context.Background(), task.ID, cf.ID, nil)
+				err = apiv2.RemoveCustomFieldValueLocal(context.Background(), client, task.ID, cf.ID, "")
 				if err != nil {
 					if bulk {
 						fmt.Fprintf(ios.ErrOut, "%s (%d/%d) %s: failed to clear custom field %q: %v\n", cs.Yellow("!"), i+1, total, rawID, fieldName, err)

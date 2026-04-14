@@ -7,8 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/raksul/go-clickup/clickup"
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
+	"github.com/triptechtravel/clickup-cli/internal/clickup"
 	"github.com/triptechtravel/clickup-cli/internal/prompter"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
@@ -234,7 +235,7 @@ func runCreate(f *cmdutil.Factory, opts *createOptions) error {
 	var spaceID string
 	var listStatuses []string
 	if opts.status != "" || len(opts.tags) > 0 {
-		list, _, listErr := client.Clickup.Lists.GetList(ctx, opts.listID)
+		list, listErr := apiv2.GetListLocal(ctx, client, opts.listID)
 		if listErr == nil && list.Space.ID != "" {
 			spaceID = list.Space.ID
 			for _, s := range list.Statuses {
@@ -313,7 +314,7 @@ func runCreate(f *cmdutil.Factory, opts *createOptions) error {
 		taskReq.CustomItemId = opts.customItemID
 	}
 
-	task, _, err := client.Clickup.Tasks.CreateTask(ctx, opts.listID, taskReq)
+	task, err := apiv2.CreateTaskLocal(ctx, client, opts.listID, taskReq, "")
 	if err != nil {
 		return fmt.Errorf("failed to create task: %w", err)
 	}
@@ -335,7 +336,7 @@ func runCreate(f *cmdutil.Factory, opts *createOptions) error {
 	// Handle custom field set operations.
 	if len(opts.fields) > 0 {
 		// Fetch accessible custom fields for the list to resolve names to IDs.
-		listFields, _, err := client.Clickup.CustomFields.GetAccessibleCustomFields(ctx, opts.listID)
+		listFields, err := apiv2.GetAccessibleCustomFieldsLocal(ctx, client, opts.listID)
 		if err != nil {
 			return fmt.Errorf("task created but failed to fetch custom fields: %w", err)
 		}
@@ -356,7 +357,7 @@ func runCreate(f *cmdutil.Factory, opts *createOptions) error {
 				return err
 			}
 
-			_, err = client.Clickup.CustomFields.SetCustomFieldValue(ctx, task.ID, cf.ID, map[string]interface{}{"value": parsed}, nil)
+			err = apiv2.SetCustomFieldValueLocal(ctx, client, task.ID, cf.ID, parsed, "")
 			if err != nil {
 				return fmt.Errorf("task created but failed to set custom field %q: %w", fieldName, err)
 			}
@@ -426,7 +427,7 @@ func runBulkCreate(f *cmdutil.Factory, opts *createOptions) error {
 		}
 	}
 	if needsValidation {
-		list, _, listErr := client.Clickup.Lists.GetList(ctx, opts.listID)
+		list, listErr := apiv2.GetListLocal(ctx, client, opts.listID)
 		if listErr == nil && list.Space.ID != "" {
 			spaceID = list.Space.ID
 			for _, s := range list.Statuses {
@@ -445,7 +446,7 @@ func runBulkCreate(f *cmdutil.Factory, opts *createOptions) error {
 		}
 	}
 	if needsFields {
-		fields, _, err := client.Clickup.CustomFields.GetAccessibleCustomFields(ctx, opts.listID)
+		fields, err := apiv2.GetAccessibleCustomFieldsLocal(ctx, client, opts.listID)
 		if err != nil {
 			return fmt.Errorf("failed to fetch custom fields: %w", err)
 		}
@@ -533,7 +534,7 @@ func runBulkCreate(f *cmdutil.Factory, opts *createOptions) error {
 			taskReq.CustomItemId = entry.Type
 		}
 
-		task, _, err := client.Clickup.Tasks.CreateTask(ctx, opts.listID, taskReq)
+		task, err := apiv2.CreateTaskLocal(ctx, client, opts.listID, taskReq, "")
 		if err != nil {
 			fmt.Fprintf(ios.ErrOut, "%s (%d/%d) %s: %v\n", cs.Yellow("!"), i+1, total, entry.Name, err)
 			continue
@@ -566,7 +567,7 @@ func runBulkCreate(f *cmdutil.Factory, opts *createOptions) error {
 					fmt.Fprintf(ios.ErrOut, "%s (%d/%d) %s: custom field %q: %v\n", cs.Yellow("!"), i+1, total, entry.Name, fieldSpec.Name, err)
 					continue
 				}
-				_, err = client.Clickup.CustomFields.SetCustomFieldValue(ctx, task.ID, cf.ID, map[string]interface{}{"value": parsed}, nil)
+				err = apiv2.SetCustomFieldValueLocal(ctx, client, task.ID, cf.ID, parsed, "")
 				if err != nil {
 					fmt.Fprintf(ios.ErrOut, "%s (%d/%d) %s: failed to set custom field %q: %v\n", cs.Yellow("!"), i+1, total, entry.Name, fieldSpec.Name, err)
 				}

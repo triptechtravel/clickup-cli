@@ -4,19 +4,17 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
-	"github.com/raksul/go-clickup/clickup"
 	"github.com/triptechtravel/clickup-cli/internal/build"
 )
 
-// Client wraps the go-clickup client with auth and rate limiting.
+// Client provides authenticated access to the ClickUp API with rate limiting.
 type Client struct {
-	Clickup     *clickup.Client
 	HTTPClient  *http.Client
 	RateLimiter *RateLimiter
+	baseURL     string
 	token       string
 }
 
@@ -73,6 +71,8 @@ func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
+const defaultBaseURL = "https://api.clickup.com/api/v2"
+
 // NewClient creates a new API client with the given token.
 func NewClient(token string) *Client {
 	rl := NewRateLimiter()
@@ -86,12 +86,10 @@ func NewClient(token string) *Client {
 		},
 	}
 
-	clickupClient := clickup.NewClient(httpClient, token)
-
 	return &Client{
-		Clickup:     clickupClient,
 		HTTPClient:  httpClient,
 		RateLimiter: rl,
+		baseURL:     defaultBaseURL,
 		token:       token,
 	}
 }
@@ -104,7 +102,7 @@ func (c *Client) Token() string {
 // BaseURL returns the base API URL. For production this is
 // "https://api.clickup.com/api/v2"; for tests it points to httptest.Server.
 func (c *Client) BaseURL() string {
-	return strings.TrimRight(c.Clickup.BaseURL.String(), "/")
+	return strings.TrimRight(c.baseURL, "/")
 }
 
 // BaseURLV3 returns the base URL for the ClickUp v3 API. For production this
@@ -141,14 +139,10 @@ func NewTestClient(baseURL string) *Client {
 		},
 	}
 
-	clickupClient := clickup.NewClient(httpClient, "test-token")
-	u, _ := url.Parse(baseURL + "/api/v2/")
-	clickupClient.BaseURL = u
-
 	return &Client{
-		Clickup:     clickupClient,
 		HTTPClient:  httpClient,
 		RateLimiter: rl,
+		baseURL:     baseURL + "/api/v2",
 		token:       "test-token",
 	}
 }

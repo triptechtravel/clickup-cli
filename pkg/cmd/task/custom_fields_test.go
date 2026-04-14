@@ -3,7 +3,7 @@ package task
 import (
 	"testing"
 
-	"github.com/raksul/go-clickup/clickup"
+	"github.com/triptechtravel/clickup-cli/internal/clickup"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

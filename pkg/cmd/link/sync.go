@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
@@ -87,10 +88,10 @@ func syncRun(opts *syncOptions) error {
 		return cfgErr
 	}
 
-	getOpts := cmdutil.CustomIDTaskOptions(cfg, parsed.IsCustomID)
+	qs := cmdutil.CustomIDTaskQuery(cfg, parsed.IsCustomID)
 
 	ctx := context.Background()
-	task, _, err := client.Clickup.Tasks.GetTask(ctx, parsed.ID, getOpts)
+	task, err := apiv2.GetTaskLocal(ctx, client, parsed.ID, qs)
 	if err != nil {
 		return fmt.Errorf("failed to fetch task: %w", err)
 	}
