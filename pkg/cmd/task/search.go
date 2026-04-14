@@ -693,13 +693,16 @@ func searchTaskComments(ctx context.Context, client *api.Client, query string, t
 	// Fan out with bounded concurrency.
 	sem := make(chan struct{}, maxWorkers)
 	resultCh := make(chan result, len(tasks))
+	var wg sync.WaitGroup
 
 	for _, t := range tasks {
 		if ctx.Err() != nil {
 			break
 		}
 		sem <- struct{}{} // acquire
+		wg.Add(1)
 		go func(task searchTask) {
+			defer wg.Done()
 			defer func() { <-sem }() // release
 			match := taskMatchesComment(ctx, client, query, task.ID)
 			resultCh <- result{task: task, match: match}
@@ -707,9 +710,7 @@ func searchTaskComments(ctx context.Context, client *api.Client, query string, t
 	}
 
 	// Wait for all goroutines to finish.
-	for i := 0; i < cap(sem); i++ {
-		sem <- struct{}{}
-	}
+	wg.Wait()
 	close(resultCh)
 
 	var scored []scoredTask
@@ -777,18 +778,6 @@ func dedupScored(tasks []scoredTask) []scoredTask {
 		}
 	}
 	return result
-}
-
-func dedup(tasks []searchTask) []searchTask {
-	seen := make(map[string]bool)
-	var unique []searchTask
-	for _, t := range tasks {
-		if !seen[t.ID] {
-			seen[t.ID] = true
-			unique = append(unique, t)
-		}
-	}
-	return unique
 }
 
 func noResultsPrompt(ios *iostreams.IOStreams, opts *searchOptions) error {

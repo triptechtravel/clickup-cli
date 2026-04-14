@@ -91,7 +91,7 @@ func (d Date) MarshalJSON() ([]byte, error) {
 }
 
 func int64ToJsonNumber(n int64) json.Number {
-	b := []byte(strconv.Itoa(int(n)))
+	b := []byte(strconv.FormatInt(n, 10))
 
 	var v json.Number
 	if err := json.Unmarshal(b, &v); err != nil {

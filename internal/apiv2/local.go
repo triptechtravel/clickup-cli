@@ -71,7 +71,7 @@ func DependencyQuery(dependsOn, dependencyOf string, customTaskIDs bool, teamID 
 // GetTaskLocal fetches a single task. qs is a query string (e.g. from TaskQuery).
 func GetTaskLocal(ctx context.Context, client *api.Client, taskID, qs string) (*clickup.Task, error) {
 	var task clickup.Task
-	path := fmt.Sprintf("task/%s/%s", taskID, qs)
+	path := fmt.Sprintf("task/%s%s", taskID, qs)
 	if err := do(ctx, client, "GET", path, nil, &task); err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func CreateTaskLocal(ctx context.Context, client *api.Client, listID string, req
 // TaskAssigneeUpdateRequest are used.
 func UpdateTaskLocal(ctx context.Context, client *api.Client, taskID string, req any, qs string) (*clickup.Task, error) {
 	var task clickup.Task
-	path := fmt.Sprintf("task/%s/%s", taskID, qs)
+	path := fmt.Sprintf("task/%s%s", taskID, qs)
 	if err := do(ctx, client, "PUT", path, req, &task); err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func UpdateTaskLocal(ctx context.Context, client *api.Client, taskID string, req
 
 // DeleteTaskLocal deletes a task.
 func DeleteTaskLocal(ctx context.Context, client *api.Client, taskID, qs string) error {
-	path := fmt.Sprintf("task/%s/%s", taskID, qs)
+	path := fmt.Sprintf("task/%s%s", taskID, qs)
 	return do(ctx, client, "DELETE", path, nil, nil)
 }
 

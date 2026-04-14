@@ -34,14 +34,17 @@ See the [getting started guide](https://triptechtravel.github.io/clickup-cli/get
 
 ## What it does
 
-- **Task management** -- view, create, edit, search, and bulk-edit tasks with custom fields, tags, points, and time estimates
+- **Task management** -- view, create, edit, search, bulk-edit, and bulk-delete tasks with custom fields, tags, points, and time estimates
+- **Folder & list management** -- browse folders and lists, select defaults per directory, create tasks by list name
 - **Docs** -- list, view, create ClickUp Docs and manage their pages (list, view, create, edit) via the v3 API
 - **Git integration** -- auto-detects task IDs from branch names and links PRs, branches, and commits to ClickUp
 - **Sprint dashboard** -- `sprint current` shows tasks grouped by status; `task create --current` creates tasks in the active sprint
 - **Time tracking** -- log time, view per-task entries, or query workspace-wide timesheets by date range
 - **Comments & inbox** -- add comments with @mentions, view your recent mentions across the workspace
+- **Chat** -- send messages to ClickUp chat channels
+- **Search** -- server-side search with parallel space traversal, `--assignee` filtering (name, username, ID, or `me`)
 - **Fuzzy status matching** -- set statuses with partial input (`"review"` matches `"code review"`)
-- **AI-friendly** -- `--json` output and explicit flags make it easy for AI agents to read and update tasks
+- **AI-friendly** -- `--json` output, recursive task view, and explicit flags make it easy for AI agents to read and update tasks
 - **CI/CD ready** -- `--with-token`, exit codes, and JSON output for automation; includes GitHub Actions examples
 
 ## Commands
@@ -50,13 +53,16 @@ Full command list with flags and examples: **[Command reference](https://triptec
 
 | Area | Key commands |
 |------|-------------|
-| **Tasks** | `task view`, `task create`, `task edit`, `task search`, `task recent` |
+| **Tasks** | `task view`, `task create`, `task edit`, `task search`, `task delete`, `task recent` |
+| **Folders** | `folder list`, `folder select` |
+| **Lists** | `list list`, `list select` |
 | **Docs** | `doc list`, `doc view`, `doc create`, `doc page list`, `doc page view`, `doc page create`, `doc page edit` |
 | **Time** | `task time log`, `task time list` |
 | **Status** | `status set`, `status list`, `status add` |
 | **Git** | `link pr`, `link sync`, `link branch`, `link commit` |
 | **Sprints** | `sprint current`, `sprint list` |
 | **Comments** | `comment add`, `comment list` |
+| **Chat** | `chat send` |
 | **Attachments** | `attachment list`, `attachment add` |
 | **Workspace** | `inbox`, `member list`, `space select`, `tag list`, `field list` |
 

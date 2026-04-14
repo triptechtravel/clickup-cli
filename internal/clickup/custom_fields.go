@@ -316,6 +316,8 @@ func getIntValue(v interface{}) (int64, bool) {
 	switch v := v.(type) {
 	case int:
 		return int64(v), true
+	case float64:
+		return int64(v), true
 	case string:
 		num, err := strconv.ParseInt(v, 10, 64)
 		if err != nil {

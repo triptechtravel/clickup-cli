@@ -182,7 +182,7 @@ func TestGetTaskLocal(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "GET", capturedMethod)
-	assert.Contains(t, capturedPath, "/task/task123/")
+	assert.Contains(t, capturedPath, "/task/task123")
 
 	// Verify decoded fields
 	assert.Equal(t, "task123", task.ID)
@@ -263,7 +263,7 @@ func TestUpdateTaskLocal(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "PUT", capturedMethod)
-	assert.Contains(t, capturedPath, "/task/task123/")
+	assert.Contains(t, capturedPath, "/task/task123")
 	assert.Equal(t, "Updated Name", capturedBody["name"])
 	assert.EqualValues(t, 2, capturedBody["priority"])
 	assert.Equal(t, "task123", task.ID)
@@ -285,7 +285,7 @@ func TestDeleteTaskLocal(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "DELETE", capturedMethod)
-	assert.Contains(t, capturedPath, "/task/task123/")
+	assert.Contains(t, capturedPath, "/task/task123")
 }
 
 func TestGetFilteredTeamTasksLocal(t *testing.T) {
