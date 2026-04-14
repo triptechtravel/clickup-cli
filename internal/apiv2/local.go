@@ -209,7 +209,7 @@ func GetSpacesLocal(ctx context.Context, client *api.Client, teamID string, arch
 // GetFoldersLocal fetches folders for a space.
 func GetFoldersLocal(ctx context.Context, client *api.Client, spaceID string, archived bool) ([]clickup.Folder, error) {
 	var resp struct {
-		Folders []clickup.Folder `json:"Folders"`
+		Folders []clickup.Folder `json:"folders"`
 	}
 	path := fmt.Sprintf("space/%s/folder?archived=%v", spaceID, archived)
 	if err := do(ctx, client, "GET", path, nil, &resp); err != nil {
@@ -221,7 +221,7 @@ func GetFoldersLocal(ctx context.Context, client *api.Client, spaceID string, ar
 // GetListsLocal fetches lists for a folder.
 func GetListsLocal(ctx context.Context, client *api.Client, folderID string, archived bool) ([]clickup.List, error) {
 	var resp struct {
-		Lists []clickup.List `json:"Lists"`
+		Lists []clickup.List `json:"lists"`
 	}
 	path := fmt.Sprintf("folder/%s/list?archived=%v", folderID, archived)
 	if err := do(ctx, client, "GET", path, nil, &resp); err != nil {
@@ -233,7 +233,7 @@ func GetListsLocal(ctx context.Context, client *api.Client, folderID string, arc
 // GetFolderlessListsLocal fetches folderless lists for a space.
 func GetFolderlessListsLocal(ctx context.Context, client *api.Client, spaceID string) ([]clickup.List, error) {
 	var resp struct {
-		Lists []clickup.List `json:"Lists"`
+		Lists []clickup.List `json:"lists"`
 	}
 	path := fmt.Sprintf("space/%s/list", spaceID)
 	if err := do(ctx, client, "GET", path, nil, &resp); err != nil {
