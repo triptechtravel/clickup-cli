@@ -134,18 +134,32 @@ func resolveTypeFromSpec(spec map[string]any, genCode, typeName string) []fieldI
 	jsonFieldName := m[1]
 
 	// Step 2: Search all spec paths for an array property with this field
-	// name whose items have a $ref.
+	// name whose items have a $ref. Iterate in sorted order so the result
+	// is deterministic — without sorting, Go's random map iteration can
+	// pick different $refs across runs when multiple paths match.
 	paths, ok := spec["paths"].(map[string]any)
 	if !ok {
 		return nil
 	}
 
-	for _, methods := range paths {
-		methodMap, ok := methods.(map[string]any)
+	pathNames := make([]string, 0, len(paths))
+	for p := range paths {
+		pathNames = append(pathNames, p)
+	}
+	sort.Strings(pathNames)
+
+	for _, pathName := range pathNames {
+		methodMap, ok := paths[pathName].(map[string]any)
 		if !ok {
 			continue
 		}
-		for methodName, opRaw := range methodMap {
+		methodNames := make([]string, 0, len(methodMap))
+		for mn := range methodMap {
+			methodNames = append(methodNames, mn)
+		}
+		sort.Strings(methodNames)
+		for _, methodName := range methodNames {
+			opRaw := methodMap[methodName]
 			if methodName == "parameters" {
 				continue
 			}
