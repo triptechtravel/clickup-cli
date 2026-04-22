@@ -47,6 +47,12 @@ brews:
       bin.install "clickup"
     test: |
       system "#{bin}/clickup", "version"
+    # The "clickup" cask (desktop app) shadows this formula under the bare
+    # name `clickup`. Declare the conflict so Homebrew prints a clearer
+    # message than the generic "Cask clickup is not installed" warning.
+    custom_block: |
+      conflicts_with cask: "clickup",
+        because: "the ClickUp desktop app cask also installs a binary; use `brew install triptechtravel/tap/clickup` explicitly"
 
 checksum:
   name_template: "checksums.txt"
