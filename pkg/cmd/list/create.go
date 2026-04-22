@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	clickupv2 "github.com/triptechtravel/clickup-cli/api/clickupv2"
 	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
@@ -76,12 +75,13 @@ func runListCreate(f *cmdutil.Factory, opts *createOptions) error {
 	ctx := context.Background()
 
 	if opts.folderID != "" {
-		req := &clickupv2.CreateListJSONRequest{
-			Name: opts.name,
-		}
-
-		resp, err := apiv2.CreateList(ctx, client, opts.folderID, req)
-		if err != nil {
+		// Bypass generated CreateList wrapper: its response type declares
+		// task_count as string, but the API returns an integer on this
+		// endpoint, causing unmarshal failures after the list is created.
+		req := map[string]string{"name": opts.name}
+		var resp map[string]interface{}
+		path := fmt.Sprintf("folder/%s/list", opts.folderID)
+		if err := apiv2.Do(ctx, client, "POST", path, req, &resp); err != nil {
 			return fmt.Errorf("failed to create list: %w", err)
 		}
 
@@ -89,13 +89,10 @@ func runListCreate(f *cmdutil.Factory, opts *createOptions) error {
 			return opts.jsonFlags.OutputJSON(ios.Out, resp)
 		}
 
-		id := ""
+		id, _ := resp["id"].(string)
 		name := opts.name
-		if resp.ID != nil {
-			id = *resp.ID
-		}
-		if resp.Name != nil {
-			name = *resp.Name
+		if n, ok := resp["name"].(string); ok && n != "" {
+			name = n
 		}
 
 		fmt.Fprintf(ios.Out, "%s Created list %s (%s)\n", cs.Green("!"), cs.Bold(name), id)
@@ -103,12 +100,11 @@ func runListCreate(f *cmdutil.Factory, opts *createOptions) error {
 	}
 
 	// Folderless list in a space.
-	req := &clickupv2.CreateFolderlessListJSONRequest{
-		Name: opts.name,
-	}
-
-	resp, err := apiv2.CreateFolderlessList(ctx, client, opts.spaceID, req)
-	if err != nil {
+	// Same task_count type-mismatch applies to the folderless variant.
+	req := map[string]string{"name": opts.name}
+	var resp map[string]interface{}
+	path := fmt.Sprintf("space/%s/list", opts.spaceID)
+	if err := apiv2.Do(ctx, client, "POST", path, req, &resp); err != nil {
 		return fmt.Errorf("failed to create list: %w", err)
 	}
 
@@ -116,13 +112,10 @@ func runListCreate(f *cmdutil.Factory, opts *createOptions) error {
 		return opts.jsonFlags.OutputJSON(ios.Out, resp)
 	}
 
-	id := ""
+	id, _ := resp["id"].(string)
 	name := opts.name
-	if resp.ID != nil {
-		id = *resp.ID
-	}
-	if resp.Name != nil {
-		name = *resp.Name
+	if n, ok := resp["name"].(string); ok && n != "" {
+		name = n
 	}
 
 	fmt.Fprintf(ios.Out, "%s Created list %s (%s)\n", cs.Green("!"), cs.Bold(name), id)

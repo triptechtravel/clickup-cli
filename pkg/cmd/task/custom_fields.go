@@ -1,13 +1,49 @@
 package task
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/triptechtravel/clickup-cli/internal/api"
 	"github.com/triptechtravel/clickup-cli/internal/clickup"
+	"github.com/triptechtravel/clickup-cli/internal/text"
+	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
+
+// UserResolver resolves a user input (name, username, or "me") to a numeric
+// user ID. Implementations should accept numeric input unchanged.
+type UserResolver func(input string) (int, error)
+
+// newUserResolver returns a resolver that fetches workspace members lazily
+// on the first non-numeric input and reuses the cached list thereafter.
+func newUserResolver(ctx context.Context, client *api.Client) UserResolver {
+	var (
+		members       []clickup.TeamUser
+		currentUserID int
+		initErr       error
+		once          sync.Once
+	)
+	return func(input string) (int, error) {
+		once.Do(func() {
+			members, initErr = fetchWorkspaceMembers(ctx, client)
+			if initErr != nil {
+				return
+			}
+			if id, err := cmdutil.GetCurrentUserID(client); err == nil {
+				currentUserID = id
+			}
+		})
+		if initErr != nil {
+			return 0, initErr
+		}
+		id, _, err := resolveAssigneeFromMembers(members, input, currentUserID)
+		return id, err
+	}
+}
 
 // resolveFieldByName finds a custom field by name (case-insensitive) in a list
 // of custom fields.
@@ -22,7 +58,9 @@ func resolveFieldByName(fields []clickup.CustomField, name string) *clickup.Cust
 
 // parseFieldValue parses a string value into the appropriate type for a
 // custom field, returning a value suitable for SetCustomFieldValue.
-func parseFieldValue(field *clickup.CustomField, rawValue string) (interface{}, error) {
+// If resolver is non-nil, non-numeric tokens in "users" fields are resolved
+// via the workspace member list; otherwise only numeric IDs are accepted.
+func parseFieldValue(field *clickup.CustomField, rawValue string, resolver UserResolver) (interface{}, error) {
 	switch field.Type {
 	case "url", "email", "phone", "text", "short_text":
 		return rawValue, nil
@@ -62,26 +100,31 @@ func parseFieldValue(field *clickup.CustomField, rawValue string) (interface{}, 
 		return v, nil
 
 	case "users":
-		// Expect comma-separated user IDs.
-		ids := strings.Split(rawValue, ",")
-		var users []map[string]interface{}
-		for _, id := range ids {
-			id = strings.TrimSpace(id)
-			if id != "" {
-				users = append(users, map[string]interface{}{"id": id})
+		// ClickUp v2 wants {"add": [id, ...]} with bare integer IDs — a raw
+		// [{"id": "<string>"}] slice is silently accepted but leaves the
+		// field value empty.
+		var ids []int
+		for _, p := range text.SplitAndTrim(rawValue) {
+			id, err := strconv.Atoi(p)
+			if err == nil && id > 0 {
+				ids = append(ids, id)
+				continue
 			}
+			if resolver == nil {
+				return nil, fmt.Errorf("invalid user ID %q for field %q (expected a positive numeric ID — run 'clickup member list' to look up IDs)", p, field.Name)
+			}
+			resolved, rerr := resolver(p)
+			if rerr != nil {
+				return nil, fmt.Errorf("cannot resolve user %q for field %q: %w", p, field.Name, rerr)
+			}
+			ids = append(ids, resolved)
 		}
-		return users, nil
+		return map[string]interface{}{"add": ids}, nil
 
 	case "tasks":
-		// Expect comma-separated task IDs.
-		ids := strings.Split(rawValue, ",")
 		var tasks []map[string]interface{}
-		for _, id := range ids {
-			id = strings.TrimSpace(id)
-			if id != "" {
-				tasks = append(tasks, map[string]interface{}{"id": id})
-			}
+		for _, id := range text.SplitAndTrim(rawValue) {
+			tasks = append(tasks, map[string]interface{}{"id": id})
 		}
 		return map[string]interface{}{"add": tasks}, nil
 
@@ -135,13 +178,8 @@ func resolveLabelOptions(field *clickup.CustomField, rawValue string) (interface
 		return nil, fmt.Errorf("field %q has no label options configured", field.Name)
 	}
 
-	names := strings.Split(rawValue, ",")
 	var ids []string
-	for _, name := range names {
-		name = strings.TrimSpace(name)
-		if name == "" {
-			continue
-		}
+	for _, name := range text.SplitAndTrim(rawValue) {
 		found := false
 		for _, opt := range options {
 			if optName := getOptionName(opt); optName != "" {

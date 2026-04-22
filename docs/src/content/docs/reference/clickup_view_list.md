@@ -35,15 +35,15 @@ clickup view list [flags]
 ### Options
 
 ```
-      --folder string     List views in a folder
-  -h, --help              help for list
-      --jq string         Filter JSON output using a jq expression
-      --json              Output JSON
-      --list string       List views in a list
-  -r, --raw               Output raw strings instead of JSON-encoded (use with --jq)
-      --space string      List views in a space
-      --team              List workspace-level views (default)
-      --template string   Format JSON output using a Go template
+      --folder string       List views in a folder
+  -h, --help                help for list
+      --jq string           Filter JSON output using a jq expression
+      --json                Output JSON
+      --list string         List views in a list
+  -r, --raw                 Output raw strings instead of JSON-encoded (use with --jq)
+      --space string        List views in a space
+      --team string[=" "]   Workspace ID override (or pass without value for default workspace)
+      --template string     Format JSON output using a Go template
 ```
 
 ### SEE ALSO

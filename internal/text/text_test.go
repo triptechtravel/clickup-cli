@@ -2,9 +2,32 @@ package text
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 )
+
+func TestSplitAndTrim(t *testing.T) {
+	tests := []struct {
+		input string
+		want  []string
+	}{
+		{"", nil},
+		{"   ", nil},
+		{",,,", nil},
+		{"a", []string{"a"}},
+		{"a,b,c", []string{"a", "b", "c"}},
+		{" a , b , c ", []string{"a", "b", "c"}},
+		{"a,,b, ,c", []string{"a", "b", "c"}},
+	}
+
+	for _, tt := range tests {
+		got := SplitAndTrim(tt.input)
+		if !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("SplitAndTrim(%q) = %#v, want %#v", tt.input, got, tt.want)
+		}
+	}
+}
 
 func TestTruncate(t *testing.T) {
 	tests := []struct {

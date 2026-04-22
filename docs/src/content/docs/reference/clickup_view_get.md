@@ -9,6 +9,9 @@ Get a view
 
 Get detailed information about a ClickUp view.
 
+Output is always JSON because the response is a union type that cannot
+be rendered as a table.
+
 ```
 clickup view get <view-id> [flags]
 ```
@@ -18,9 +21,6 @@ clickup view get <view-id> [flags]
 ```
   # Get a view
   clickup view get 3v-abc123
-
-  # Get as JSON
-  clickup view get 3v-abc123 --json
 ```
 
 ### Options

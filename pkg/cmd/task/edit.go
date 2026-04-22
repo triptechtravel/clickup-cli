@@ -388,7 +388,7 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 					continue
 				}
 
-				parsed, err := parseFieldValue(cf, fieldValue)
+				parsed, err := parseFieldValue(cf, fieldValue, newUserResolver(context.Background(), client))
 				if err != nil {
 					if bulk {
 						fmt.Fprintf(ios.ErrOut, "%s (%d/%d) %s: custom field %q: %v\n", cs.Yellow("!"), i+1, total, rawID, fieldName, err)

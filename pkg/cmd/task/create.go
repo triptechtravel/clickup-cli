@@ -362,7 +362,7 @@ func runCreate(f *cmdutil.Factory, opts *createOptions) error {
 				return fmt.Errorf("custom field %q not found (available: %s)", fieldName, customFieldNames(listFields))
 			}
 
-			parsed, err := parseFieldValue(cf, fieldValue)
+			parsed, err := parseFieldValue(cf, fieldValue, newUserResolver(ctx, client))
 			if err != nil {
 				return err
 			}
@@ -572,7 +572,7 @@ func runBulkCreate(f *cmdutil.Factory, opts *createOptions) error {
 					fmt.Fprintf(ios.ErrOut, "%s (%d/%d) %s: custom field %q not found\n", cs.Yellow("!"), i+1, total, entry.Name, fieldSpec.Name)
 					continue
 				}
-				parsed, err := parseFieldValue(cf, fieldSpec.Value)
+				parsed, err := parseFieldValue(cf, fieldSpec.Value, newUserResolver(ctx, client))
 				if err != nil {
 					fmt.Fprintf(ios.ErrOut, "%s (%d/%d) %s: custom field %q: %v\n", cs.Yellow("!"), i+1, total, entry.Name, fieldSpec.Name, err)
 					continue

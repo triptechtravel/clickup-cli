@@ -32,6 +32,7 @@ official ClickUp API V2 spec (82 paths, 137 operations).
 |-----|--------|
 | Tag creation sends tags in request body | ClickUp ignores body tags; must use `POST /task/{id}/tag/{name}` URL |
 | Nullable priority parsed as empty struct | `"priority": null` → `TaskPriority{Priority:"", Color:""}` instead of nil |
+| `PUT /list/{id}` silently ignores `folder_id` | Endpoint returns 200 and echoes the original folder; the list does not move. Verified 2026-04-22 against a live workspace. `POST /folder/{id}/list` with `list_id` also rejects (`List Name Invalid`). **There is no public-API way to reparent a list between folders.** Do NOT add a `list move` command (nick-preda's fork did and shipped a non-functional no-op). |
 
 ## Operations in Spec NOT in go-clickup
 

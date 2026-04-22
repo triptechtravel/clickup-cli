@@ -1,6 +1,8 @@
 package task
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/triptechtravel/clickup-cli/internal/clickup"
@@ -208,10 +210,16 @@ func TestParseFieldValue(t *testing.T) {
 			name:     "users comma-separated",
 			field:    &clickup.CustomField{Name: "Assignees", Type: "users"},
 			rawValue: "123, 456",
-			want: []map[string]interface{}{
-				{"id": "123"},
-				{"id": "456"},
+			want: map[string]interface{}{
+				"add": []int{123, 456},
 			},
+		},
+		{
+			name:      "users invalid id (no resolver)",
+			field:     &clickup.CustomField{Name: "Assignees", Type: "users"},
+			rawValue:  "abc",
+			wantErr:   true,
+			errSubstr: "invalid user ID",
 		},
 		{
 			name:     "tasks comma-separated",
@@ -266,7 +274,7 @@ func TestParseFieldValue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseFieldValue(tt.field, tt.rawValue)
+			got, err := parseFieldValue(tt.field, tt.rawValue, nil)
 			if tt.wantErr {
 				require.Error(t, err)
 				if tt.errSubstr != "" {
@@ -370,6 +378,49 @@ func TestResolveDropdownOption(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+// ---------------------------------------------------------------------------
+// parseFieldValue with user resolver
+// ---------------------------------------------------------------------------
+
+func TestParseFieldValue_UsersWithResolver(t *testing.T) {
+	resolver := func(input string) (int, error) {
+		switch strings.ToLower(input) {
+		case "isaac":
+			return 111, nil
+		case "alice":
+			return 222, nil
+		}
+		return 0, fmt.Errorf("no match for %q", input)
+	}
+
+	field := &clickup.CustomField{Name: "Stakeholders", Type: "users"}
+
+	t.Run("mixed names and numeric IDs", func(t *testing.T) {
+		got, err := parseFieldValue(field, "isaac, 333, alice", resolver)
+		require.NoError(t, err)
+		assert.Equal(t, map[string]interface{}{"add": []int{111, 333, 222}}, got)
+	})
+
+	t.Run("unknown name returns resolver error", func(t *testing.T) {
+		_, err := parseFieldValue(field, "nobody", resolver)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `cannot resolve user "nobody"`)
+		assert.Contains(t, err.Error(), `for field "Stakeholders"`)
+	})
+
+	t.Run("numeric only skips resolver", func(t *testing.T) {
+		called := false
+		trackingResolver := func(input string) (int, error) {
+			called = true
+			return 0, nil
+		}
+		got, err := parseFieldValue(field, "42, 99", trackingResolver)
+		require.NoError(t, err)
+		assert.Equal(t, map[string]interface{}{"add": []int{42, 99}}, got)
+		assert.False(t, called, "resolver should not be called for purely numeric input")
+	})
 }
 
 // ---------------------------------------------------------------------------

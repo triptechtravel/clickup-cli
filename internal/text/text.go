@@ -127,6 +127,18 @@ func FormatBytes(bytes int) string {
 	}
 }
 
+// SplitAndTrim splits s on commas, trims whitespace from each token, and
+// drops empty tokens.
+func SplitAndTrim(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 // IndentLines indents each line of text by the given prefix.
 func IndentLines(text, prefix string) string {
 	lines := strings.Split(text, "\n")

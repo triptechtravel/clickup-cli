@@ -434,34 +434,51 @@ func searchLevel(ctx context.Context, client *api.Client, teamID, query string, 
 // resolveAssignee resolves a user input (name, username, numeric ID, or "me")
 // to a numeric user ID and display name. It uses the workspace members list.
 func resolveAssignee(ctx context.Context, client *api.Client, input string) (int, string, error) {
-	teams, err := apiv2.GetTeamsLocal(ctx, client)
+	members, err := fetchWorkspaceMembers(ctx, client)
 	if err != nil {
-		return 0, "", fmt.Errorf("failed to fetch workspace members: %w", err)
+		return 0, "", err
 	}
 
-	// Collect all members across teams.
+	var currentUserID int
+	if strings.EqualFold(input, "me") {
+		id, err := cmdutil.GetCurrentUserID(client)
+		if err != nil {
+			return 0, "", fmt.Errorf("failed to get current user: %w", err)
+		}
+		currentUserID = id
+	}
+
+	return resolveAssigneeFromMembers(members, input, currentUserID)
+}
+
+// fetchWorkspaceMembers returns the flattened list of members across all teams.
+func fetchWorkspaceMembers(ctx context.Context, client *api.Client) ([]clickup.TeamUser, error) {
+	teams, err := apiv2.GetTeamsLocal(ctx, client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch workspace members: %w", err)
+	}
 	var members []clickup.TeamUser
 	for _, team := range teams {
 		for _, m := range team.Members {
 			members = append(members, m.User)
 		}
 	}
+	return members, nil
+}
 
-	// "me" — resolve via current user ID, then look up display name.
+// resolveAssigneeFromMembers matches input (name, username, numeric ID, or
+// "me") against a pre-fetched member list. If input is "me", currentUserID
+// must be pre-resolved by the caller.
+func resolveAssigneeFromMembers(members []clickup.TeamUser, input string, currentUserID int) (int, string, error) {
 	if strings.EqualFold(input, "me") {
-		userID, err := cmdutil.GetCurrentUserID(client)
-		if err != nil {
-			return 0, "", fmt.Errorf("failed to get current user: %w", err)
-		}
 		for _, m := range members {
-			if m.ID == userID {
-				return userID, m.Username, nil
+			if m.ID == currentUserID {
+				return currentUserID, m.Username, nil
 			}
 		}
-		return userID, "me", nil
+		return currentUserID, "me", nil
 	}
 
-	// Numeric ID — parse and look up.
 	if id, err := strconv.Atoi(input); err == nil {
 		for _, m := range members {
 			if m.ID == id {
@@ -471,14 +488,12 @@ func resolveAssignee(ctx context.Context, client *api.Client, input string) (int
 		return 0, "", fmt.Errorf("no workspace member found with ID %d", id)
 	}
 
-	// Exact username match (case-insensitive).
 	for _, m := range members {
 		if strings.EqualFold(m.Username, input) {
 			return m.ID, m.Username, nil
 		}
 	}
 
-	// Substring match on username.
 	lowerInput := strings.ToLower(input)
 	var matches []clickup.TeamUser
 	for _, m := range members {
