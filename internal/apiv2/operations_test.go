@@ -101,6 +101,57 @@ func TestUpdateTask_NumericTimeSpent(t *testing.T) {
 	assert.Equal(t, "86d2ay3mz", *resp.ID)
 }
 
+// Regression: the ClickUp API returns watchers, group_assignees, checklists,
+// dependencies, and linked_tasks as arrays of objects, but the upstream OpenAPI
+// spec declares them as string[]. patch-v2-spec.jq rewrites these to object[]
+// before codegen; this test fails if that patch regresses, because
+// json.Unmarshal on the UpdateTask response would error with:
+//
+//	json: cannot unmarshal object into Go struct field
+//	    UpdateTaskJSONResponse.watchers of type string
+//
+// Surfaced by `clickup task edit --points N`, which calls UpdateTask directly
+// (the points path bypasses the looser go-clickup wrapper).
+func TestUpdateTask_ObjectArrayFields(t *testing.T) {
+	const responseWithObjectArrays = `{
+		"id": "86d2ay3mz",
+		"name": "Test task",
+		"status": {"status": "in progress"},
+		"watchers": [
+			{"id": 12345, "username": "alice", "email": "alice@example.com", "color": "#ff0000", "initials": "A", "profilePicture": null}
+		],
+		"group_assignees": [
+			{"id": "group-1", "name": "Team A"}
+		],
+		"checklists": [
+			{"id": "chk-1", "name": "QA", "items": []}
+		],
+		"dependencies": [
+			{"task_id": "task-a", "depends_on": "task-b"}
+		],
+		"linked_tasks": [
+			{"task_id": "task-c", "link_id": "link-1"}
+		],
+		"url": "https://app.clickup.com/t/86d2ay3mz"
+	}`
+
+	_, client := testServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Remaining", "99")
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(responseWithObjectArrays))
+	})
+
+	pts := float32(5)
+	resp, err := UpdateTask(context.Background(), client, "86d2ay3mz", &clickupv2.UpdateTaskJSONRequest{
+		Points: &pts,
+	})
+
+	require.NoError(t, err, "UpdateTask should decode responses where watchers/checklists/etc are object arrays")
+	assert.NotNil(t, resp)
+	assert.Equal(t, "86d2ay3mz", *resp.ID)
+	assert.Len(t, resp.Watchers, 1, "watchers should decode as object array, not []string")
+}
+
 // Regression: same issue affects GetTask — the API returns numeric time_spent.
 func TestGetTask_NumericTimeSpent(t *testing.T) {
 	const response = `{

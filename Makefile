@@ -69,7 +69,8 @@ api-gen: api-spec
 
 .PHONY: api-clean
 api-clean:
-	rm -rf api/specs/ api/clickupv2/*.gen.go api/clickupv3/*.gen.go
+	rm -f api/specs/clickup-v2.json api/specs/clickup-v2.json.raw api/specs/clickup-v3.yaml
+	rm -f api/clickupv2/*.gen.go api/clickupv3/*.gen.go
 
 # ── Skills ──────────────────────────────────────────────────────────
 .PHONY: install-skill
