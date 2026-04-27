@@ -22,15 +22,16 @@ import (
 )
 
 type searchOptions struct {
-	factory   *cmdutil.Factory
-	query     string
-	space     string
-	folder    string
-	assignee  string
-	pick      bool
-	comments  bool
-	exact     bool
-	jsonFlags cmdutil.JSONFlags
+	factory         *cmdutil.Factory
+	query           string
+	space           string
+	folder          string
+	assignee        string
+	pick            bool
+	comments        bool
+	exact           bool
+	includeSubtasks bool
+	jsonFlags       cmdutil.JSONFlags
 }
 
 type searchTask struct {
@@ -169,6 +170,9 @@ recently updated tasks and discover which folders/lists to search in.`,
   clickup task recent
   clickup task search geozone --folder "Engineering Sprint"
 
+  # Include subtasks in results
+  clickup task search "Phase 1" --include-subtasks
+
   # JSON output
   clickup task search geozone --json`,
 		Args:              cobra.RangeArgs(0, 1),
@@ -190,6 +194,7 @@ recently updated tasks and discover which folders/lists to search in.`,
 	cmd.Flags().BoolVar(&opts.pick, "pick", false, "Interactively select a task and print its ID")
 	cmd.Flags().BoolVar(&opts.comments, "comments", false, "Also search through task comments (slower)")
 	cmd.Flags().BoolVar(&opts.exact, "exact", false, "Only show exact substring matches (no fuzzy results)")
+	cmd.Flags().BoolVar(&opts.includeSubtasks, "include-subtasks", false, "Include subtasks in search results")
 	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 
 	return cmd
@@ -385,9 +390,12 @@ func runSearch(opts *searchOptions) error {
 }
 
 // fetchTeamTasks fetches one page of tasks from the team endpoint with optional extra query params.
-func fetchTeamTasks(ctx context.Context, client *api.Client, teamID string, page int, extraParams string) ([]searchTask, error) {
+func fetchTeamTasks(ctx context.Context, client *api.Client, teamID string, page int, extraParams string, subtasks bool) ([]searchTask, error) {
 	path := fmt.Sprintf("team/%s/task?include_closed=true&page=%d&order_by=updated&reverse=true",
 		teamID, page)
+	if subtasks {
+		path += "&subtasks=true"
+	}
 	if extraParams != "" {
 		path += "&" + extraParams
 	}
@@ -401,14 +409,14 @@ func fetchTeamTasks(ctx context.Context, client *api.Client, teamID string, page
 }
 
 // searchLevel searches tasks at a given drill-down level and returns scored matches.
-func searchLevel(ctx context.Context, client *api.Client, teamID, query string, extraParams string, maxPages int, comments bool, ios *iostreams.IOStreams) ([]scoredTask, error) {
+func searchLevel(ctx context.Context, client *api.Client, teamID, query string, extraParams string, maxPages int, comments bool, subtasks bool, ios *iostreams.IOStreams) ([]scoredTask, error) {
 	var allScored []scoredTask
 	for page := 0; page < maxPages; page++ {
 		if ctx.Err() != nil {
 			break
 		}
 
-		tasks, err := fetchTeamTasks(ctx, client, teamID, page, extraParams)
+		tasks, err := fetchTeamTasks(ctx, client, teamID, page, extraParams, subtasks)
 		if err != nil {
 			return nil, err
 		}
@@ -557,7 +565,7 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 	// If --assignee with no query: fetch all tasks for that assignee.
 	if opts.query == "" && assigneeParam != "" {
 		fmt.Fprintf(ios.ErrOut, "  fetching tasks for %s...\n", assigneeName)
-		tasks, err := fetchTeamTasks(ctx, client, teamID, 0, assigneeParam)
+		tasks, err := fetchTeamTasks(ctx, client, teamID, 0, assigneeParam, opts.includeSubtasks)
 		if err != nil {
 			return nil, err
 		}
@@ -585,7 +593,7 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 
 	// Level 0: Server-side search (fastest — single API call).
 	fmt.Fprintf(ios.ErrOut, "  searching (server-side)...\n")
-	scored, err := searchLevel(ctx, client, teamID, query, buildParams("search="+url.QueryEscape(opts.query)), 1, opts.comments, ios)
+	scored, err := searchLevel(ctx, client, teamID, query, buildParams("search="+url.QueryEscape(opts.query)), 1, opts.comments, opts.includeSubtasks, ios)
 	if err == nil && len(scored) > 0 {
 		return scored, nil
 	}
@@ -595,7 +603,7 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 		fmt.Fprintf(ios.ErrOut, "  searching sprint...\n")
 		listID, err := cmdutil.ResolveCurrentSprintListID(ctx, client, cfg.SprintFolder)
 		if err == nil && listID != "" {
-			scored, err := searchLevel(ctx, client, teamID, query, buildParams("list_ids[]="+listID), 1, opts.comments, ios)
+			scored, err := searchLevel(ctx, client, teamID, query, buildParams("list_ids[]="+listID), 1, opts.comments, opts.includeSubtasks, ios)
 			if err != nil {
 				return nil, err
 			}
@@ -609,7 +617,7 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 	fmt.Fprintf(ios.ErrOut, "  searching your tasks...\n")
 	userID, err := cmdutil.GetCurrentUserID(client)
 	if err == nil {
-		scored, err := searchLevel(ctx, client, teamID, query, buildParams(fmt.Sprintf("assignees[]=%d", userID)), 1, opts.comments, ios)
+		scored, err := searchLevel(ctx, client, teamID, query, buildParams(fmt.Sprintf("assignees[]=%d", userID)), 1, opts.comments, opts.includeSubtasks, ios)
 		if err != nil {
 			return nil, err
 		}
@@ -621,7 +629,7 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 	// Level 3: Configured space.
 	if cfg.Space != "" {
 		fmt.Fprintf(ios.ErrOut, "  searching space...\n")
-		scored, err := searchLevel(ctx, client, teamID, query, buildParams("space_ids[]="+cfg.Space), 3, opts.comments, ios)
+		scored, err := searchLevel(ctx, client, teamID, query, buildParams("space_ids[]="+cfg.Space), 3, opts.comments, opts.includeSubtasks, ios)
 		if err != nil {
 			return nil, err
 		}
@@ -632,7 +640,7 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 
 	// Level 4: Full workspace (up to 10 pages).
 	fmt.Fprintf(ios.ErrOut, "  searching workspace...\n")
-	scored, err = searchLevel(ctx, client, teamID, query, buildParams(""), 10, opts.comments, ios)
+	scored, err = searchLevel(ctx, client, teamID, query, buildParams(""), 10, opts.comments, opts.includeSubtasks, ios)
 	if err != nil {
 		return nil, err
 	}
@@ -1021,6 +1029,9 @@ func searchViaSpaces(ctx context.Context, opts *searchOptions) ([]scoredTask, er
 			defer func() { <-sem }()
 
 			taskPath := fmt.Sprintf("list/%s/task?include_closed=true&page=0", url.PathEscape(lid))
+			if opts.includeSubtasks {
+				taskPath += "&subtasks=true"
+			}
 			var taskResp searchResponse
 			if err := apiv2.Do(ctx, client, "GET", taskPath, nil, &taskResp); err != nil {
 				return
