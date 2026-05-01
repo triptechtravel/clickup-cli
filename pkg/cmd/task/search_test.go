@@ -339,3 +339,27 @@ func TestSearchServerSide(t *testing.T) {
 	assert.Contains(t, out, "abc")
 	assert.Contains(t, out, "Server Bug Fix")
 }
+
+func TestSearchIncludeSubtasks(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+
+	var capturedURL string
+	tf.HandleFunc("team/12345/task", func(w http.ResponseWriter, r *http.Request) {
+		capturedURL = r.URL.String()
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-RateLimit-Remaining", "99")
+		w.WriteHeader(200)
+		w.Write([]byte(`{"tasks":[{"id":"abc","name":"Server Bug Fix","status":{"status":"open"},"assignees":[]}]}`))
+	})
+
+	tf.Handle("GET", "user", 200, `{"user":{"id":100}}`)
+
+	cmd := NewCmdSearch(tf.Factory)
+	err := testutil.RunCommand(t, cmd, "Bug", "--include-subtasks")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	assert.True(t, strings.Contains(capturedURL, "subtasks=true"),
+		"expected subtasks=true in URL, got: %s", capturedURL)
+}

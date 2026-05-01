@@ -22,15 +22,16 @@ import (
 )
 
 type searchOptions struct {
-	factory   *cmdutil.Factory
-	query     string
-	space     string
-	folder    string
-	assignee  string
-	pick      bool
-	comments  bool
-	exact     bool
-	jsonFlags cmdutil.JSONFlags
+	factory         *cmdutil.Factory
+	query           string
+	space           string
+	folder          string
+	assignee        string
+	pick            bool
+	comments        bool
+	exact           bool
+	includeSubtasks bool
+	jsonFlags       cmdutil.JSONFlags
 }
 
 type searchTask struct {
@@ -169,6 +170,9 @@ recently updated tasks and discover which folders/lists to search in.`,
   clickup task recent
   clickup task search geozone --folder "Engineering Sprint"
 
+  # Include subtasks in results
+  clickup task search "Phase 1" --include-subtasks
+
   # JSON output
   clickup task search geozone --json`,
 		Args:              cobra.RangeArgs(0, 1),
@@ -190,6 +194,7 @@ recently updated tasks and discover which folders/lists to search in.`,
 	cmd.Flags().BoolVar(&opts.pick, "pick", false, "Interactively select a task and print its ID")
 	cmd.Flags().BoolVar(&opts.comments, "comments", false, "Also search through task comments (slower)")
 	cmd.Flags().BoolVar(&opts.exact, "exact", false, "Only show exact substring matches (no fuzzy results)")
+	cmd.Flags().BoolVar(&opts.includeSubtasks, "include-subtasks", false, "Include subtasks in search results")
 	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 
 	return cmd
@@ -554,10 +559,25 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 		return searchViaSpaces(ctx, opts)
 	}
 
+	// Build extra params combining assignee filter and subtasks toggle if present.
+	buildParams := func(base string) string {
+		parts := make([]string, 0, 3)
+		if base != "" {
+			parts = append(parts, base)
+		}
+		if assigneeParam != "" {
+			parts = append(parts, assigneeParam)
+		}
+		if opts.includeSubtasks {
+			parts = append(parts, "subtasks=true")
+		}
+		return strings.Join(parts, "&")
+	}
+
 	// If --assignee with no query: fetch all tasks for that assignee.
 	if opts.query == "" && assigneeParam != "" {
 		fmt.Fprintf(ios.ErrOut, "  fetching tasks for %s...\n", assigneeName)
-		tasks, err := fetchTeamTasks(ctx, client, teamID, 0, assigneeParam)
+		tasks, err := fetchTeamTasks(ctx, client, teamID, 0, buildParams(""))
 		if err != nil {
 			return nil, err
 		}
@@ -569,17 +589,6 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 	}
 
 	query := strings.ToLower(opts.query)
-
-	// Build extra params combining assignee filter if present.
-	buildParams := func(base string) string {
-		if assigneeParam == "" {
-			return base
-		}
-		if base == "" {
-			return assigneeParam
-		}
-		return base + "&" + assigneeParam
-	}
 
 	// Progressive drill-down: server-side → sprint → user → space → workspace.
 
@@ -1021,6 +1030,9 @@ func searchViaSpaces(ctx context.Context, opts *searchOptions) ([]scoredTask, er
 			defer func() { <-sem }()
 
 			taskPath := fmt.Sprintf("list/%s/task?include_closed=true&page=0", url.PathEscape(lid))
+			if opts.includeSubtasks {
+				taskPath += "&subtasks=true"
+			}
 			var taskResp searchResponse
 			if err := apiv2.Do(ctx, client, "GET", taskPath, nil, &taskResp); err != nil {
 				return

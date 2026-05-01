@@ -15,13 +15,14 @@ import (
 )
 
 type listOptions struct {
-	listID        string
-	assignee      []string
-	status        []string
-	sprint        string
-	page          int
-	includeClosed bool
-	jsonFlags     cmdutil.JSONFlags
+	listID          string
+	assignee        []string
+	status          []string
+	sprint          string
+	page            int
+	includeClosed   bool
+	includeSubtasks bool
+	jsonFlags       cmdutil.JSONFlags
 }
 
 // NewCmdList returns a command to list ClickUp tasks in a given list.
@@ -46,7 +47,10 @@ status, and sprint.`,
   clickup task list --list-id 12345 --assignee me --status "in progress"
 
   # Include closed tasks
-  clickup task list --list-id 12345 --include-closed`,
+  clickup task list --list-id 12345 --include-closed
+
+  # Include subtasks
+  clickup task list --list-id 12345 --include-subtasks`,
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if opts.listID == "" {
@@ -70,6 +74,7 @@ status, and sprint.`,
 	cmd.Flags().StringVar(&opts.sprint, "sprint", "", "Filter by sprint name")
 	cmd.Flags().IntVar(&opts.page, "page", 0, "Page number for pagination (starts at 0)")
 	cmd.Flags().BoolVarP(&opts.includeClosed, "include-closed", "c", false, "Include closed/completed tasks")
+	cmd.Flags().BoolVar(&opts.includeSubtasks, "include-subtasks", false, "Include subtasks in results")
 
 	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 
@@ -99,6 +104,9 @@ func runList(f *cmdutil.Factory, opts *listOptions) error {
 	}
 	if opts.includeClosed {
 		q.Set("include_closed", "true")
+	}
+	if opts.includeSubtasks {
+		q.Set("subtasks", "true")
 	}
 
 	qs := ""
