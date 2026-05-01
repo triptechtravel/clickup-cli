@@ -82,6 +82,9 @@ available custom fields and their types.`,
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.taskIDs = cmdutil.ExpandIDArgs(args)
+			if err := cmdutil.ValidateTaskIDArgs(opts.taskIDs); err != nil {
+				return err
+			}
 			return runEdit(f, opts, cmd)
 		},
 	}

@@ -42,6 +42,9 @@ reported but do not stop the batch.`,
 			if len(opts.taskIDs) == 0 {
 				return fmt.Errorf("no task IDs provided")
 			}
+			if err := cmdutil.ValidateTaskIDArgs(opts.taskIDs); err != nil {
+				return err
+			}
 			return runListRemove(f, opts)
 		},
 	}

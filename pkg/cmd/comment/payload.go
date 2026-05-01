@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/triptechtravel/clickup-cli/api/clickupv2"
 	"github.com/triptechtravel/clickup-cli/internal/api"
@@ -109,26 +110,28 @@ func toUpdateBlocks(blocks []commentBlock) []clickupv2.PutV2CommentCommentIDRequ
 	return out
 }
 
-// toReplyMap is the conversion for the reply endpoint, which the public spec
-// doesn't document — so the request body is sent as a generic map via
-// apiv2.Do.
-func toReplyMap(blocks []commentBlock) []map[string]interface{} {
-	out := make([]map[string]interface{}, 0, len(blocks))
+// toReplyBlocks adapts internal commentBlocks to the typed slice the
+// generated CreateThreadedComment wrapper expects.
+func toReplyBlocks(blocks []commentBlock) []clickupv2.PostV2CommentCommentIDReplyRequestJSON2 {
+	out := make([]clickupv2.PostV2CommentCommentIDReplyRequestJSON2, 0, len(blocks))
 	for _, b := range blocks {
-		m := map[string]interface{}{}
+		var item clickupv2.PostV2CommentCommentIDReplyRequestJSON2
 		if b.Text != "" {
-			m["text"] = b.Text
+			t := b.Text
+			item.Text = &t
 		}
 		if b.Type != "" {
-			m["type"] = b.Type
+			tp := b.Type
+			item.Type = &tp
 		}
 		if b.User != nil {
-			m["user"] = map[string]interface{}{"id": b.User.ID}
+			id := b.User.ID
+			item.User = &clickupv2.PostV2CommentCommentIDReplyRequestJSON3{ID: &id}
 		}
 		if len(b.Attributes) > 0 {
-			m["attributes"] = b.Attributes
+			item.Attributes = b.Attributes
 		}
-		out = append(out, m)
+		out = append(out, item)
 	}
 	return out
 }
@@ -145,11 +148,21 @@ func hasFormatting(blocks []commentBlock) bool {
 	return false
 }
 
+// memberCache holds workspace members for the duration of a CLI process,
+// keyed by workspace ID. Chained operations (`comment add` followed by
+// another `comment add` in a loop, or a single command that resolves
+// multiple mentions) reuse the cached lookup instead of refetching.
+var (
+	memberCacheMu sync.Mutex
+	memberCache   = map[string]map[string]workspaceMember{}
+)
+
 // fetchWorkspaceMembers returns a lookup of mention key → workspace member.
 // Members are keyed by lowercased full username, and additionally by their
 // first-name token and email local-part when those are unambiguous within
 // the workspace — so `@first` resolves to a member named "First Last" when
-// they're the only First in the workspace.
+// they're the only First in the workspace. Results are cached per-workspace
+// for the lifetime of the process.
 func fetchWorkspaceMembers(f *cmdutil.Factory, client *api.Client) (map[string]workspaceMember, error) {
 	cfg, err := f.Config()
 	if err != nil {
@@ -158,6 +171,13 @@ func fetchWorkspaceMembers(f *cmdutil.Factory, client *api.Client) (map[string]w
 	if cfg.Workspace == "" {
 		return nil, fmt.Errorf("no workspace configured")
 	}
+
+	memberCacheMu.Lock()
+	if cached, ok := memberCache[cfg.Workspace]; ok {
+		memberCacheMu.Unlock()
+		return cached, nil
+	}
+	memberCacheMu.Unlock()
 
 	ctx := context.Background()
 	teams, err := apiv2.GetTeamsLocal(ctx, client)
@@ -200,6 +220,10 @@ func fetchWorkspaceMembers(f *cmdutil.Factory, client *api.Client) (map[string]w
 		}
 		break
 	}
+
+	memberCacheMu.Lock()
+	memberCache[cfg.Workspace] = members
+	memberCacheMu.Unlock()
 
 	return members, nil
 }

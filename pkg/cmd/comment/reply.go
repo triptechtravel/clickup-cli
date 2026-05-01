@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/api/clickupv2"
 	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 	"github.com/triptechtravel/clickup-cli/internal/prompter"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
@@ -85,8 +86,6 @@ func replyRun(opts *replyOptions) error {
 		return err
 	}
 
-	replyPath := fmt.Sprintf("comment/%s/reply", opts.commentID)
-
 	members, mErr := resolveMentionMembers(opts.factory, client, body)
 	if mErr != nil {
 		fmt.Fprintf(ios.ErrOut, "%s could not resolve @mentions: %v\n", cs.Yellow("warning:"), mErr)
@@ -96,17 +95,15 @@ func replyRun(opts *replyOptions) error {
 		fmt.Fprintf(ios.ErrOut, "Mentioning %s\n", cs.Bold("@"+name))
 	}
 
-	// POST /comment/{id}/reply isn't in the public OpenAPI spec, so this stays
-	// hand-rolled rather than going through a generated wrapper.
-	var payload interface{}
+	req := &clickupv2.CreateThreadedCommentJSONRequest{}
 	if useBlocks {
-		payload = map[string]interface{}{"comment": toReplyMap(blocks)}
+		req.Comment = toReplyBlocks(blocks)
 	} else {
-		payload = map[string]string{"comment_text": body}
+		req.CommentText = &body
 	}
 
 	ctx := context.Background()
-	if err = apiv2.Do(ctx, client, "POST", replyPath, payload, nil); err != nil {
+	if _, err := apiv2.CreateThreadedComment(ctx, client, opts.commentID, req); err != nil {
 		return fmt.Errorf("API request failed: %w", err)
 	}
 

@@ -263,18 +263,24 @@ func TestToCreateBlocks_RoundtripsTextTypeUserAttributes(t *testing.T) {
 	assert.Equal(t, true, out[2].Attributes["bold"])
 }
 
-func TestToReplyMap_OmitsZeroFields(t *testing.T) {
+func TestToReplyBlocks_RoundtripsTextTypeUserAttributes(t *testing.T) {
 	in := []commentBlock{
 		{Text: "hello"},
 		{Type: "tag", User: &mentionUser{ID: 7}},
+		{Text: "italic", Attributes: map[string]interface{}{"italic": true}},
 	}
-	out := toReplyMap(in)
-	require.Len(t, out, 2)
-	assert.Equal(t, "hello", out[0]["text"])
-	assert.NotContains(t, out[0], "type")
-	assert.NotContains(t, out[0], "user")
-	assert.Equal(t, "tag", out[1]["type"])
-	assert.NotContains(t, out[1], "text")
+	out := toReplyBlocks(in)
+	require.Len(t, out, 3)
+	require.NotNil(t, out[0].Text)
+	assert.Equal(t, "hello", *out[0].Text)
+	assert.Nil(t, out[0].Type)
+	assert.Nil(t, out[0].User)
+	require.NotNil(t, out[1].Type)
+	assert.Equal(t, "tag", *out[1].Type)
+	require.NotNil(t, out[1].User)
+	require.NotNil(t, out[1].User.ID)
+	assert.Equal(t, 7, *out[1].User.ID)
+	assert.Equal(t, true, out[2].Attributes["italic"])
 }
 
 // ---------------------------------------------------------------------------

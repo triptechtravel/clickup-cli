@@ -6,6 +6,32 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestValidateTaskIDArgs(t *testing.T) {
+	tests := []struct {
+		name    string
+		ids     []string
+		wantErr string
+	}{
+		{"valid native IDs", []string{"86abc1", "86abc2"}, ""},
+		{"valid CU- and custom", []string{"CU-abc123", "PROJ-42"}, ""},
+		{"empty ID", []string{"a", "", "b"}, "empty task ID"},
+		{"id with embedded space", []string{"a b"}, "invalid task ID"},
+		{"id with slash", []string{"a/b"}, "invalid task ID"},
+		{"id with query marker", []string{"a?b"}, "invalid task ID"},
+		{"id with ampersand", []string{"a&b"}, "invalid task ID"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateTaskIDArgs(tt.ids)
+			if tt.wantErr == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorContains(t, err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestExpandIDArgs(t *testing.T) {
 	tests := []struct {
 		name string

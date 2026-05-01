@@ -42,6 +42,9 @@ Multiple task IDs can be provided for bulk deletion.`,
 			if len(opts.taskIDs) == 0 {
 				return fmt.Errorf("no task IDs provided")
 			}
+			if err := cmdutil.ValidateTaskIDArgs(opts.taskIDs); err != nil {
+				return err
+			}
 			return runDelete(f, opts)
 		},
 	}

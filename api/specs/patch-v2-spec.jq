@@ -139,9 +139,70 @@ def fix_comment_request:
   | fix_dependencies
   | fix_linked_tasks
 )
-# Then patch comment request bodies. The /v2/comment/{comment_id}/reply POST
-# endpoint is undocumented in the public spec, so the reply command stays
-# hand-rolled (see pkg/cmd/comment/reply.go).
+# Add the undocumented POST /v2/comment/{comment_id}/reply endpoint so the
+# reply command can use a generated wrapper. The schema is inlined (rather
+# than $ref'd to the task-comment schema) because oapi-codegen-exp doesn't
+# emit a fresh type for path-style refs, which gen-api then can't resolve.
+| .paths."/v2/comment/{comment_id}/reply".post = {
+    "summary": "Create Threaded Comment",
+    "description": "Reply to an existing comment, creating a threaded reply.",
+    "tags": ["Comments"],
+    "operationId": "CreateThreadedComment",
+    "parameters": [
+      {
+        "name": "comment_id",
+        "in": "path",
+        "required": true,
+        "style": "simple",
+        "schema": {"type": "string"}
+      }
+    ],
+    "requestBody": {
+      "required": true,
+      "content": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "comment_text": {"type": "string"},
+              "notify_all": {"type": "boolean"},
+              "comment": {
+                "type": "array",
+                "description": "Structured Quill-delta comment blocks (rich formatting + @mentions).",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "text": {"type": "string"},
+                    "type": {"type": "string"},
+                    "user": {"type": "object", "properties": {"id": {"type": "integer"}}},
+                    "attributes": {"type": "object", "additionalProperties": true}
+                  }
+                }
+              },
+              "markdown_text": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "200": {
+        "description": "",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {"type": "integer", "contentEncoding": "int64"},
+                "hist_id": {"type": "string"},
+                "date": {"type": "integer", "contentEncoding": "int64"}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 | (.paths."/v2/task/{task_id}/comment".post.requestBody.content."application/json".schema) |= fix_comment_request
 | (.paths."/v2/comment/{comment_id}".put.requestBody.content."application/json".schema) |= fix_comment_request
 # Fix create-comment response shapes — `id` is documented as string but
