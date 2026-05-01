@@ -14,10 +14,21 @@ import (
 )
 
 type addOptions struct {
-	factory *cmdutil.Factory
-	taskID  string
-	body    string
-	editor  bool
+	factory   *cmdutil.Factory
+	taskID    string
+	body      string
+	editor    bool
+	jsonFlags cmdutil.JSONFlags
+}
+
+// addOutput is the JSON-mode response — exposes the created comment's ID
+// (so scripts can chain into edit/reply/delete without a follow-up list)
+// plus the resolved mentions for confirmation.
+type addOutput struct {
+	ID               string   `json:"id"`
+	HistID           string   `json:"hist_id"`
+	Date             int      `json:"date"`
+	ResolvedMentions []string `json:"resolved_mentions,omitempty"`
 }
 
 // NewCmdAdd returns the "comment add" command.
@@ -70,6 +81,7 @@ email local-part when unambiguous within the workspace.`,
 	}
 
 	cmd.Flags().BoolVarP(&opts.editor, "editor", "e", false, "Open editor to compose comment body")
+	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 
 	return cmd
 }
@@ -150,8 +162,18 @@ func addRun(opts *addOptions) error {
 	}
 
 	ctx := context.Background()
-	if _, err := apiv2.CreateTaskComment(ctx, client, taskID, req, params...); err != nil {
+	resp, err := apiv2.CreateTaskComment(ctx, client, taskID, req, params...)
+	if err != nil {
 		return fmt.Errorf("API request failed: %w", err)
+	}
+
+	if opts.jsonFlags.WantsJSON() {
+		return opts.jsonFlags.OutputJSON(ios.Out, addOutput{
+			ID:               strconv.Itoa(resp.ID),
+			HistID:           resp.HistID,
+			Date:             resp.Date,
+			ResolvedMentions: resolved,
+		})
 	}
 
 	fmt.Fprintf(ios.Out, "%s Comment added to task %s\n", cs.Green("!"), cs.Bold(taskID))

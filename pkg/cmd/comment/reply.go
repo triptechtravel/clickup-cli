@@ -3,6 +3,7 @@ package comment
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/spf13/cobra"
 	"github.com/triptechtravel/clickup-cli/api/clickupv2"
@@ -16,6 +17,16 @@ type replyOptions struct {
 	commentID string
 	body      string
 	editor    bool
+	jsonFlags cmdutil.JSONFlags
+}
+
+// replyOutput mirrors addOutput — exposes the new threaded-reply ID so
+// scripts can chain follow-ups.
+type replyOutput struct {
+	ID               string   `json:"id"`
+	HistID           string   `json:"hist_id"`
+	Date             int      `json:"date"`
+	ResolvedMentions []string `json:"resolved_mentions,omitempty"`
 }
 
 // NewCmdReply returns the "comment reply" command.
@@ -58,6 +69,7 @@ local-part when unambiguous.`,
 	}
 
 	cmd.Flags().BoolVarP(&opts.editor, "editor", "e", false, "Open editor to compose reply body")
+	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 
 	return cmd
 }
@@ -103,8 +115,23 @@ func replyRun(opts *replyOptions) error {
 	}
 
 	ctx := context.Background()
-	if _, err := apiv2.CreateThreadedComment(ctx, client, opts.commentID, req); err != nil {
+	resp, err := apiv2.CreateThreadedComment(ctx, client, opts.commentID, req)
+	if err != nil {
 		return fmt.Errorf("API request failed: %w", err)
+	}
+
+	if opts.jsonFlags.WantsJSON() {
+		out := replyOutput{ResolvedMentions: resolved}
+		if resp.ID != nil {
+			out.ID = strconv.Itoa(*resp.ID)
+		}
+		if resp.HistID != nil {
+			out.HistID = *resp.HistID
+		}
+		if resp.Date != nil {
+			out.Date = *resp.Date
+		}
+		return opts.jsonFlags.OutputJSON(ios.Out, out)
 	}
 
 	fmt.Fprintf(ios.Out, "%s Reply added to comment %s\n", cs.Green("!"), cs.Bold(opts.commentID))

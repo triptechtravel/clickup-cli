@@ -39,8 +39,12 @@ clickup comment reply <comment-id> [BODY] [flags]
 ### Options
 
 ```
-  -e, --editor   Open editor to compose reply body
-  -h, --help     help for reply
+  -e, --editor            Open editor to compose reply body
+  -h, --help              help for reply
+      --jq string         Filter JSON output using a jq expression
+      --json              Output JSON
+  -r, --raw               Output raw strings instead of JSON-encoded (use with --jq)
+      --template string   Format JSON output using a Go template
 ```
 
 ### SEE ALSO

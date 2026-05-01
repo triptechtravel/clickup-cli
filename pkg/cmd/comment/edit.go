@@ -16,6 +16,14 @@ type editOptions struct {
 	commentID string
 	body      string
 	editor    bool
+	jsonFlags cmdutil.JSONFlags
+}
+
+// editOutput mirrors addOutput for symmetry. UpdateComment returns no body
+// so we just echo the comment ID and the resolved mentions.
+type editOutput struct {
+	ID               string   `json:"id"`
+	ResolvedMentions []string `json:"resolved_mentions,omitempty"`
 }
 
 // NewCmdEdit returns the "comment edit" command.
@@ -59,6 +67,7 @@ local-part when unambiguous.`,
 	}
 
 	cmd.Flags().BoolVarP(&opts.editor, "editor", "e", false, "Open editor to compose comment body")
+	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 
 	return cmd
 }
@@ -107,6 +116,13 @@ func editRun(opts *editOptions) error {
 	ctx := context.Background()
 	if _, err := apiv2.UpdateComment(ctx, client, opts.commentID, req); err != nil {
 		return fmt.Errorf("API request failed: %w", err)
+	}
+
+	if opts.jsonFlags.WantsJSON() {
+		return opts.jsonFlags.OutputJSON(ios.Out, editOutput{
+			ID:               opts.commentID,
+			ResolvedMentions: resolved,
+		})
 	}
 
 	fmt.Fprintf(ios.Out, "%s Comment %s updated\n", cs.Green("!"), cs.Bold(opts.commentID))

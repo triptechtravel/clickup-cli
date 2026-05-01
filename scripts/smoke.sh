@@ -72,15 +72,17 @@ ok "task list returned $COUNT items matching token (parent + subtask)"
 
 # --- comment add (CreateTaskComment, typed response) ----------------------
 step "comment add — exercises typed response decode (the v0.34.1 regression)"
-"$BIN" comment add "$PARENT_ID" "Smoke probe: **bold** and \`code\` should render." > /dev/null 2>&1 \
-  || fail "comment add failed (likely response decode drift)"
-ok "comment add succeeded"
+COMMENT_ID="$("$BIN" comment add "$PARENT_ID" "Smoke probe: **bold** and \`code\` should render." \
+  --json --jq '.id' --raw 2>/dev/null | tail -1)"
+[ -n "$COMMENT_ID" ] && [ "$COMMENT_ID" != "null" ] \
+  || fail "comment add did not return an id (response decode drift, or --json output broken)"
+ok "comment added (id $COMMENT_ID)"
 
 # --- comment list (read) --------------------------------------------------
 step "comment list — read-side decode"
-COMMENT_ID=$("$BIN" comment list "$PARENT_ID" --json --jq '.[0].id' --raw 2>/dev/null | tail -1)
-[ -n "$COMMENT_ID" ] && [ "$COMMENT_ID" != "null" ] || fail "comment list returned no id"
-ok "comment listed (id $COMMENT_ID)"
+LIST_FIRST_ID=$("$BIN" comment list "$PARENT_ID" --json --jq '.[0].id' --raw 2>/dev/null | tail -1)
+[ -n "$LIST_FIRST_ID" ] && [ "$LIST_FIRST_ID" != "null" ] || fail "comment list returned no id"
+ok "comment listed (newest id $LIST_FIRST_ID)"
 
 # --- comment edit (UpdateComment) -----------------------------------------
 step "comment edit — exercises UpdateComment typed wrapper"

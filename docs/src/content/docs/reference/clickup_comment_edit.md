@@ -40,8 +40,12 @@ clickup comment edit <COMMENT_ID> [BODY] [flags]
 ### Options
 
 ```
-  -e, --editor   Open editor to compose comment body
-  -h, --help     help for edit
+  -e, --editor            Open editor to compose comment body
+  -h, --help              help for edit
+      --jq string         Filter JSON output using a jq expression
+      --json              Output JSON
+  -r, --raw               Output raw strings instead of JSON-encoded (use with --jq)
+      --template string   Format JSON output using a Go template
 ```
 
 ### SEE ALSO
