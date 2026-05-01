@@ -91,6 +91,14 @@ def fix_linked_tasks:
     .linked_tasks.items = {"type": "object"}
   else . end;
 
+# Helper: fix the create-comment response schema. The spec declares `id` as
+# string, but the API returns a JSON number (large enough to require int64).
+# Reported on every comment create endpoint (task/list/view).
+def fix_comment_response:
+  if .properties and .properties.id and (.properties.id.type == "string") then
+    .properties.id = {"type": "integer", "contentEncoding": "int64"}
+  else . end;
+
 # Helper: extend a comment request schema with structured `comment` blocks
 # (Quill-delta format used by ClickUp's web app for rich formatting and
 # @mentions) and `markdown_text`. Also relax `required` so callers can send
@@ -136,3 +144,8 @@ def fix_comment_request:
 # hand-rolled (see pkg/cmd/comment/reply.go).
 | (.paths."/v2/task/{task_id}/comment".post.requestBody.content."application/json".schema) |= fix_comment_request
 | (.paths."/v2/comment/{comment_id}".put.requestBody.content."application/json".schema) |= fix_comment_request
+# Fix create-comment response shapes — `id` is documented as string but
+# returned as a JSON number.
+| (.paths."/v2/task/{task_id}/comment".post.responses."200".content."application/json".schema) |= fix_comment_response
+| (.paths."/v2/list/{list_id}/comment".post.responses."200".content."application/json".schema) |= fix_comment_response
+| (.paths."/v2/view/{view_id}/comment".post.responses."200".content."application/json".schema) |= fix_comment_response
