@@ -87,8 +87,8 @@ output (--json, --jq, or --template) and returns an array of tasks.`,
 		Args:              cobra.ArbitraryArgs,
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.taskIDs = args
-			if len(args) > 1 && !opts.jsonFlags.WantsJSON() {
+			opts.taskIDs = cmdutil.ExpandIDArgs(args)
+			if len(opts.taskIDs) > 1 && !opts.jsonFlags.WantsJSON() {
 				return fmt.Errorf("bulk view requires JSON output: add --json, --jq, or --template")
 			}
 			return runView(f, opts)

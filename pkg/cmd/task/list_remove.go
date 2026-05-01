@@ -38,7 +38,10 @@ reported but do not stop the batch.`,
 		Args:              cobra.MinimumNArgs(1),
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.taskIDs = args
+			opts.taskIDs = cmdutil.ExpandIDArgs(args)
+			if len(opts.taskIDs) == 0 {
+				return fmt.Errorf("no task IDs provided")
+			}
 			return runListRemove(f, opts)
 		},
 	}
