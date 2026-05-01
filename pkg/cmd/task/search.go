@@ -390,12 +390,9 @@ func runSearch(opts *searchOptions) error {
 }
 
 // fetchTeamTasks fetches one page of tasks from the team endpoint with optional extra query params.
-func fetchTeamTasks(ctx context.Context, client *api.Client, teamID string, page int, extraParams string, subtasks bool) ([]searchTask, error) {
+func fetchTeamTasks(ctx context.Context, client *api.Client, teamID string, page int, extraParams string) ([]searchTask, error) {
 	path := fmt.Sprintf("team/%s/task?include_closed=true&page=%d&order_by=updated&reverse=true",
 		teamID, page)
-	if subtasks {
-		path += "&subtasks=true"
-	}
 	if extraParams != "" {
 		path += "&" + extraParams
 	}
@@ -409,14 +406,14 @@ func fetchTeamTasks(ctx context.Context, client *api.Client, teamID string, page
 }
 
 // searchLevel searches tasks at a given drill-down level and returns scored matches.
-func searchLevel(ctx context.Context, client *api.Client, teamID, query string, extraParams string, maxPages int, comments bool, subtasks bool, ios *iostreams.IOStreams) ([]scoredTask, error) {
+func searchLevel(ctx context.Context, client *api.Client, teamID, query string, extraParams string, maxPages int, comments bool, ios *iostreams.IOStreams) ([]scoredTask, error) {
 	var allScored []scoredTask
 	for page := 0; page < maxPages; page++ {
 		if ctx.Err() != nil {
 			break
 		}
 
-		tasks, err := fetchTeamTasks(ctx, client, teamID, page, extraParams, subtasks)
+		tasks, err := fetchTeamTasks(ctx, client, teamID, page, extraParams)
 		if err != nil {
 			return nil, err
 		}
@@ -562,10 +559,25 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 		return searchViaSpaces(ctx, opts)
 	}
 
+	// Build extra params combining assignee filter and subtasks toggle if present.
+	buildParams := func(base string) string {
+		parts := make([]string, 0, 3)
+		if base != "" {
+			parts = append(parts, base)
+		}
+		if assigneeParam != "" {
+			parts = append(parts, assigneeParam)
+		}
+		if opts.includeSubtasks {
+			parts = append(parts, "subtasks=true")
+		}
+		return strings.Join(parts, "&")
+	}
+
 	// If --assignee with no query: fetch all tasks for that assignee.
 	if opts.query == "" && assigneeParam != "" {
 		fmt.Fprintf(ios.ErrOut, "  fetching tasks for %s...\n", assigneeName)
-		tasks, err := fetchTeamTasks(ctx, client, teamID, 0, assigneeParam, opts.includeSubtasks)
+		tasks, err := fetchTeamTasks(ctx, client, teamID, 0, buildParams(""))
 		if err != nil {
 			return nil, err
 		}
@@ -578,22 +590,11 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 
 	query := strings.ToLower(opts.query)
 
-	// Build extra params combining assignee filter if present.
-	buildParams := func(base string) string {
-		if assigneeParam == "" {
-			return base
-		}
-		if base == "" {
-			return assigneeParam
-		}
-		return base + "&" + assigneeParam
-	}
-
 	// Progressive drill-down: server-side → sprint → user → space → workspace.
 
 	// Level 0: Server-side search (fastest — single API call).
 	fmt.Fprintf(ios.ErrOut, "  searching (server-side)...\n")
-	scored, err := searchLevel(ctx, client, teamID, query, buildParams("search="+url.QueryEscape(opts.query)), 1, opts.comments, opts.includeSubtasks, ios)
+	scored, err := searchLevel(ctx, client, teamID, query, buildParams("search="+url.QueryEscape(opts.query)), 1, opts.comments, ios)
 	if err == nil && len(scored) > 0 {
 		return scored, nil
 	}
@@ -603,7 +604,7 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 		fmt.Fprintf(ios.ErrOut, "  searching sprint...\n")
 		listID, err := cmdutil.ResolveCurrentSprintListID(ctx, client, cfg.SprintFolder)
 		if err == nil && listID != "" {
-			scored, err := searchLevel(ctx, client, teamID, query, buildParams("list_ids[]="+listID), 1, opts.comments, opts.includeSubtasks, ios)
+			scored, err := searchLevel(ctx, client, teamID, query, buildParams("list_ids[]="+listID), 1, opts.comments, ios)
 			if err != nil {
 				return nil, err
 			}
@@ -617,7 +618,7 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 	fmt.Fprintf(ios.ErrOut, "  searching your tasks...\n")
 	userID, err := cmdutil.GetCurrentUserID(client)
 	if err == nil {
-		scored, err := searchLevel(ctx, client, teamID, query, buildParams(fmt.Sprintf("assignees[]=%d", userID)), 1, opts.comments, opts.includeSubtasks, ios)
+		scored, err := searchLevel(ctx, client, teamID, query, buildParams(fmt.Sprintf("assignees[]=%d", userID)), 1, opts.comments, ios)
 		if err != nil {
 			return nil, err
 		}
@@ -629,7 +630,7 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 	// Level 3: Configured space.
 	if cfg.Space != "" {
 		fmt.Fprintf(ios.ErrOut, "  searching space...\n")
-		scored, err := searchLevel(ctx, client, teamID, query, buildParams("space_ids[]="+cfg.Space), 3, opts.comments, opts.includeSubtasks, ios)
+		scored, err := searchLevel(ctx, client, teamID, query, buildParams("space_ids[]="+cfg.Space), 3, opts.comments, ios)
 		if err != nil {
 			return nil, err
 		}
@@ -640,7 +641,7 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 
 	// Level 4: Full workspace (up to 10 pages).
 	fmt.Fprintf(ios.ErrOut, "  searching workspace...\n")
-	scored, err = searchLevel(ctx, client, teamID, query, buildParams(""), 10, opts.comments, opts.includeSubtasks, ios)
+	scored, err = searchLevel(ctx, client, teamID, query, buildParams(""), 10, opts.comments, ios)
 	if err != nil {
 		return nil, err
 	}
