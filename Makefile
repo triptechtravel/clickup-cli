@@ -9,7 +9,7 @@ LDFLAGS := -s -w \
 	-X $(MODULE)/internal/build.Commit=$(COMMIT) \
 	-X $(MODULE)/internal/build.Date=$(DATE)
 
-.PHONY: build install test lint clean
+.PHONY: build install test lint clean smoke
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o bin/$(BINARY) ./cmd/clickup
@@ -19,6 +19,12 @@ install:
 
 test:
 	go test ./...
+
+# Round-trip the typed-wrapper code paths against a real ClickUp workspace.
+# Catches OpenAPI spec drift unit tests can't see. Requires `clickup auth login`.
+# Override BIN to test a local build: `BIN=./bin/clickup make smoke`.
+smoke:
+	@./scripts/smoke.sh
 
 lint:
 	golangci-lint run ./...
