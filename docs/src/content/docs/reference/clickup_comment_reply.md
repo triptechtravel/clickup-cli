@@ -10,7 +10,14 @@ Reply to a comment thread
 Reply to an existing comment on a ClickUp task, creating a threaded reply.
 
 Use 'clickup comment list <task> --json' to find comment IDs.
-Use @username in the body to @mention workspace members.
+
+The body is parsed as markdown — headers (##), bold (**x**), italic (*x*),
+inline code, fenced code blocks, ordered/bullet lists, blockquotes, and links
+all render as rich formatting.
+
+Use @username in the body to @mention workspace members. Mentions resolve
+case-insensitively against full username, first-name token, or email
+local-part when unambiguous.
 
 ```
 clickup comment reply <comment-id> [BODY] [flags]

@@ -3,7 +3,6 @@ package comment
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/triptechtravel/clickup-cli/internal/apiv2"
@@ -30,7 +29,14 @@ func NewCmdReply(f *cmdutil.Factory) *cobra.Command {
 		Long: `Reply to an existing comment on a ClickUp task, creating a threaded reply.
 
 Use 'clickup comment list <task> --json' to find comment IDs.
-Use @username in the body to @mention workspace members.`,
+
+The body is parsed as markdown — headers (##), bold (**x**), italic (*x*),
+inline code, fenced code blocks, ordered/bullet lists, blockquotes, and links
+all render as rich formatting.
+
+Use @username in the body to @mention workspace members. Mentions resolve
+case-insensitively against full username, first-name token, or email
+local-part when unambiguous.`,
 		Example: `  # Reply to a specific comment
   clickup comment reply 90160175975219 "Yes, that's confirmed"
 
@@ -81,25 +87,24 @@ func replyRun(opts *replyOptions) error {
 
 	replyPath := fmt.Sprintf("comment/%s/reply", opts.commentID)
 
-	// Build reply payload, resolving @mentions to real ClickUp user tags.
-	var payload interface{}
-	if strings.Contains(body, "@") {
-		if members, mErr := fetchWorkspaceMembers(opts.factory, client); mErr == nil && len(members) > 0 {
-			if blocks, resolved := buildCommentBlocks(body, members); len(resolved) > 0 {
-				for _, name := range resolved {
-					fmt.Fprintf(ios.ErrOut, "Mentioning %s\n", cs.Bold("@"+name))
-				}
-				payload = map[string]interface{}{"comment": blocks}
-			}
-		}
+	members, mErr := resolveMentionMembers(opts.factory, client, body)
+	if mErr != nil {
+		fmt.Fprintf(ios.ErrOut, "%s could not resolve @mentions: %v\n", cs.Yellow("warning:"), mErr)
 	}
-	if payload == nil {
+	blocks, resolved, useBlocks := buildBlocks(body, members)
+	for _, name := range resolved {
+		fmt.Fprintf(ios.ErrOut, "Mentioning %s\n", cs.Bold("@"+name))
+	}
+
+	// POST /comment/{id}/reply isn't in the public OpenAPI spec, so this stays
+	// hand-rolled rather than going through a generated wrapper.
+	var payload interface{}
+	if useBlocks {
+		payload = map[string]interface{}{"comment": toReplyMap(blocks)}
+	} else {
 		payload = map[string]string{"comment_text": body}
 	}
 
-	// TODO: swap to generated wrapper — no generated POST function for
-	// comment/{id}/reply exists, and the payload uses structured comment
-	// blocks for @mentions (same issue as comment add).
 	ctx := context.Background()
 	if err = apiv2.Do(ctx, client, "POST", replyPath, payload, nil); err != nil {
 		return fmt.Errorf("API request failed: %w", err)

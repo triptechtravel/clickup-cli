@@ -317,15 +317,31 @@ clickup list select --local  # per-directory
 
 ## Comments
 
+`comment add`, `comment edit`, and `comment reply` all parse the body as
+markdown — headers (`##`), bold (`**x**`), italic (`*x*`), inline code,
+fenced code blocks, ordered/bullet lists (with nesting), blockquotes, and
+links all render as rich formatting in ClickUp.
+
+`@username` resolves against workspace members (case-insensitive) and also
+accepts the **first-name token** or **email local-part** when unambiguous —
+so `@alice` works for "Alice Smith" if she's the only Alice in the workspace.
+
 ```bash
-# Add a comment (supports @mentions — resolves usernames to ClickUp user tags)
+# Add a comment (markdown + @mention shortcuts)
 clickup comment add CU-abc123 "Looks good, @alice please review"
+clickup comment add CU-abc123 "## Recap
+
+- Fixed the timeout bug
+- Added regression test"
+
+# Reply in a thread (same markdown + mention rules)
+clickup comment reply <comment-id> "@bob confirmed this on staging"
 
 # List comments (newest first — .[0] is most recent, .[-1] is oldest)
 clickup comment list CU-abc123
 
 # Edit/delete comments (you can only edit comments you authored)
-clickup comment edit <comment-id> "Updated text"
+clickup comment edit <comment-id> "Updated text with **bold** and `code`"
 clickup comment delete <comment-id>
 ```
 
@@ -569,7 +585,8 @@ clickup task checklist item edit <checklist-id> <item-id1> <item-id2> --assignee
 - **Status validation**: `task create` and `task edit` validate statuses against the space's configured statuses
 - **Archive filtering**: `task recent` automatically excludes tasks from archived folders
 - **Custom IDs**: Supports both native IDs and custom IDs (e.g., `CU-abc123`)
-- **@mentions**: Comment add resolves `@username` to real ClickUp user tags
+- **@mentions**: `comment add`/`edit`/`reply` resolve `@username` to real ClickUp user tags. Accepts full username, first-name token, or email local-part when unambiguous in the workspace
+- **Markdown comments**: comment bodies are parsed as markdown and posted as rich-formatted blocks (headers, bold, lists, code, links) — plain text still posts as plain text
 - **Subtask discovery**: `task search` and `task list` accept `--include-subtasks` so you can find subtasks by name without already knowing the parent task ID
 - **Bulk operations**: `task create --from-file` creates many tasks from JSON; `task edit ID1 ID2 ...` applies the same changes to multiple tasks. To bulk-edit subtasks: view the parent with `--json`, extract subtask IDs from `.subtasks[].id`, then pass them all to `task edit`
 - **Subtask visibility**: `task view` shows subtask due/start dates inline, so you can spot-check deadlines without viewing each subtask individually

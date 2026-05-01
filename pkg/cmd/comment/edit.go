@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/api/clickupv2"
 	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 	"github.com/triptechtravel/clickup-cli/internal/prompter"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
@@ -29,8 +30,24 @@ func NewCmdEdit(f *cmdutil.Factory) *cobra.Command {
 		Long: `Edit an existing comment on a ClickUp task.
 
 COMMENT_ID is required as the first argument.
-If BODY is not provided (or --editor is used), your editor opens for composing the new text.`,
-		Args:              cobra.RangeArgs(1, 2),
+If BODY is not provided (or --editor is used), your editor opens for composing the new text.
+
+The body is parsed as markdown — headers (##), bold (**x**), italic (*x*),
+inline code, fenced code blocks, ordered/bullet lists, blockquotes, and links
+all render as rich formatting.
+
+Use @username in the body to @mention workspace members. Mentions resolve
+case-insensitively against full username, first-name token, or email
+local-part when unambiguous.`,
+		Example: `  # Edit a comment
+  clickup comment edit 90160175975219 "Updated the description"
+
+  # Edit using your editor
+  clickup comment edit 90160175975219 --editor
+
+  # Re-add a mention via shortcut
+  clickup comment edit 90160175975219 "Hey @alice — pushed the fix"`,
+		Args: cobra.RangeArgs(1, 2),
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.commentID = args[0]
@@ -71,12 +88,24 @@ func editRun(opts *editOptions) error {
 		return err
 	}
 
-	// TODO: swap to generated wrapper — UpdateComment requires Assignee (int)
-	// and Resolved (bool) fields which would zero-out existing values when only
-	// updating comment text.
+	members, mErr := resolveMentionMembers(opts.factory, client, body)
+	if mErr != nil {
+		fmt.Fprintf(ios.ErrOut, "%s could not resolve @mentions: %v\n", cs.Yellow("warning:"), mErr)
+	}
+	blocks, resolved, useBlocks := buildBlocks(body, members)
+	for _, name := range resolved {
+		fmt.Fprintf(ios.ErrOut, "Mentioning %s\n", cs.Bold("@"+name))
+	}
+
+	req := &clickupv2.UpdateCommentJSONRequest{}
+	if useBlocks {
+		req.Comment = toUpdateBlocks(blocks)
+	} else {
+		req.CommentText = &body
+	}
+
 	ctx := context.Background()
-	payload := map[string]string{"comment_text": body}
-	if err := apiv2.Do(ctx, client, "PUT", fmt.Sprintf("comment/%s", opts.commentID), payload, nil); err != nil {
+	if _, err := apiv2.UpdateComment(ctx, client, opts.commentID, req); err != nil {
 		return fmt.Errorf("API request failed: %w", err)
 	}
 

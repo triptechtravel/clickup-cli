@@ -91,7 +91,36 @@ def fix_linked_tasks:
     .linked_tasks.items = {"type": "object"}
   else . end;
 
-# Walk all schema properties objects and apply fixes
+# Helper: extend a comment request schema with structured `comment` blocks
+# (Quill-delta format used by ClickUp's web app for rich formatting and
+# @mentions) and `markdown_text`. Also relax `required` so callers can send
+# any one of comment / comment_text / markdown_text and need not supply
+# assignee/resolved on partial updates.
+def fix_comment_request:
+  if .properties and .properties.comment_text then
+    .properties += {
+      "comment": {
+        "type": "array",
+        "description": "Structured Quill-delta comment blocks (rich formatting + @mentions).",
+        "items": {
+          "type": "object",
+          "properties": {
+            "text": {"type": "string"},
+            "type": {"type": "string"},
+            "user": {"type": "object", "properties": {"id": {"type": "integer"}}},
+            "attributes": {"type": "object", "additionalProperties": true}
+          }
+        }
+      },
+      "markdown_text": {
+        "type": "string",
+        "description": "Markdown body — alternative to comment_text/comment."
+      }
+    }
+    | (if .required then .required = (.required - ["comment_text", "assignee", "resolved"]) else . end)
+  else . end;
+
+# Walk all schema properties objects and apply field-level fixes.
 (.. | objects | select(has("properties")) | .properties) |= (
   fix_time_fields
   | fix_assignees
@@ -102,3 +131,8 @@ def fix_linked_tasks:
   | fix_dependencies
   | fix_linked_tasks
 )
+# Then patch comment request bodies. The /v2/comment/{comment_id}/reply POST
+# endpoint is undocumented in the public spec, so the reply command stays
+# hand-rolled (see pkg/cmd/comment/reply.go).
+| (.paths."/v2/task/{task_id}/comment".post.requestBody.content."application/json".schema) |= fix_comment_request
+| (.paths."/v2/comment/{comment_id}".put.requestBody.content."application/json".schema) |= fix_comment_request
