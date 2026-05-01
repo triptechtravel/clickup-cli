@@ -50,6 +50,7 @@ clickup task search "login bug"
 clickup task search "login bug" --exact    # Exact matches only
 clickup task search "login bug" --assignee me       # Only your tasks
 clickup task search "login bug" --assignee "alice"   # By name/username/ID
+clickup task search "Phase 1" --include-subtasks    # Discover subtasks by name without knowing parent ID
 
 # Recent tasks (excludes archived folders)
 clickup task recent
@@ -64,6 +65,9 @@ clickup task list
 # Include closed tasks in the list
 clickup task list --include-closed
 clickup task list -c --list-id 12345
+
+# Include subtasks in the list (off by default)
+clickup task list --include-subtasks --list-id 12345
 
 # Recursive view — fetch subtasks and their children in a single tree
 clickup task view 86abc123 --recursive --json
@@ -566,6 +570,7 @@ clickup task checklist item edit <checklist-id> <item-id1> <item-id2> --assignee
 - **Archive filtering**: `task recent` automatically excludes tasks from archived folders
 - **Custom IDs**: Supports both native IDs and custom IDs (e.g., `CU-abc123`)
 - **@mentions**: Comment add resolves `@username` to real ClickUp user tags
+- **Subtask discovery**: `task search` and `task list` accept `--include-subtasks` so you can find subtasks by name without already knowing the parent task ID
 - **Bulk operations**: `task create --from-file` creates many tasks from JSON; `task edit ID1 ID2 ...` applies the same changes to multiple tasks. To bulk-edit subtasks: view the parent with `--json`, extract subtask IDs from `.subtasks[].id`, then pass them all to `task edit`
 - **Subtask visibility**: `task view` shows subtask due/start dates inline, so you can spot-check deadlines without viewing each subtask individually
 - **Multi-list**: `task list-add`/`task list-remove` manage secondary list memberships — useful for cross-team sprint planning

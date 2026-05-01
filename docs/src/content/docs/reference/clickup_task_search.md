@@ -60,6 +60,9 @@ clickup task search [query] [flags]
   clickup task recent
   clickup task search geozone --folder "Engineering Sprint"
 
+  # Include subtasks in results
+  clickup task search "Phase 1" --include-subtasks
+
   # JSON output
   clickup task search geozone --json
 ```
@@ -67,17 +70,18 @@ clickup task search [query] [flags]
 ### Options
 
 ```
-      --assignee string   Filter by assignee (name, username, numeric ID, or "me")
-      --comments          Also search through task comments (slower)
-      --exact             Only show exact substring matches (no fuzzy results)
-      --folder string     Limit search to a specific folder (name, substring match)
-  -h, --help              help for search
-      --jq string         Filter JSON output using a jq expression
-      --json              Output JSON
-      --pick              Interactively select a task and print its ID
-  -r, --raw               Output raw strings instead of JSON-encoded (use with --jq)
-      --space string      Limit search to a specific space (name or ID)
-      --template string   Format JSON output using a Go template
+      --assignee string    Filter by assignee (name, username, numeric ID, or "me")
+      --comments           Also search through task comments (slower)
+      --exact              Only show exact substring matches (no fuzzy results)
+      --folder string      Limit search to a specific folder (name, substring match)
+  -h, --help               help for search
+      --include-subtasks   Include subtasks in search results
+      --jq string          Filter JSON output using a jq expression
+      --json               Output JSON
+      --pick               Interactively select a task and print its ID
+  -r, --raw                Output raw strings instead of JSON-encoded (use with --jq)
+      --space string       Limit search to a specific space (name or ID)
+      --template string    Format JSON output using a Go template
 ```
 
 ### SEE ALSO

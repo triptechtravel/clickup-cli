@@ -31,6 +31,9 @@ clickup task list [flags]
 
   # Include closed tasks
   clickup task list --list-id 12345 --include-closed
+
+  # Include subtasks
+  clickup task list --list-id 12345 --include-subtasks
 ```
 
 ### Options
@@ -39,6 +42,7 @@ clickup task list [flags]
       --assignee strings   Filter by assignee ID(s), or "me" for yourself
   -h, --help               help for list
   -c, --include-closed     Include closed/completed tasks
+      --include-subtasks   Include subtasks in results
       --jq string          Filter JSON output using a jq expression
       --json               Output JSON
       --list-id string     ClickUp list ID (defaults to configured list)
