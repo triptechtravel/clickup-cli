@@ -12,6 +12,7 @@ LDFLAGS := -s -w \
 .PHONY: build install test lint clean smoke
 
 build:
+	@[ -f api/clickupv3/client.gen.go ] || $(MAKE) api-gen
 	go build -ldflags "$(LDFLAGS)" -o bin/$(BINARY) ./cmd/clickup
 
 install:
