@@ -17,11 +17,12 @@ import (
 )
 
 type inboxOptions struct {
-	factory   *cmdutil.Factory
-	days      int
-	limit     int
-	noCache   bool
-	jsonFlags cmdutil.JSONFlags
+	factory     *cmdutil.Factory
+	days        int
+	limit       int
+	noCache     bool
+	includeSelf bool
+	jsonFlags   cmdutil.JSONFlags
 }
 
 type mention struct {
@@ -115,6 +116,7 @@ approximates your inbox by combining these two endpoints.`,
 	cmd.Flags().IntVar(&opts.days, "days", 7, "How many days back to search")
 	cmd.Flags().IntVar(&opts.limit, "limit", 200, "Maximum number of tasks to scan for mentions")
 	cmd.Flags().BoolVar(&opts.noCache, "no-cache", false, "Bypass the local cache and re-fetch comments for every task")
+	cmd.Flags().BoolVar(&opts.includeSelf, "include-self", false, "Include @mentions where you authored the comment (useful for self-reminders)")
 	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 
 	return cmd
@@ -185,7 +187,7 @@ func inboxRun(opts *inboxOptions) error {
 			fmt.Fprintf(ios.ErrOut, "Warning: failed to load inbox cache: %v\n", err)
 			cache = &inboxCache{Tasks: map[string]inboxCacheEntry{}}
 		}
-		if !cache.IsFresh(time.Now()) {
+		if !cache.IsFresh(time.Now()) || cache.IncludeSelf != opts.includeSelf {
 			cache = &inboxCache{Tasks: map[string]inboxCacheEntry{}}
 		}
 	}
@@ -258,7 +260,8 @@ func inboxRun(opts *inboxOptions) error {
 		}
 
 		for _, c := range r.comments {
-			if containsMention(c.CommentText, username) && strings.ToLower(c.User.Username) != username {
+			isSelf := strings.ToLower(c.User.Username) == username
+			if containsMention(c.CommentText, username) && (opts.includeSelf || !isSelf) {
 				ms, _ := strconv.ParseInt(c.Date, 10, 64)
 				attachments := extractAttachmentURLs(c.Comment)
 				addMention(mention{
@@ -311,6 +314,7 @@ func inboxRun(opts *inboxOptions) error {
 	if cache == nil {
 		cache = &inboxCache{Tasks: map[string]inboxCacheEntry{}}
 	}
+	cache.IncludeSelf = opts.includeSelf
 	updateCacheFromTasks(cache, workspaceTasks, mentionsByTask, time.Now())
 	if err := saveInboxCache(cachePath, cache); err != nil {
 		fmt.Fprintf(ios.ErrOut, "Warning: failed to save inbox cache: %v\n", err)

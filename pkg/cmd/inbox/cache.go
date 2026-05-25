@@ -25,9 +25,12 @@ const (
 
 // inboxCache stores the date_updated of tasks observed in the workspace scan
 // so subsequent runs can skip the comment fetch for tasks that have not changed.
+// IncludeSelf records whether the cached mentions were captured with
+// self-authored mentions included, so a flag mismatch triggers a cold rescan.
 type inboxCache struct {
-	ScannedAt int64                      `json:"scanned_at"`
-	Tasks     map[string]inboxCacheEntry `json:"tasks"`
+	ScannedAt   int64                      `json:"scanned_at"`
+	IncludeSelf bool                       `json:"include_self"`
+	Tasks       map[string]inboxCacheEntry `json:"tasks"`
 }
 
 type inboxCacheEntry struct {
