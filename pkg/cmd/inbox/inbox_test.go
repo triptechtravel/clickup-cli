@@ -30,6 +30,51 @@ func TestNewCmdInbox_Defaults(t *testing.T) {
 	if limitFlag.DefValue != "200" {
 		t.Errorf("--limit default = %q, want %q", limitFlag.DefValue, "200")
 	}
+
+	includeSelfFlag := cmd.Flags().Lookup("include-self")
+	if includeSelfFlag == nil {
+		t.Fatal("expected --include-self flag")
+	}
+	if includeSelfFlag.DefValue != "false" {
+		t.Errorf("--include-self default = %q, want %q", includeSelfFlag.DefValue, "false")
+	}
+}
+
+func TestInboxCache_FlagMismatchInvalidates(t *testing.T) {
+	now := time.Now()
+	fresh := &inboxCache{
+		ScannedAt:   now.UnixMilli(),
+		IncludeSelf: false,
+		Tasks:       map[string]inboxCacheEntry{"a": {DateUpdated: "1"}},
+	}
+	if !fresh.IsFresh(now) {
+		t.Fatal("cache should be fresh by timestamp")
+	}
+	// The invalidation lives in inboxRun, but the cache field must round-trip
+	// through JSON so the next process sees the prior run's setting.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cache.json")
+	if err := saveInboxCache(path, fresh); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	loaded, err := loadInboxCache(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if loaded.IncludeSelf {
+		t.Error("IncludeSelf round-trip lost — expected false")
+	}
+	fresh.IncludeSelf = true
+	if err := saveInboxCache(path, fresh); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	loaded, err = loadInboxCache(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if !loaded.IncludeSelf {
+		t.Error("IncludeSelf=true did not round-trip")
+	}
 }
 
 func TestContainsMention_TaskDescriptions(t *testing.T) {
