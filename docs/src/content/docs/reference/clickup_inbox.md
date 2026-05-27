@@ -47,6 +47,7 @@ clickup inbox [flags]
 ```
       --days int          How many days back to search (default 7)
   -h, --help              help for inbox
+      --include-self      Include @mentions where you authored the comment (useful for self-reminders)
       --jq string         Filter JSON output using a jq expression
       --json              Output JSON
       --limit int         Maximum number of tasks to scan for mentions (default 200)
