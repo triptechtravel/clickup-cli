@@ -20,6 +20,10 @@ jobs:
         run: make api-gen
       - run: go test ./...
       - run: go vet ./...
+      - name: Check docs are up to date
+        run: |
+          make docs
+          git diff --exit-code docs/ || { echo "::error::Docs are out of date. Run 'make docs' locally and commit the result."; exit 1; }
 
   build:
     runs-on: ubuntu-latest
