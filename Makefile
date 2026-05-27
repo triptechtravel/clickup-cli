@@ -9,16 +9,18 @@ LDFLAGS := -s -w \
 	-X $(MODULE)/internal/build.Commit=$(COMMIT) \
 	-X $(MODULE)/internal/build.Date=$(DATE)
 
-.PHONY: build install test lint clean smoke
+.PHONY: build install test lint clean smoke ensure-gen
 
-build:
+ensure-gen:
 	@[ -f api/clickupv3/client.gen.go ] || $(MAKE) api-gen
+
+build: ensure-gen
 	go build -ldflags "$(LDFLAGS)" -o bin/$(BINARY) ./cmd/clickup
 
-install:
+install: ensure-gen
 	go install -ldflags "$(LDFLAGS)" ./cmd/clickup
 
-test:
+test: ensure-gen
 	go test ./...
 
 # Round-trip the typed-wrapper code paths against a real ClickUp workspace.
