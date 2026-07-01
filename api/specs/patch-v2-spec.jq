@@ -8,6 +8,10 @@
 #   - group_assignees / checklists / dependencies / linked_tasks: declared as string[],
 #     API returns object[]. Patches here widen the items to generic objects so
 #     json.Unmarshal does not fail when they are populated.
+#   - checklist-item response `assignee` (singular): declared as string|null, but
+#     the API returns a full user object on assigned items. Patched (response
+#     schemas only — request bodies still send a scalar assignee id) so the
+#     checklist item edit/resolve responses decode.
 #
 # Usage: jq -f patch-v2-spec.jq clickup-v2.json > clickup-v2-patched.json
 #
@@ -89,6 +93,15 @@ def fix_dependencies:
 def fix_linked_tasks:
   if .linked_tasks.items.type == "string" then
     .linked_tasks.items = {"type": "object"}
+  else . end;
+
+# Helper: widen the singular checklist-item `assignee` (response) to a generic
+# object. Applied only to response schemas via path (below) so request bodies,
+# which send a scalar assignee id, keep their string type. The API returns a
+# user object on assigned items, which otherwise breaks json.Unmarshal.
+def fix_checklist_item_assignee:
+  if .properties.checklist.properties.items.items.properties.assignee then
+    .properties.checklist.properties.items.items.properties.assignee = {"type": "object"}
   else . end;
 
 # Helper: fix the create-comment response schema. The spec declares `id` as
@@ -210,3 +223,7 @@ def fix_comment_request:
 | (.paths."/v2/task/{task_id}/comment".post.responses."200".content."application/json".schema) |= fix_comment_response
 | (.paths."/v2/list/{list_id}/comment".post.responses."200".content."application/json".schema) |= fix_comment_response
 | (.paths."/v2/view/{view_id}/comment".post.responses."200".content."application/json".schema) |= fix_comment_response
+# Fix checklist-item response `assignee` — documented as string but returned as
+# a user object on assigned items (breaks edit/resolve response decoding).
+| (.paths."/v2/checklist/{checklist_id}/checklist_item/{checklist_item_id}".put.responses."200".content."application/json".schema) |= fix_checklist_item_assignee
+| (.paths."/v2/checklist/{checklist_id}/checklist_item".post.responses."200".content."application/json".schema) |= fix_checklist_item_assignee

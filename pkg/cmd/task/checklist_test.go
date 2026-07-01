@@ -189,6 +189,30 @@ func TestChecklistItemResolve_DoesNotWipeName(t *testing.T) {
 	assert.False(t, hasName, "resolve should not send a name field (would wipe it)")
 }
 
+// Regression: ClickUp returns the checklist item's `assignee` as a full user
+// object (not the string the raw spec declares). The response must decode
+// without error. See fix_checklist_item_assignee in patch-v2-spec.jq.
+func TestChecklistItemResolve_DecodesObjectAssignee(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+
+	tf.HandleFunc("checklist/cl-1/checklist_item/item-1", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-RateLimit-Remaining", "99")
+
+		if r.Method == "PUT" {
+			// assignee is an object here — the shape the live API returns for
+			// an assigned item. Before the spec patch this failed to decode.
+			w.Write([]byte(`{"checklist": {"items": [{"id": "item-1", "name": "Do the thing", "orderindex": 0, "assignee": {"id": 123, "username": "Isaac", "email": "isaac@triptech.com"}, "resolved": true, "parent": null, "date_created": "1700000000000", "children": []}]}}`))
+			return
+		}
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	})
+
+	cmd := newCmdChecklistItemResolve(tf.Factory)
+	err := testutil.RunCommand(t, cmd, "cl-1", "item-1")
+	require.NoError(t, err, "object-shaped assignee in the response must decode")
+}
+
 func TestChecklistItemAdd_WithAssignee(t *testing.T) {
 	tf := testutil.NewTestFactory(t)
 
