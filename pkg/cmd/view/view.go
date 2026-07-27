@@ -17,5 +17,5 @@ func NewCmdView(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(NewCmdViewGet(f))
 	cmd.AddCommand(NewCmdViewTasks(f))
 
-	return cmd
+	return cmdutil.GroupCommand(cmd)
 }

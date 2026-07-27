@@ -12,7 +12,7 @@ LDFLAGS := -s -w \
 .PHONY: build install test lint clean smoke test-install ensure-gen
 
 ensure-gen:
-	@[ -f api/clickupv3/client.gen.go ] || $(MAKE) api-gen
+	@[ -f api/clickupv2/client.gen.go ] && [ -f api/clickupv3/client.gen.go ] || $(MAKE) api-gen
 
 build: ensure-gen
 	go build -ldflags "$(LDFLAGS)" -o bin/$(BINARY) ./cmd/clickup
@@ -52,9 +52,33 @@ snapshot:
 SPEC_V2_URL := https://developer.clickup.com/openapi/clickup-api-v2-reference.json
 SPEC_V3_URL := https://developer.clickup.com/openapi/ClickUp_PUBLIC_API_V3.yaml
 
+# Generated code is deliberately not committed, which makes the spec the source
+# of truth — so the spec is pinned. Without this, two clean clones a week apart
+# can silently produce different clients. Bump deliberately with `make api-update`.
+SPEC_V2_SHA := 224a4d4d1a50116268be54dbf887a59a444a6bffadd133c620cd1a6c32b1069b
+SPEC_V3_SHA := 167e0b99e0c2218312d1318fff613f180dccdfcb8decb724ce08559aa04329f2
+
+# verify_spec <file> <expected-sha> <name>
+define verify_spec
+	@actual=$$(shasum -a 256 $(1) | cut -d' ' -f1); \
+	if [ "$$actual" != "$(2)" ]; then \
+		echo ""; \
+		echo "ERROR: $(3) spec checksum mismatch."; \
+		echo "  expected: $(2)"; \
+		echo "  actual:   $$actual"; \
+		echo ""; \
+		echo "Upstream published a new spec. Review the change, then re-pin:"; \
+		echo "    make api-update"; \
+		echo ""; \
+		rm -f $(1); \
+		exit 1; \
+	fi
+endef
+
 api/specs/clickup-v2.json:
 	@mkdir -p api/specs
 	curl -sfL -o $@.raw $(SPEC_V2_URL)
+	$(call verify_spec,$@.raw,$(SPEC_V2_SHA),V2)
 	@echo "Patching V2 spec (fixing time_spent, assignees, tags types)..."
 	jq -f api/specs/patch-v2-spec.jq $@.raw > $@
 	rm -f $@.raw
@@ -63,6 +87,7 @@ api/specs/clickup-v2.json:
 api/specs/clickup-v3.yaml:
 	@mkdir -p api/specs
 	curl -sfL -o $@ $(SPEC_V3_URL)
+	$(call verify_spec,$@,$(SPEC_V3_SHA),V3)
 	@echo "Downloaded V3 spec ($$(wc -c < $@ | tr -d ' ') bytes)"
 
 .PHONY: api-spec
@@ -80,6 +105,23 @@ api-gen: api-spec
 	go run ./cmd/gen-api -spec api/specs/clickup-v2.json -pkg apiv2 -types-pkg clickupv2 -out internal/apiv2/operations.gen.go
 	go run ./cmd/gen-api -spec api/specs/clickup-v3.yaml -pkg apiv3 -types-pkg clickupv3 -out internal/apiv3/operations.gen.go
 	@echo "Done: V2 + V3 types, fixes, and wrappers generated."
+
+.PHONY: api-update
+api-update:
+	@echo "Fetching current specs to re-pin..."
+	@mkdir -p api/specs
+	@curl -sfL -o /tmp/clickup-v2-repin.json $(SPEC_V2_URL)
+	@curl -sfL -o /tmp/clickup-v3-repin.yaml $(SPEC_V3_URL)
+	@v2=$$(shasum -a 256 /tmp/clickup-v2-repin.json | cut -d' ' -f1); \
+	 v3=$$(shasum -a 256 /tmp/clickup-v3-repin.yaml | cut -d' ' -f1); \
+	 if [ "$$v2" = "$(SPEC_V2_SHA)" ] && [ "$$v3" = "$(SPEC_V3_SHA)" ]; then \
+		echo "Specs unchanged; nothing to re-pin."; \
+	 else \
+		sed -i.bak -e "s/^SPEC_V2_SHA := .*/SPEC_V2_SHA := $$v2/" -e "s/^SPEC_V3_SHA := .*/SPEC_V3_SHA := $$v3/" Makefile && rm -f Makefile.bak; \
+		echo "Re-pinned:"; echo "  V2 $$v2"; echo "  V3 $$v3"; \
+		echo "Now run 'make api-clean api-gen' and review the generated diff."; \
+	 fi
+	@rm -f /tmp/clickup-v2-repin.json /tmp/clickup-v3-repin.yaml
 
 .PHONY: api-clean
 api-clean:

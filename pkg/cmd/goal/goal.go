@@ -18,5 +18,5 @@ func NewCmdGoal(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(NewCmdGoalCreate(f))
 	cmd.AddCommand(NewCmdGoalDelete(f))
 
-	return cmd
+	return cmdutil.GroupCommand(cmd)
 }

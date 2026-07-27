@@ -18,5 +18,5 @@ func NewCmdFolder(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(NewCmdFolderCreate(f))
 	cmd.AddCommand(NewCmdFolderDelete(f))
 
-	return cmd
+	return cmdutil.GroupCommand(cmd)
 }

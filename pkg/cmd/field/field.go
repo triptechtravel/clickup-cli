@@ -15,5 +15,5 @@ func NewCmdField(f *cmdutil.Factory) *cobra.Command {
 
 	cmd.AddCommand(NewCmdFieldList(f))
 
-	return cmd
+	return cmdutil.GroupCommand(cmd)
 }

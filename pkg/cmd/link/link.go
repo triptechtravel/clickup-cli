@@ -24,5 +24,5 @@ duplicates.`,
 	cmd.AddCommand(NewCmdLinkCommit(f))
 	cmd.AddCommand(NewCmdLinkSync(f))
 
-	return cmd
+	return cmdutil.GroupCommand(cmd)
 }

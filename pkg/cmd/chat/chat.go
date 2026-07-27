@@ -20,5 +20,5 @@ func NewCmdChat(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(NewCmdReact(f))
 	cmd.AddCommand(NewCmdDelete(f))
 
-	return cmd
+	return cmdutil.GroupCommand(cmd)
 }

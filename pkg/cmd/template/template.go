@@ -16,5 +16,5 @@ func NewCmdTemplate(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(NewCmdTemplateList(f))
 	cmd.AddCommand(NewCmdTemplateUse(f))
 
-	return cmd
+	return cmdutil.GroupCommand(cmd)
 }

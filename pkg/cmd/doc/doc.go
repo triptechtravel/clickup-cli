@@ -18,5 +18,5 @@ func NewCmdDoc(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(NewCmdCreate(f))
 	cmd.AddCommand(NewCmdPage(f))
 
-	return cmd
+	return cmdutil.GroupCommand(cmd)
 }

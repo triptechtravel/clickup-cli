@@ -18,5 +18,5 @@ func NewCmdList(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(NewCmdListCreate(f))
 	cmd.AddCommand(NewCmdListDelete(f))
 
-	return cmd
+	return cmdutil.GroupCommand(cmd)
 }

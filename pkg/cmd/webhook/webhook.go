@@ -17,5 +17,5 @@ func NewCmdWebhook(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(NewCmdWebhookCreate(f))
 	cmd.AddCommand(NewCmdWebhookDelete(f))
 
-	return cmd
+	return cmdutil.GroupCommand(cmd)
 }

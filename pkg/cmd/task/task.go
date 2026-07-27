@@ -28,5 +28,5 @@ func NewCmdTask(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(NewCmdListRemove(f))
 	cmd.AddCommand(NewCmdMove(f))
 
-	return cmd
+	return cmdutil.GroupCommand(cmd)
 }

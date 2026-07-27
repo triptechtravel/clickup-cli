@@ -16,5 +16,5 @@ func NewCmdSprint(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(NewCmdSprintList(f))
 	cmd.AddCommand(NewCmdSprintCurrent(f))
 
-	return cmd
+	return cmdutil.GroupCommand(cmd)
 }

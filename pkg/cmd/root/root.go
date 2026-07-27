@@ -2,6 +2,7 @@ package root
 
 import (
 	"github.com/spf13/cobra"
+	apicmd "github.com/triptechtravel/clickup-cli/pkg/cmd/api"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/attachment"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/auth"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/chat"
@@ -21,8 +22,8 @@ import (
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/tag"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/task"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/template"
-	"github.com/triptechtravel/clickup-cli/pkg/cmd/view"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/version"
+	"github.com/triptechtravel/clickup-cli/pkg/cmd/view"
 	"github.com/triptechtravel/clickup-cli/pkg/cmd/webhook"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
@@ -42,6 +43,7 @@ Links GitHub PRs, branches, and commits to ClickUp tasks.`,
 
 	// Core commands
 	cmd.AddCommand(auth.NewCmdAuth(f))
+	cmd.AddCommand(apicmd.NewCmdAPI(f))
 	cmd.AddCommand(task.NewCmdTask(f))
 	cmd.AddCommand(comment.NewCmdComment(f))
 	cmd.AddCommand(attachment.NewCmdAttachment(f))

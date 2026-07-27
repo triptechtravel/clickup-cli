@@ -18,5 +18,5 @@ func NewCmdSpace(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(NewCmdSpaceCreate(f))
 	cmd.AddCommand(NewCmdSpaceDelete(f))
 
-	return cmd
+	return cmdutil.GroupCommand(cmd)
 }
