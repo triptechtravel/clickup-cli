@@ -66,6 +66,26 @@ type Task struct {
 	Folder              FolderOftaskBelonging  `json:"folder"`
 	Space               SpaceOfTaskBelonging   `json:"space"`
 	Attachments         []TaskAttachment       `json:"attachments"`
+
+	// Locations is every list this task appears in, including its home list.
+	// ClickUp's multi-list feature means a task can be surfaced in lists other
+	// than the one it lives in, and GET /list/{id}/task returns *only* home-list
+	// tasks — so without this field the CLI cannot tell that a list view is
+	// incomplete. Omitting it caused a list to be reported clean twice while it
+	// still held six linked tasks.
+	Locations []ListOfTaskBelonging `json:"locations,omitempty"`
+}
+
+// LinkedLists returns the lists this task is surfaced in other than its home
+// list — the memberships a plain list query will not reveal.
+func (t Task) LinkedLists() []ListOfTaskBelonging {
+	var out []ListOfTaskBelonging
+	for _, loc := range t.Locations {
+		if loc.ID != t.List.ID {
+			out = append(out, loc)
+		}
+	}
+	return out
 }
 
 // TaskStatus represents a task's status.

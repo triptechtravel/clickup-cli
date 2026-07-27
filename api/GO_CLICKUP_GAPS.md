@@ -32,6 +32,7 @@ official ClickUp API V2 spec (82 paths, 137 operations).
 |-----|--------|
 | Tag creation sends tags in request body | ClickUp ignores body tags; must use `POST /task/{id}/tag/{name}` URL |
 | Nullable priority parsed as empty struct | `"priority": null` → `TaskPriority{Priority:"", Color:""}` instead of nil |
+| No endpoint enumerates tasks *linked into* a list | ClickUp multi-list lets a task appear in lists other than its home list. Neither `GET /list/{id}/task` nor `GET /team/{id}/task?list_ids[]=` returns them — both filter by **home list only**. Verified 2026-07-27 against a live workspace: a list with 2 home tasks and 6 linked tasks returned 2 and 61-with-archived, never a foreign-homed task. The only way to answer "what appears in this list" is to scan every list in every space and check each task's `locations[]`. `task list --linked` does exactly that and says so; it is inherently O(workspace). Do not assume a cheap query exists. |
 | `PUT /list/{id}` silently ignores `folder_id` | Endpoint returns 200 and echoes the original folder; the list does not move. Verified 2026-04-22 against a live workspace. `POST /folder/{id}/list` with `list_id` also rejects (`List Name Invalid`). **There is no public-API way to reparent a list between folders.** Do NOT add a `list move` command (nick-preda's fork did and shipped a non-functional no-op). |
 
 ## Operations in Spec NOT in go-clickup

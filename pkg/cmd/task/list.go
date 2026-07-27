@@ -22,6 +22,7 @@ type listOptions struct {
 	page            int
 	includeClosed   bool
 	includeSubtasks bool
+	linked          bool
 	jsonFlags       cmdutil.JSONFlags
 }
 
@@ -75,6 +76,8 @@ status, and sprint.`,
 	cmd.Flags().IntVar(&opts.page, "page", 0, "Page number for pagination (starts at 0)")
 	cmd.Flags().BoolVarP(&opts.includeClosed, "include-closed", "c", false, "Include closed/completed tasks")
 	cmd.Flags().BoolVar(&opts.includeSubtasks, "include-subtasks", false, "Include subtasks in results")
+	cmd.Flags().BoolVar(&opts.linked, "linked", false,
+		"Also find tasks linked into this list from elsewhere (scans the workspace; slow)")
 
 	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 
@@ -120,6 +123,19 @@ func runList(f *cmdutil.Factory, opts *listOptions) error {
 		return fmt.Errorf("failed to list tasks: %w", err)
 	}
 
+	if opts.linked {
+		linkedTasks, err := apiv2.FindLinkedTasks(ctx, client, opts.listID, opts.includeClosed,
+			func(p apiv2.LinkedScanProgress) {
+				fmt.Fprintf(ios.ErrOut,
+					"Scanning %d lists for tasks linked into this one (ClickUp has no direct query for this)...\n",
+					p.Lists)
+			})
+		if err != nil {
+			return fmt.Errorf("failed to scan for linked tasks: %w", err)
+		}
+		tasks = append(tasks, linkedTasks...)
+	}
+
 	if len(tasks) == 0 {
 		fmt.Fprintln(ios.ErrOut, "No tasks found.")
 		return nil
@@ -142,6 +158,21 @@ func runList(f *cmdutil.Factory, opts *listOptions) error {
 	fmt.Fprintf(ios.Out, "  %s  clickup task edit <id> --status <status>\n", cs.Gray("Edit:"))
 	fmt.Fprintf(ios.Out, "  %s  clickup status set <status> <id>\n", cs.Gray("Status:"))
 	fmt.Fprintf(ios.Out, "  %s  clickup task list --list-id %s --json\n", cs.Gray("JSON:"), opts.listID)
+
+	// Never let a filtered view read as a complete one. Counting what was
+	// withheld would cost requests the user did not ask for, so name the
+	// omission and the flag that lifts it.
+	var omitted []string
+	if !opts.linked {
+		omitted = append(omitted, "tasks linked in from other lists (--linked)")
+	}
+	if !opts.includeSubtasks {
+		omitted = append(omitted, "subtasks (--include-subtasks)")
+	}
+	if len(omitted) > 0 {
+		fmt.Fprintln(ios.Out)
+		fmt.Fprintf(ios.Out, "%s %s\n", cs.Gray("Not shown:"), cs.Gray(strings.Join(omitted, ", ")))
+	}
 
 	return nil
 }

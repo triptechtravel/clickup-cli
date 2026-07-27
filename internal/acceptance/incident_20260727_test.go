@@ -175,7 +175,7 @@ func TestIncident_GenericAPIPassthrough(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestIncident_TaskViewShowsLinkedLists(t *testing.T) {
-	t.Skip("Phase 2.4 — add Locations to the task type, surface in task view")
+	
 
 	tf := testutil.NewTestFactory(t)
 	tf.Handle(http.MethodGet, "task/4n6u4xw", 200, `{
@@ -192,25 +192,45 @@ func TestIncident_TaskViewShowsLinkedLists(t *testing.T) {
 	assert.Contains(t, out, "Apps", "linked list must be visible, not silently dropped")
 }
 
+// --linked has to scan the workspace: ClickUp has no endpoint that returns
+// tasks linked into a list (see api/GO_CLICKUP_GAPS.md). The test asserts the
+// scan finds a foreign-homed task and that the cost is disclosed.
 func TestIncident_TaskListLinkedFlag(t *testing.T) {
-	t.Skip("Phase 2.5 — task list --linked")
-
 	tf := testutil.NewTestFactory(t)
+
+	// Home-list query returns only the QA task, as the real API does.
 	tf.Handle(http.MethodGet, "list/216668663/task", 200,
 		`{"tasks":[{"id":"qa1","name":"[QA] smoke","status":{"status":"open"},"list":{"id":"216668663","name":"Apps"}}]}`)
 
-	out, _, err := runCLI(t, tf, "task", "list", "--list-id", "216668663", "--linked")
+	// Workspace shape for the scan.
+	tf.Handle(http.MethodGet, "team", 200, `{"teams":[{"id":"12345","name":"TripTech"}]}`)
+	tf.Handle(http.MethodGet, "team/12345/space", 200, `{"spaces":[{"id":"66607490","name":"Development"}]}`)
+	tf.Handle(http.MethodGet, "space/66607490/list", 200,
+		`{"lists":[{"id":"216668663","name":"Apps"},{"id":"216686969","name":"Bugs"}]}`)
+	tf.Handle(http.MethodGet, "space/66607490/folder", 200, `{"folders":[]}`)
+
+	// The Bugs list holds a task linked into Apps.
+	tf.Handle(http.MethodGet, "list/216686969/task", 200, `{"tasks":[{
+		"id":"4n6u4xw","name":"iOS Admob placements not showing","status":{"status":"done"},
+		"list":{"id":"216686969","name":"Bugs"},
+		"locations":[{"id":"216668663","name":"Apps"}]}]}`)
+
+	out, errOut, err := runCLI(t, tf, "task", "list", "--list-id", "216668663", "--linked")
 
 	require.NoError(t, err)
 	assert.Contains(t, out, "iOS Admob placements", "linked tasks must appear under --linked")
+	assert.Contains(t, out, "[QA] smoke", "home-list tasks must still appear")
+	assert.Regexp(t, `(?i)scan`, errOut, "the workspace scan cost must be disclosed")
 }
 
 // The general fix, and the one that actually matters: a filtered view must
 // never read as a complete one. This is what turned a missing feature into a
 // wrong answer.
+//
+// A count of what was hidden is not obtainable without spending the requests
+// the user did not ask for, so the honest form is a named caveat plus the flag
+// that lifts it.
 func TestIncident_FilteredListReportsWhatItOmitted(t *testing.T) {
-	t.Skip("Phase 2.6 — footer counting excluded subtasks and linked tasks")
-
 	tf := testutil.NewTestFactory(t)
 	tf.Handle(http.MethodGet, "list/216668663/task", 200,
 		`{"tasks":[{"id":"qa1","name":"[QA] smoke","status":{"status":"open"},"list":{"id":"216668663","name":"Apps"}}]}`)
@@ -218,8 +238,29 @@ func TestIncident_FilteredListReportsWhatItOmitted(t *testing.T) {
 	out, _, err := runCLI(t, tf, "task", "list", "--list-id", "216668663")
 
 	require.NoError(t, err)
-	assert.Regexp(t, `(?i)\d+ (linked task|subtask)`, out,
-		"a view that hides tasks must say how many it hid")
+	assert.Regexp(t, `(?i)linked`, out,
+		"must disclose that tasks linked in from other lists are not shown")
+	assert.Contains(t, out, "--linked", "must name the flag that would show them")
+	assert.Regexp(t, `(?i)subtask`, out,
+		"must disclose that subtasks are excluded by default")
+	assert.Contains(t, out, "--include-subtasks")
+}
+
+// The caveat must disappear once the flags are supplied, or it becomes noise
+// that people learn to ignore.
+func TestIncident_NoCaveatWhenNothingIsHidden(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	tf.Handle(http.MethodGet, "list/216668663/task", 200,
+		`{"tasks":[{"id":"qa1","name":"[QA] smoke","status":{"status":"open"},"list":{"id":"216668663","name":"Apps"}}]}`)
+	tf.Handle(http.MethodGet, "team", 200, `{"teams":[{"id":"12345","name":"TripTech"}]}`)
+	tf.Handle(http.MethodGet, "team/12345/space", 200, `{"spaces":[]}`)
+
+	out, _, err := runCLI(t, tf, "task", "list", "--list-id", "216668663",
+		"--linked", "--include-subtasks")
+
+	require.NoError(t, err)
+	assert.NotRegexp(t, `(?i)not shown`, out,
+		"no caveat when nothing is being withheld")
 }
 
 // ---------------------------------------------------------------------------

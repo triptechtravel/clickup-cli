@@ -309,6 +309,17 @@ func printTaskView(f *cmdutil.Factory, task *clickup.Task, subtasks []subtaskInf
 		}
 	}
 
+	// Multi-list membership. A task can be surfaced in lists other than the one
+	// it lives in, and nothing else in the CLI reveals that — a list query
+	// returns home-list tasks only.
+	if linked := task.LinkedLists(); len(linked) > 0 {
+		names := make([]string, 0, len(linked))
+		for _, l := range linked {
+			names = append(names, l.Name)
+		}
+		fmt.Fprintf(out, "%s %s\n", cs.Bold("Also in:"), strings.Join(names, ", "))
+	}
+
 	// Parent task
 	if task.Parent != "" {
 		fmt.Fprintf(out, "%s %s\n", cs.Bold("Parent:"), task.Parent)
