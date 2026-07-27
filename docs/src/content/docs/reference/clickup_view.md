@@ -9,6 +9,10 @@ Manage views
 
 List views and view tasks in ClickUp.
 
+```
+clickup view [flags]
+```
+
 ### Options
 
 ```

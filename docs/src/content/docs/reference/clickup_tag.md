@@ -9,6 +9,10 @@ Manage space tags
 
 View and manage tags available in your ClickUp spaces.
 
+```
+clickup tag <command> [flags]
+```
+
 ### Options
 
 ```

@@ -9,6 +9,10 @@ Manage ClickUp Docs
 
 List, view, and create ClickUp Docs and their pages.
 
+```
+clickup doc <command> [flags]
+```
+
 ### Options
 
 ```

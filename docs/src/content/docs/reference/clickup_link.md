@@ -15,6 +15,10 @@ links, bold formatting, and code blocks directly in the ClickUp UI. Running
 the same command again updates the existing entry rather than creating
 duplicates.
 
+```
+clickup link <command> [flags]
+```
+
 ### Options
 
 ```

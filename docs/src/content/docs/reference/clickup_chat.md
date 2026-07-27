@@ -9,6 +9,10 @@ Manage ClickUp Chat messages
 
 Send messages to ClickUp Chat channels.
 
+```
+clickup chat <command> [flags]
+```
+
 ### Options
 
 ```

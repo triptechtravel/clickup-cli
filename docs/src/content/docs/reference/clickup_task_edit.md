@@ -53,6 +53,7 @@ clickup task edit [<task-id>...] [flags]
 
 ```
       --add-tags strings              Add tags without removing existing ones
+      --archived                      Set archived
       --assignee ints                 Assignee user ID(s) to add
       --clear-field stringArray       Clear a custom field value ("Name", repeatable)
       --description string            New task description

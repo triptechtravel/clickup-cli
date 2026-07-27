@@ -53,10 +53,35 @@ Generated code is gitignored — run `make api-gen` after cloning.
 ```
 make api-gen
 ├── Fetches V2 + V3 specs from developer.clickup.com
+│   └── verified against SPEC_V2_SHA / SPEC_V3_SHA — see below
 ├── oapi-codegen → types (api/clickupv2/, api/clickupv3/)
 ├── gen-api -fix → resolves broken $refs via spec introspection (fixes.gen.go)
-└── gen-api → typed wrapper functions (internal/apiv2/, internal/apiv3/)
+├── gen-api → typed wrapper functions (internal/apiv2/, internal/apiv3/)
+└── gen-api -flags-out → cobra flag binding per request field (flags.gen.go)
 ```
+
+**Specs are pinned by checksum.** Generated code is not committed, which makes
+the spec the source of truth, so it cannot be fetched unpinned — two clones a
+week apart would otherwise build different clients silently. A mismatch fails
+the build with the expected and actual hashes.
+
+When ClickUp publishes a new spec, re-pin deliberately:
+
+```bash
+make api-update          # re-pins the checksums
+make api-clean api-gen   # regenerate
+git diff                 # review what changed before committing
+```
+
+**Adding a request field costs no Go.** `gen-api` emits a `<Op>Flags` struct per
+operation with a request body; `Register(cmd, skip...)` binds a flag per scalar
+field and `Apply(req)` copies the ones the user set. A field added upstream
+becomes a working flag after `make api-gen`. Commands skip any field they bind
+themselves, where hand-written ergonomics beat a generic flag.
+
+`internal/clickup.TestSpecDrift` fails the build when a hand-written type lacks
+a field the spec has — the guard that exists because `archived` went missing
+that way.
 
 ### When to use which layer
 
@@ -78,7 +103,7 @@ make api-gen
 
 1. Fork the repository and create your branch from `main`
 2. Make your changes and add tests for new functionality
-3. Run `make api-gen && go build ./... && go test ./... && go vet ./...`
+3. Run `make api-gen && go build ./... && go test ./... && go vet ./... && make lint`
 4. Submit a pull request with a clear description
 
 ## Release process

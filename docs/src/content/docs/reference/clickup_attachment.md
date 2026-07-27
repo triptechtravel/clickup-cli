@@ -9,6 +9,10 @@ Manage attachments on ClickUp tasks
 
 List and upload attachments on ClickUp tasks.
 
+```
+clickup attachment <command> [flags]
+```
+
 ### Options
 
 ```

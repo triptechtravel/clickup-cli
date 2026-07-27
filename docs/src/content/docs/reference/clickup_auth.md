@@ -9,6 +9,10 @@ Authenticate with ClickUp
 
 Manage authentication state for the ClickUp CLI.
 
+```
+clickup auth <command> [flags]
+```
+
 ### Options
 
 ```

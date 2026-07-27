@@ -9,6 +9,10 @@ Manage spaces
 
 List and select ClickUp spaces in your workspace.
 
+```
+clickup space [flags]
+```
+
 ### Options
 
 ```

@@ -56,7 +56,7 @@ Full command list with flags and examples: **[Command reference](https://triptec
 
 | Area | Key commands |
 |------|-------------|
-| **Tasks** | `task view`, `task create`, `task edit`, `task search`, `task delete`, `task recent` |
+| **Tasks** | `task view`, `task create`, `task edit`, `task search`, `task delete`, `task recent`, `task archive`, `task unarchive` |
 | **Folders** | `folder list`, `folder select` |
 | **Lists** | `list list`, `list select` |
 | **Docs** | `doc list`, `doc view`, `doc create`, `doc page list`, `doc page view`, `doc page create`, `doc page edit` |
@@ -68,6 +68,7 @@ Full command list with flags and examples: **[Command reference](https://triptec
 | **Chat** | `chat send` |
 | **Attachments** | `attachment list`, `attachment add` |
 | **Workspace** | `inbox`, `member list`, `space select`, `tag list`, `field list` |
+| **Escape hatch** | `api` -- any endpoint, including ones without a dedicated command |
 
 ## Documentation
 

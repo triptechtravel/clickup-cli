@@ -20,6 +20,7 @@ Links GitHub PRs, branches, and commits to ClickUp tasks.
 
 ### SEE ALSO
 
+* [clickup api](/clickup-cli/reference/clickup_api/)	 - Make an authenticated request to the ClickUp API
 * [clickup attachment](/clickup-cli/reference/clickup_attachment/)	 - Manage attachments on ClickUp tasks
 * [clickup auth](/clickup-cli/reference/clickup_auth/)	 - Authenticate with ClickUp
 * [clickup chat](/clickup-cli/reference/clickup_chat/)	 - Manage ClickUp Chat messages

@@ -9,6 +9,10 @@ Manage workspace members
 
 List and look up members of your ClickUp workspace.
 
+```
+clickup member [flags]
+```
+
 ### Options
 
 ```

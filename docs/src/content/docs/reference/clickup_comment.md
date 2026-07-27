@@ -9,6 +9,10 @@ Manage comments on ClickUp tasks
 
 Add, list, edit, and delete comments on ClickUp tasks.
 
+```
+clickup comment <command> [flags]
+```
+
 ### Options
 
 ```

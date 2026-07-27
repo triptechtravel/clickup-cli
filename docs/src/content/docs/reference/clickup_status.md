@@ -9,6 +9,10 @@ Manage task statuses
 
 Set task statuses and list available statuses for a space.
 
+```
+clickup status <command> [flags]
+```
+
 ### Options
 
 ```

@@ -9,6 +9,10 @@ Manage goals
 
 List, view, create, and delete ClickUp goals.
 
+```
+clickup goal [flags]
+```
+
 ### Options
 
 ```

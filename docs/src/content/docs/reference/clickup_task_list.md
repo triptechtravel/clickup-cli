@@ -45,6 +45,7 @@ clickup task list [flags]
       --include-subtasks   Include subtasks in results
       --jq string          Filter JSON output using a jq expression
       --json               Output JSON
+      --linked             Also find tasks linked into this list from elsewhere (scans the workspace; slow)
       --list-id string     ClickUp list ID (defaults to configured list)
       --page int           Page number for pagination (starts at 0)
   -r, --raw                Output raw strings instead of JSON-encoded (use with --jq)

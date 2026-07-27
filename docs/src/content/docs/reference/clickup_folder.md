@@ -9,6 +9,10 @@ Manage folders
 
 List and select ClickUp folders in a space.
 
+```
+clickup folder [flags]
+```
+
 ### Options
 
 ```

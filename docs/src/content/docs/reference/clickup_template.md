@@ -9,6 +9,10 @@ Manage templates
 
 List and use ClickUp templates for tasks, folders, and lists.
 
+```
+clickup template [flags]
+```
+
 ### Options
 
 ```

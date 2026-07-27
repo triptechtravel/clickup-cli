@@ -9,6 +9,10 @@ Manage custom fields
 
 Discover and inspect custom fields available in your ClickUp lists.
 
+```
+clickup field <command> [flags]
+```
+
 ### Options
 
 ```

@@ -9,6 +9,10 @@ Manage webhooks
 
 List, create, and delete ClickUp webhooks.
 
+```
+clickup webhook [flags]
+```
+
 ### Options
 
 ```

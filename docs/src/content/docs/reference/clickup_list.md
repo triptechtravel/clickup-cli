@@ -9,6 +9,10 @@ Manage lists
 
 List and select ClickUp lists in a folder or space.
 
+```
+clickup list [flags]
+```
+
 ### Options
 
 ```

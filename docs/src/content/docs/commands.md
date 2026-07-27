@@ -16,6 +16,7 @@ Flag details, examples, and options for each command are in the auto-generated [
 | Command | Description |
 |---------|-------------|
 | [`task activity`](/clickup-cli/reference/clickup_task_activity/) | View a task's details and comment history |
+| [`task archive`](/clickup-cli/reference/clickup_task_archive/) | Archive one or more tasks |
 | [`task create`](/clickup-cli/reference/clickup_task_create/) | Create a new ClickUp task |
 | [`task delete`](/clickup-cli/reference/clickup_task_delete/) | Delete one or more tasks |
 | [`task edit`](/clickup-cli/reference/clickup_task_edit/) | Edit a ClickUp task |
@@ -25,6 +26,7 @@ Flag details, examples, and options for each command are in the auto-generated [
 | [`task move`](/clickup-cli/reference/clickup_task_move/) | Move a task to a different list |
 | [`task recent`](/clickup-cli/reference/clickup_task_recent/) | Show recently updated tasks |
 | [`task search`](/clickup-cli/reference/clickup_task_search/) | Search tasks by name and description |
+| [`task unarchive`](/clickup-cli/reference/clickup_task_unarchive/) | Restore one or more archived tasks |
 | [`task view`](/clickup-cli/reference/clickup_task_view/) | View one or more ClickUp tasks |
 
 ---

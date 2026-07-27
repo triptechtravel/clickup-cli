@@ -9,6 +9,10 @@ Manage sprints
 
 List and view sprints in your ClickUp workspace.
 
+```
+clickup sprint [flags]
+```
+
 ### Options
 
 ```

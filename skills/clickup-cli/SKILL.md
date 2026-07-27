@@ -257,6 +257,43 @@ clickup task list-remove 86abc1 86abc2 86abc3 --list-id 901613544162
 
 Use `list-add` when a task needs to appear in multiple lists — e.g., a campaign task that also belongs in an engineering sprint. Use `list-remove` to undo this. Neither command moves the task; they manage secondary list memberships.
 
+**Important — a list listing does not show linked tasks.** ClickUp has no endpoint
+that returns tasks linked *into* a list: both `GET /list/{id}/task` and the
+team-level query filter by **home list only**. So `task list` can report a list
+as empty while the UI shows tasks in it. Use `--linked` when the answer matters:
+
+```bash
+# Include tasks homed elsewhere but surfaced in this list.
+# Scans every list in the workspace — there is no cheap query. Slow but complete.
+clickup task list --list-id 901613544162 --linked
+
+# See which lists a task appears in beyond its home list
+clickup task view 86abc123     # "Also in: ..." lists them
+```
+
+`task list` prints a "Not shown:" line naming anything it withheld — later pages,
+subtasks, linked tasks — and in `--json` mode sends it to stderr. Trust that line
+over an absence of results.
+
+### Archiving
+
+```bash
+# Archive one or more tasks (bulk-capable)
+clickup task archive 86abc123
+clickup task archive 86abc1 86abc2 86abc3
+
+# Restore
+clickup task unarchive 86abc123
+```
+
+Archiving does **not** cascade to subtasks — ClickUp does not, so neither does
+this. The command names every subtask it left active; pass `--cascade` to
+include them.
+
+Note the asymmetry: `--cascade` cannot work on `unarchive`, because the API omits
+archived subtasks from a task's subtask list, so they are invisible. Restore
+those by ID.
+
 ### Status Management
 
 ```bash
@@ -278,6 +315,31 @@ clickup status add "done" --space 12345   # Specific space
 Status values are fuzzy-matched: exact match > contains match > fuzzy match. If ambiguous, the CLI picks the most specific match and prints a warning.
 
 **Guardrails for `status add`:** Only suggest adding a status when there's a genuine gap in the workflow (e.g., a space has "Closed" but no "done" equivalent). Always confirm with the user before adding. Never remove statuses without explicit user instruction — statuses affect all tasks in the space.
+
+## Generic API access
+
+Any endpoint, including ones with no dedicated command. Reach for this rather
+than assuming a capability is missing.
+
+```bash
+# Read anything
+clickup api task/abc123
+clickup api list/901234/task --jq '.tasks[].name'
+
+# Write anything. -f coerces true/false/null/numbers to JSON types;
+# use --raw-field to force a string.
+clickup api -X PUT task/abc123 -f archived=true
+clickup api -X POST list/901234/task -f name="New task"
+
+# Body from a file or stdin
+echo '{"name":"New task"}' | clickup api -X POST list/901234/task --input -
+
+# v3 API
+clickup api --v3 workspaces/123/docs
+```
+
+Collection endpoints paginate at 100 items. The command warns on stderr when
+more pages exist; `--paginate` follows them and merges the results (GET only).
 
 ## Sprints
 
