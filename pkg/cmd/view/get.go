@@ -22,7 +22,7 @@ Output is always JSON because the response is a union type that cannot
 be rendered as a table.`,
 		Example: `  # Get a view
   clickup view get 3v-abc123`,
-		Args:    cobra.ExactArgs(1),
+		Args:              cobra.ExactArgs(1),
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			viewID := args[0]

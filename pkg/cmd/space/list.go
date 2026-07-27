@@ -15,8 +15,8 @@ func NewCmdSpaceList(f *cmdutil.Factory) *cobra.Command {
 	var jsonFlags cmdutil.JSONFlags
 
 	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List spaces in your workspace",
+		Use:     "list",
+		Short:   "List spaces in your workspace",
 		PreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := f.ApiClient()

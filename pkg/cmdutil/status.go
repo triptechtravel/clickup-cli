@@ -81,7 +81,6 @@ func MatchStatus(target string, available []string) (string, error) {
 		target, strings.Join(available, ", "))
 }
 
-
 // ValidateStatus validates a status string against the available statuses for a task's list,
 // falling back to space-level statuses if the list has no custom overrides.
 // If the status fuzzy-matches, it returns the matched value and prints a warning to w.

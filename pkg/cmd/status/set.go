@@ -41,8 +41,8 @@ If TASK is not provided, the task ID is auto-detected from the current git branc
 
   # Fuzzy matching works too
   clickup status set "prog" CU-abc123`,
-		Args:               cobra.RangeArgs(1, 2),
-		PersistentPreRunE:  cmdutil.NeedsAuth(f),
+		Args:              cobra.RangeArgs(1, 2),
+		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.targetStatus = args[0]
 			if len(args) > 1 {
@@ -130,4 +130,3 @@ func setRun(opts *setOptions) error {
 
 	return nil
 }
-

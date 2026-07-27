@@ -145,10 +145,10 @@ func TestLoad_InvalidYAML(t *testing.T) {
 
 func TestSpaceForDir(t *testing.T) {
 	tests := []struct {
-		name     string
-		cfg      Config
-		dir      string
-		want     string
+		name string
+		cfg  Config
+		dir  string
+		want string
 	}{
 		{
 			name: "returns directory-specific space",

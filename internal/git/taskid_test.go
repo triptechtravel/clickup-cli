@@ -14,27 +14,27 @@ func TestExtractTaskID(t *testing.T) {
 		wantCustom bool
 	}{
 		{
-			name:   "CU hex ID",
-			branch: "CU-ae27de-fix-bug",
-			wantID: "ae27de",
+			name:    "CU hex ID",
+			branch:  "CU-ae27de-fix-bug",
+			wantID:  "ae27de",
 			wantRaw: "CU-ae27de",
 		},
 		{
-			name:   "CU hex ID with feature prefix",
-			branch: "feature/CU-abc123-new-feature",
-			wantID: "abc123",
+			name:    "CU hex ID with feature prefix",
+			branch:  "feature/CU-abc123-new-feature",
+			wantID:  "abc123",
 			wantRaw: "CU-abc123",
 		},
 		{
-			name:   "CU alphanumeric ID",
-			branch: "CU-86d1u2bz4_React-Native-Pois-gone",
-			wantID: "86d1u2bz4",
+			name:    "CU alphanumeric ID",
+			branch:  "CU-86d1u2bz4_React-Native-Pois-gone",
+			wantID:  "86d1u2bz4",
 			wantRaw: "CU-86d1u2bz4",
 		},
 		{
-			name:   "CU alphanumeric ID with feature prefix",
-			branch: "features/CU-86d0xd2r1_BUG-React-Native",
-			wantID: "86d0xd2r1",
+			name:    "CU alphanumeric ID with feature prefix",
+			branch:  "features/CU-86d0xd2r1_BUG-React-Native",
+			wantID:  "86d0xd2r1",
 			wantRaw: "CU-86d0xd2r1",
 		},
 		{
@@ -67,15 +67,15 @@ func TestExtractTaskID(t *testing.T) {
 			wantNil: true,
 		},
 		{
-			name:   "CU ID case insensitive",
-			branch: "cu-dead01-test",
-			wantID: "dead01",
+			name:    "CU ID case insensitive",
+			branch:  "cu-dead01-test",
+			wantID:  "dead01",
 			wantRaw: "cu-dead01",
 		},
 		{
-			name:   "multiple segments picks first CU",
-			branch: "CU-aaa111-also-CU-bbb222",
-			wantID: "aaa111",
+			name:    "multiple segments picks first CU",
+			branch:  "CU-aaa111-also-CU-bbb222",
+			wantID:  "aaa111",
 			wantRaw: "CU-aaa111",
 		},
 	}

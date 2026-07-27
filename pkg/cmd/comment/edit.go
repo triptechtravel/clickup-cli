@@ -55,7 +55,7 @@ local-part when unambiguous.`,
 
   # Re-add a mention via shortcut
   clickup comment edit 90160175975219 "Hey @alice — pushed the fix"`,
-		Args: cobra.RangeArgs(1, 2),
+		Args:              cobra.RangeArgs(1, 2),
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.commentID = args[0]

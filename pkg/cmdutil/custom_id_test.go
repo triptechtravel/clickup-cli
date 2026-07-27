@@ -9,10 +9,10 @@ import (
 
 func TestCustomIDTaskQuery(t *testing.T) {
 	tests := []struct {
-		name       string
-		cfg        *config.Config
-		isCustomID bool
-		wantEmpty  bool
+		name         string
+		cfg          *config.Config
+		isCustomID   bool
+		wantEmpty    bool
 		wantContains []string
 	}{
 		{
@@ -22,21 +22,21 @@ func TestCustomIDTaskQuery(t *testing.T) {
 			wantEmpty:  true,
 		},
 		{
-			name:       "custom ID with workspace sets team_id",
-			cfg:        &config.Config{Workspace: "1276003"},
-			isCustomID: true,
+			name:         "custom ID with workspace sets team_id",
+			cfg:          &config.Config{Workspace: "1276003"},
+			isCustomID:   true,
 			wantContains: []string{"custom_task_ids=true", "team_id=1276003"},
 		},
 		{
-			name:       "custom ID with empty workspace omits team_id",
-			cfg:        &config.Config{Workspace: ""},
-			isCustomID: true,
+			name:         "custom ID with empty workspace omits team_id",
+			cfg:          &config.Config{Workspace: ""},
+			isCustomID:   true,
 			wantContains: []string{"custom_task_ids=true"},
 		},
 		{
-			name:       "custom ID with nil config omits team_id",
-			cfg:        nil,
-			isCustomID: true,
+			name:         "custom ID with nil config omits team_id",
+			cfg:          nil,
+			isCustomID:   true,
 			wantContains: []string{"custom_task_ids=true"},
 		},
 	}

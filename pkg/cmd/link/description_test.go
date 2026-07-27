@@ -214,4 +214,3 @@ func TestParseLinksBlock_ClickUpStarBullets(t *testing.T) {
 	}, entries)
 	assert.Equal(t, "Task description.", rest)
 }
-

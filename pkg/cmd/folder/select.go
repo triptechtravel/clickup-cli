@@ -20,9 +20,9 @@ func NewCmdFolderSelect(f *cmdutil.Factory) *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "select",
-		Short: "Set default folder",
-		Long:  "Set the default folder globally or for the current directory.",
+		Use:     "select",
+		Short:   "Set default folder",
+		Long:    "Set the default folder globally or for the current directory.",
 		PreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := f.ApiClient()

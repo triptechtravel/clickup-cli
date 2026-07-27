@@ -11,9 +11,9 @@ import (
 // NewCmdStatus returns the "auth status" command.
 func NewCmdStatus(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "status",
-		Short: "Show authentication status",
-		Long:  "Display information about the current authentication state.",
+		Use:               "status",
+		Short:             "Show authentication status",
+		Long:              "Display information about the current authentication state.",
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return statusRun(f)

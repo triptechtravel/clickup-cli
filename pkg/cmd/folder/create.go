@@ -11,8 +11,8 @@ import (
 )
 
 type createOptions struct {
-	name    string
-	spaceID string
+	name      string
+	spaceID   string
 	jsonFlags cmdutil.JSONFlags
 }
 

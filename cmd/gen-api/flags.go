@@ -176,12 +176,18 @@ func firstLine(s string) string {
 	return s
 }
 
-func writeFlags(path, pkg, typesImport string, ops []flagOp) error {
+func writeFlags(path, pkg, typesImport string, ops []flagOp) (err error) {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	// Close is reported: a failed flush here would silently truncate generated
+	// code, and the next build would fail somewhere unrelated.
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("close %s: %w", path, cerr)
+		}
+	}()
 	return flagsTmpl.Execute(f, map[string]any{
 		"Pkg":         pkg,
 		"TypesImport": typesImport,

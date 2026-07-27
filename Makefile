@@ -34,8 +34,24 @@ smoke:
 test-install:
 	@./scripts/test-install.sh
 
-lint:
+lint: fmt-check
 	golangci-lint run ./...
+
+# Formatting is checked, not assumed. Every non-generated file was unformatted
+# at some point because nothing enforced it.
+.PHONY: fmt-check
+fmt-check:
+	@files=$$(gofmt -l . 2>/dev/null | grep -v '\.gen\.go' | grep -v '^\.claude/'); \
+	if [ -n "$$files" ]; then \
+		echo "These files are not gofmt-formatted:"; echo "$$files"; \
+		echo ""; echo "Run: make fmt"; \
+		exit 1; \
+	fi
+
+.PHONY: fmt
+fmt:
+	@gofmt -w $$(git ls-files '*.go' | grep -v '\.gen\.go')
+	@echo "Formatted."
 
 clean:
 	rm -rf bin/ dist/

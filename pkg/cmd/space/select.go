@@ -17,10 +17,10 @@ func NewCmdSpaceSelect(f *cmdutil.Factory) *cobra.Command {
 	var directory bool
 
 	cmd := &cobra.Command{
-		Use:   "select [NAME]",
-		Short: "Set default space",
-		Long:  "Set the default space globally or for the current directory.",
-		Args:  cobra.MaximumNArgs(1),
+		Use:     "select [NAME]",
+		Short:   "Set default space",
+		Long:    "Set the default space globally or for the current directory.",
+		Args:    cobra.MaximumNArgs(1),
 		PreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := f.ApiClient()

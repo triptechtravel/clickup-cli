@@ -9,15 +9,15 @@ import (
 
 // Config represents the user's CLI configuration.
 type Config struct {
-	Workspace         string                       `yaml:"workspace,omitempty"`
-	Space             string                       `yaml:"space,omitempty"`
-	Folder            string                       `yaml:"folder,omitempty"`
-	List              string                       `yaml:"list,omitempty"`
-	SprintFolder      string                       `yaml:"sprint_folder,omitempty"`
-	Editor            string                       `yaml:"editor,omitempty"`
-	Prompt            string                       `yaml:"prompt,omitempty"`
-	Aliases           map[string]string            `yaml:"aliases,omitempty"`
-	DirectoryDefaults map[string]DirectoryConfig   `yaml:"directory_defaults,omitempty"`
+	Workspace         string                     `yaml:"workspace,omitempty"`
+	Space             string                     `yaml:"space,omitempty"`
+	Folder            string                     `yaml:"folder,omitempty"`
+	List              string                     `yaml:"list,omitempty"`
+	SprintFolder      string                     `yaml:"sprint_folder,omitempty"`
+	Editor            string                     `yaml:"editor,omitempty"`
+	Prompt            string                     `yaml:"prompt,omitempty"`
+	Aliases           map[string]string          `yaml:"aliases,omitempty"`
+	DirectoryDefaults map[string]DirectoryConfig `yaml:"directory_defaults,omitempty"`
 }
 
 // DirectoryConfig holds per-directory overrides.

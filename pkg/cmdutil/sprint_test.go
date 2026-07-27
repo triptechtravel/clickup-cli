@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/triptechtravel/clickup-cli/internal/clickup"
 	"github.com/stretchr/testify/assert"
+	"github.com/triptechtravel/clickup-cli/internal/clickup"
 )
 
 func TestParseMSTimestamp(t *testing.T) {
@@ -202,9 +202,9 @@ func TestMatchSprintListID_TimezoneConsistency(t *testing.T) {
 		// Pick an instant solidly within Sprint 86: Wed 4 Mar 2026 00:00 UTC
 		instants := []time.Time{
 			utcTime(2026, 3, 4, 0, 0, 0),
-			aestTime(2026, 3, 4, 10, 0, 0),  // same instant
-			aedtTime(2026, 3, 4, 11, 0, 0),  // same instant
-			nzdtTime(2026, 3, 4, 13, 0, 0),  // same instant
+			aestTime(2026, 3, 4, 10, 0, 0), // same instant
+			aedtTime(2026, 3, 4, 11, 0, 0), // same instant
+			nzdtTime(2026, 3, 4, 13, 0, 0), // same instant
 		}
 
 		for _, now := range instants {

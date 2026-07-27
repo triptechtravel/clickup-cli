@@ -10,12 +10,12 @@ import (
 
 // TablePrinter renders TTY-aware table output.
 type TablePrinter struct {
-	out        io.Writer
-	maxWidth   int
-	isTTY      bool
-	rows       [][]string
-	colWidths  []int
-	truncCols  map[int]bool // columns to truncate
+	out       io.Writer
+	maxWidth  int
+	isTTY     bool
+	rows      [][]string
+	colWidths []int
+	truncCols map[int]bool // columns to truncate
 }
 
 // New creates a new TablePrinter for the given IOStreams.

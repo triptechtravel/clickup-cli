@@ -20,6 +20,9 @@ jobs:
         run: make api-gen
       - run: go test ./...
       - run: go vet ./...
+      # Nothing enforced formatting, so every non-generated file had drifted.
+      - name: Check formatting
+        run: make fmt-check
       - name: Check docs are up to date
         run: |
           make docs

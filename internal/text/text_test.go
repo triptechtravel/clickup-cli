@@ -93,7 +93,7 @@ func TestRelativeTime(t *testing.T) {
 func TestFormatUnixMillis(t *testing.T) {
 	now := time.Now()
 	// A timestamp 5 minutes ago in milliseconds.
-	millis := now.Add(-5*time.Minute).UnixMilli()
+	millis := now.Add(-5 * time.Minute).UnixMilli()
 
 	ms := fmt.Sprintf("%d", millis)
 	got := FormatUnixMillis(ms)

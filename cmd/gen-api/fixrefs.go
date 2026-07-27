@@ -119,10 +119,10 @@ type fieldInfo struct {
 }
 
 // resolveTypeFromSpec finds the actual schema for a self-referencing type by:
-// 1. Finding which struct field uses this type in the generated code
-// 2. Searching the spec for an array property with that json field name
-//    whose items have a $ref
-// 3. Following the $ref to get the real schema with properties
+//  1. Finding which struct field uses this type in the generated code
+//  2. Searching the spec for an array property with that json field name
+//     whose items have a $ref
+//  3. Following the $ref to get the real schema with properties
 func resolveTypeFromSpec(spec map[string]any, genCode, typeName string) []fieldInfo {
 	// Step 1: Find the JSON field name that references this type in gen code.
 	reStr := `\w+\s+\[\]` + regexp.QuoteMeta(typeName) + `\s+` + "`.+?json:\"([^\"]+)\"`"

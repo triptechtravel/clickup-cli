@@ -18,7 +18,6 @@ type addOptions struct {
 	confirm bool
 }
 
-
 // NewCmdAdd returns the "status add" command.
 func NewCmdAdd(f *cmdutil.Factory) *cobra.Command {
 	opts := &addOptions{

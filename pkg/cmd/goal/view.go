@@ -22,7 +22,7 @@ func NewCmdGoalView(f *cmdutil.Factory) *cobra.Command {
 
   # View as JSON
   clickup goal view e53a33d0-2eb2-4664-a4b3-5e1b0df0e912 --json`,
-		Args:    cobra.ExactArgs(1),
+		Args:              cobra.ExactArgs(1),
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			goalID := args[0]

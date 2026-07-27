@@ -23,7 +23,7 @@ func NewCmdTemplateUse(f *cmdutil.Factory) *cobra.Command {
 		Long:  "Create a new task from an existing task template.",
 		Example: `  # Create a task from a template
   clickup template use t-12345 --list 67890 --name "New Task from Template"`,
-		Args:    cobra.ExactArgs(1),
+		Args:              cobra.ExactArgs(1),
 		PersistentPreRunE: cmdutil.NeedsAuth(f),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			templateID := args[0]

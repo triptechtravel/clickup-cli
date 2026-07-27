@@ -36,12 +36,12 @@ func makeResponse(remaining, resetUnix string) *http.Response {
 
 func TestUpdate(t *testing.T) {
 	tests := []struct {
-		name              string
-		remaining         string
-		resetUnix         string
-		wantRemaining     int
-		wantResetIsZero   bool
-		wantResetUnix     int64 // ignored when wantResetIsZero is true
+		name            string
+		remaining       string
+		resetUnix       string
+		wantRemaining   int
+		wantResetIsZero bool
+		wantResetUnix   int64 // ignored when wantResetIsZero is true
 	}{
 		{
 			name:            "updates both remaining and reset",
