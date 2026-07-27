@@ -66,8 +66,10 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 
 ## Quick install
 
+On Linux and macOS, with no toolchain required:
+
 ```sh
-go install github.com/triptechtravel/clickup-cli/cmd/clickup@latest
+curl -fsSL https://raw.githubusercontent.com/triptechtravel/clickup-cli/main/scripts/install.sh | sh
 ```
 
 Or via Homebrew:
@@ -76,7 +78,13 @@ Or via Homebrew:
 brew install triptechtravel/tap/clickup
 ```
 
-See the [Installation](/clickup-cli/installation/) page for all options.
+Or with Go 1.25+:
+
+```sh
+go install github.com/triptechtravel/clickup-cli/cmd/clickup@latest
+```
+
+See the [Installation](/clickup-cli/installation/) page for all options, including Windows and prebuilt binaries.
 
 ## Quick start
 
