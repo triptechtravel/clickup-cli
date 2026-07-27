@@ -300,10 +300,15 @@ func TestIncident_TaskArchiveAndUnarchive(t *testing.T) {
 		"unarchive must send archived:false — this is why Archived has to be *bool, "+
 			"not a bare bool with omitempty (which would serialise to nothing)")
 
-	// The API omits archived subtasks, so unarchive cannot cascade to them.
-	// Saying nothing would repeat the original mistake in the other direction.
-	assert.Regexp(t, `(?i)archived subtasks are not returned`, unarchiveErrOut,
-		"unarchive must disclose that it cannot reach archived subtasks")
+	// Plain unarchive stays quiet — a caveat on every run becomes wallpaper.
+	assert.NotRegexp(t, `(?i)cannot restore archived subtasks`, unarchiveErrOut,
+		"no caveat when --cascade was not requested")
+
+	// But asking for a cascade must say the API cannot deliver one.
+	_, cascadeErrOut, err := runCLI(t, tf, "task", "unarchive", "4n6u4xw", "--cascade")
+	require.NoError(t, err)
+	assert.Regexp(t, `(?i)cannot restore archived subtasks`, cascadeErrOut,
+		"--cascade on unarchive must disclose that it cannot reach archived subtasks")
 }
 
 // MANUAL: I archived 58 parents, then found three `to do` subtasks of an

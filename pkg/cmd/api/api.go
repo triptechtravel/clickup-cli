@@ -12,11 +12,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/triptechtravel/clickup-cli/internal/api"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
 
@@ -27,6 +29,7 @@ type apiOptions struct {
 	headers   []string
 	input     string
 	useV3     bool
+	paginate  bool
 	silent    bool
 	jsonFlags cmdutil.JSONFlags
 }
@@ -84,6 +87,8 @@ has no dedicated command for.`,
 	cmd.Flags().StringArrayVarP(&opts.headers, "header", "H", nil, "Extra header as key:value (repeatable)")
 	cmd.Flags().StringVar(&opts.input, "input", "", `Read the request body from a file, or "-" for stdin`)
 	cmd.Flags().BoolVar(&opts.useV3, "v3", false, "Use the v3 API base URL")
+	cmd.Flags().BoolVar(&opts.paginate, "paginate", false,
+		"Follow pagination and merge every page (collection endpoints only)")
 	cmd.Flags().BoolVar(&opts.silent, "silent", false, "Do not print the response body")
 	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 
@@ -139,7 +144,7 @@ func runAPI(f *cmdutil.Factory, opts *apiOptions, endpoint string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -159,7 +164,119 @@ func runAPI(f *cmdutil.Factory, opts *apiOptions, endpoint string) error {
 	if opts.silent {
 		return nil
 	}
+
+	// ClickUp paginates several collection endpoints and signals more pages with
+	// "last_page": false. Returning page 0 without saying so would present a
+	// partial answer as a complete one — the same failure this CLI has already
+	// shipped once.
+	if hasMorePages(respBody) {
+		if !opts.paginate {
+			_, _ = fmt.Fprintf(f.IOStreams.ErrOut,
+				"! more pages available; this is page %d only. Re-run with --paginate for all of them.\n",
+				pageOf(url))
+		} else {
+			respBody, err = followPages(client, req, respBody, url)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	return writeResponse(f, opts, respBody)
+}
+
+// followPages walks subsequent pages and merges their array fields into the
+// first page's document, so the caller sees one combined result.
+func followPages(client *api.Client, first *http.Request, firstBody []byte, url string) ([]byte, error) {
+	merged := map[string]any{}
+	if err := json.Unmarshal(firstBody, &merged); err != nil {
+		// Not an object — nothing sensible to merge into.
+		return firstBody, nil
+	}
+
+	for page := pageOf(url) + 1; ; page++ {
+		next, err := withPage(url, page)
+		if err != nil {
+			return nil, err
+		}
+		req, err := http.NewRequestWithContext(first.Context(), first.Method, next, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header = first.Header.Clone()
+
+		resp, err := client.DoRequest(req)
+		if err != nil {
+			return nil, err
+		}
+		body, err := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return nil, fmt.Errorf("HTTP %d while paginating page %d: %s",
+				resp.StatusCode, page, strings.TrimSpace(string(body)))
+		}
+
+		var doc map[string]any
+		if err := json.Unmarshal(body, &doc); err != nil {
+			return nil, fmt.Errorf("page %d is not a JSON object: %w", page, err)
+		}
+		for k, v := range doc {
+			arr, ok := v.([]any)
+			if !ok {
+				continue
+			}
+			if existing, ok := merged[k].([]any); ok {
+				merged[k] = append(existing, arr...)
+			}
+		}
+		merged["last_page"] = true
+
+		if !hasMorePages(body) {
+			break
+		}
+	}
+
+	return json.Marshal(merged)
+}
+
+// withPage returns url with its page query parameter set to n.
+func withPage(rawURL string, n int) (string, error) {
+	u, err := neturl.Parse(rawURL)
+	if err != nil {
+		return "", err
+	}
+	q := u.Query()
+	q.Set("page", strconv.Itoa(n))
+	u.RawQuery = q.Encode()
+	return u.String(), nil
+}
+
+// hasMorePages reports whether the response explicitly says it is not the last
+// page. Absent or true means there is nothing to warn about.
+func hasMorePages(body []byte) bool {
+	var probe struct {
+		LastPage *bool `json:"last_page"`
+	}
+	if err := json.Unmarshal(body, &probe); err != nil {
+		return false
+	}
+	return probe.LastPage != nil && !*probe.LastPage
+}
+
+// pageOf extracts the page query parameter, defaulting to 0.
+func pageOf(rawURL string) int {
+	u, err := neturl.Parse(rawURL)
+	if err != nil {
+		return 0
+	}
+	n, err := strconv.Atoi(u.Query().Get("page"))
+	if err != nil {
+		return 0
+	}
+	return n
 }
 
 // writeResponse applies --jq/--template when asked, and otherwise prints the

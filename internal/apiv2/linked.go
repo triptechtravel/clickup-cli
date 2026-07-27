@@ -2,6 +2,7 @@ package apiv2
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -129,9 +130,11 @@ func FindLinkedTasks(
 	close(jobs)
 	wg.Wait()
 
-	// Partial results are still useful, but the caller must know they are partial.
+	// Partial results are still useful, but silently returning them would repeat
+	// the exact bug this scan exists to fix: presenting an incomplete view as a
+	// complete one. Hand the failures back so the caller can say so.
 	if len(errs) > 0 && len(found) == 0 {
 		return nil, errs[0]
 	}
-	return found, nil
+	return found, errors.Join(errs...)
 }

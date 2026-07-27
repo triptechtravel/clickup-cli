@@ -152,14 +152,16 @@ func runArchive(f *cmdutil.Factory, opts *archiveOptions, ids []string) error {
 		fmt.Fprintf(ios.ErrOut, "  Re-run with %s to include %s.\n", cs.Bold("--cascade"), was)
 	}
 
-	// Unarchiving cannot see what it is missing: ClickUp omits archived
-	// subtasks from include_subtasks=true, so there is no way to enumerate or
-	// cascade to them. Saying nothing here would repeat the original mistake in
-	// the opposite direction.
-	if !opts.archive {
+	// Unarchiving cannot see what it is missing: ClickUp omits archived subtasks
+	// from include_subtasks=true, so there is no way to enumerate or cascade to
+	// them. Only say so when the user asked for a cascade — that is the moment
+	// the limitation actually costs them something. Printing it on every
+	// unarchive would make it wallpaper, and a warning nobody reads is the same
+	// as no warning.
+	if !opts.archive && opts.cascade {
 		fmt.Fprintf(ios.ErrOut,
-			"\n%s Archived subtasks are not returned by the API, so they cannot be\n"+
-				"  restored automatically — not even with --cascade. Restore them by ID.\n",
+			"\n%s --cascade cannot restore archived subtasks: the API does not return\n"+
+				"  them, so they are invisible to this command. Restore them by ID.\n",
 			cs.Yellow("!"))
 	}
 

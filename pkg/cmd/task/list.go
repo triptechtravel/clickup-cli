@@ -86,6 +86,7 @@ status, and sprint.`,
 
 func runList(f *cmdutil.Factory, opts *listOptions) error {
 	ios := f.IOStreams
+	cs := ios.ColorScheme()
 
 	client, err := f.ApiClient()
 	if err != nil {
@@ -130,8 +131,16 @@ func runList(f *cmdutil.Factory, opts *listOptions) error {
 					"Scanning %d lists for tasks linked into this one (ClickUp has no direct query for this)...\n",
 					p.Lists)
 			})
-		if err != nil {
+		// A scan error with results is partial, not fatal. Say so — an
+		// incomplete answer presented as complete is the bug this whole
+		// command exists to prevent.
+		if err != nil && len(linkedTasks) == 0 {
 			return fmt.Errorf("failed to scan for linked tasks: %w", err)
+		}
+		if err != nil {
+			fmt.Fprintf(ios.ErrOut,
+				"%s some lists could not be read; linked-task results are incomplete: %v\n",
+				cs.Yellow("!"), err)
 		}
 		tasks = append(tasks, linkedTasks...)
 	}
@@ -150,7 +159,6 @@ func runList(f *cmdutil.Factory, opts *listOptions) error {
 	}
 
 	// Quick actions footer
-	cs := ios.ColorScheme()
 	fmt.Fprintln(ios.Out)
 	fmt.Fprintln(ios.Out, cs.Gray("---"))
 	fmt.Fprintln(ios.Out, cs.Gray("Quick actions:"))

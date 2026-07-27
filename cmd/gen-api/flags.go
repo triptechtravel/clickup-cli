@@ -221,8 +221,9 @@ type {{.FuncName}}Flags struct {
 {{- end}}
 }
 
-// Register adds a flag per scalar request field. Names in skip are omitted, for
-// fields the command binds itself.
+// Register adds a flag per scalar request field. Names in skip are omitted, and
+// so is any flag the command already defines — pflag panics on a redefinition,
+// which would take down the whole CLI at startup rather than just one command.
 func (f *{{.FuncName}}Flags) Register(cmd *cobra.Command, skip ...string) {
 	f.flags = cmd
 	skipped := map[string]bool{}
@@ -230,7 +231,7 @@ func (f *{{.FuncName}}Flags) Register(cmd *cobra.Command, skip ...string) {
 		skipped[s] = true
 	}
 {{- range .Fields}}
-	if !skipped["{{.FlagName}}"] {
+	if !skipped["{{.FlagName}}"] && cmd.Flags().Lookup("{{.FlagName}}") == nil {
 		cmd.Flags().{{.FlagFunc}}(&f.{{.GoName}}, {{q .FlagName}}, {{if .IsBoolean}}false{{else if eq .GoType "string"}}""{{else}}0{{end}}, {{if .Doc}}{{q .Doc}}{{else}}{{q (printf "Set %s" .FlagName)}}{{end}})
 	}
 {{- end}}
