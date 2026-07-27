@@ -9,7 +9,7 @@ LDFLAGS := -s -w \
 	-X $(MODULE)/internal/build.Commit=$(COMMIT) \
 	-X $(MODULE)/internal/build.Date=$(DATE)
 
-.PHONY: build install test lint clean smoke ensure-gen
+.PHONY: build install test lint clean smoke test-install ensure-gen
 
 ensure-gen:
 	@[ -f api/clickupv3/client.gen.go ] || $(MAKE) api-gen
@@ -28,6 +28,11 @@ test: ensure-gen
 # Override BIN to test a local build: `BIN=./bin/clickup make smoke`.
 smoke:
 	@./scripts/smoke.sh
+
+# Exercise scripts/install.sh across shells, downloaders, and privilege
+# levels in Docker. Filter with `./scripts/test-install.sh -k alpine`.
+test-install:
+	@./scripts/test-install.sh
 
 lint:
 	golangci-lint run ./...

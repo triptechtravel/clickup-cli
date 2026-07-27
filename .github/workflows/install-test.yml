@@ -1,0 +1,52 @@
+name: Install script
+
+# Verifies the `curl | sh` installer still works. It downloads the latest
+# published release, so this catches two distinct classes of breakage:
+# changes to scripts/install.sh itself (PR trigger), and drift in the
+# release layout — renamed assets, a missing checksums.txt — which only
+# shows up after a release or on the weekly run.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/install.sh"
+      - "scripts/test-install.sh"
+      - ".github/workflows/install-test.yml"
+  pull_request:
+    paths:
+      - "scripts/install.sh"
+      - "scripts/test-install.sh"
+      - ".github/workflows/install-test.yml"
+  release:
+    types: [published]
+  schedule:
+    # Mondays 06:00 UTC — catches release-layout drift with no code change.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Shell/downloader/privilege matrix. Docker only covers Linux.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: ./scripts/test-install.sh
+
+  # Docker can't test darwin, and macOS is the only place the `shasum`
+  # checksum branch and BSD tar get exercised.
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install to a temp dir
+        run: |
+          CLICKUP_INSTALL_DIR="$RUNNER_TEMP/bin" sh ./scripts/install.sh
+          "$RUNNER_TEMP/bin/clickup" version
+      - name: Install to the default location
+        run: |
+          sh ./scripts/install.sh
+          clickup version
