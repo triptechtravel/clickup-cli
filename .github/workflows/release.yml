@@ -25,3 +25,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+  # Prove the install script works against the release we just cut.
+  #
+  # This lives here rather than as a `release: published` trigger on the
+  # install-script workflow because GoReleaser publishes using GITHUB_TOKEN,
+  # and events created by that token never trigger new workflow runs — so
+  # such a trigger silently never fires. Hanging it off `needs: goreleaser`
+  # makes the ordering explicit and the run guaranteed.
+  verify-install:
+    needs: goreleaser
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install the tag we just released
+        run: |
+          CLICKUP_VERSION="${GITHUB_REF_NAME}" sh ./scripts/install.sh
+          clickup version | grep -F "${GITHUB_REF_NAME#v}"

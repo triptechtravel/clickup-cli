@@ -4,7 +4,12 @@ name: Install script
 # published release, so this catches two distinct classes of breakage:
 # changes to scripts/install.sh itself (PR trigger), and drift in the
 # release layout — renamed assets, a missing checksums.txt — which only
-# shows up after a release or on the weekly run.
+# shows up on the weekly run.
+#
+# Post-release verification deliberately lives in release.yml instead of a
+# `release: published` trigger here: GoReleaser publishes with GITHUB_TOKEN,
+# and events from that token never start a workflow run, so the trigger
+# would look like coverage while never firing.
 
 on:
   push:
@@ -18,8 +23,6 @@ on:
       - "scripts/install.sh"
       - "scripts/test-install.sh"
       - ".github/workflows/install-test.yml"
-  release:
-    types: [published]
   schedule:
     # Mondays 06:00 UTC — catches release-layout drift with no code change.
     - cron: "0 6 * * 1"
