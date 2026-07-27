@@ -216,6 +216,11 @@ import (
 // {{.FuncName}}Flags binds request fields for {{.FuncName}}.
 type {{.FuncName}}Flags struct {
 	flags *cobra.Command
+	// bound records the flags Register actually created. Apply must consult it:
+	// a skipped flag may still exist on the command as a hand-written one, and
+	// applying it from this struct's never-bound field would overwrite the real
+	// value with a zero.
+	bound map[string]bool
 {{- range .Fields}}
 	{{.GoName}} {{.GoType}}
 {{- end}}
@@ -226,6 +231,7 @@ type {{.FuncName}}Flags struct {
 // which would take down the whole CLI at startup rather than just one command.
 func (f *{{.FuncName}}Flags) Register(cmd *cobra.Command, skip ...string) {
 	f.flags = cmd
+	f.bound = map[string]bool{}
 	skipped := map[string]bool{}
 	for _, s := range skip {
 		skipped[s] = true
@@ -233,6 +239,7 @@ func (f *{{.FuncName}}Flags) Register(cmd *cobra.Command, skip ...string) {
 {{- range .Fields}}
 	if !skipped["{{.FlagName}}"] && cmd.Flags().Lookup("{{.FlagName}}") == nil {
 		cmd.Flags().{{.FlagFunc}}(&f.{{.GoName}}, {{q .FlagName}}, {{if .IsBoolean}}false{{else if eq .GoType "string"}}""{{else}}0{{end}}, {{if .Doc}}{{q .Doc}}{{else}}{{q (printf "Set %s" .FlagName)}}{{end}})
+		f.bound[{{q .FlagName}}] = true
 	}
 {{- end}}
 }
@@ -244,7 +251,7 @@ func (f *{{.FuncName}}Flags) Apply(req *{{.ReqType}}) {
 		return
 	}
 {{- range .Fields}}
-	if f.flags.Flags().Changed("{{.FlagName}}") {
+	if f.bound["{{.FlagName}}"] && f.flags.Flags().Changed("{{.FlagName}}") {
 {{- if .IsPointer}}
 		v := f.{{.GoName}}
 		req.{{.GoName}} = &v

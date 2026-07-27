@@ -48,6 +48,24 @@ fmt-check:
 		exit 1; \
 	fi
 
+# Everything CI runs, in the same order, from regenerated code.
+#
+# Added after a green local run shipped a broken build: the generated client is
+# gitignored, so a stale local copy can pass tests that CI — which regenerates
+# from source — fails. Regenerating first is the only way "works locally" means
+# what it says.
+.PHONY: check
+check:
+	$(MAKE) api-clean api-gen
+	go build ./...
+	go test ./...
+	go vet ./...
+	$(MAKE) fmt-check
+	golangci-lint run ./... || go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2 run ./...
+	$(MAKE) docs
+	@git diff --exit-code docs/ || { echo "Docs are out of date; commit the regenerated docs."; exit 1; }
+	@echo "All CI checks pass."
+
 .PHONY: fmt
 fmt:
 	@gofmt -w $$(git ls-files '*.go' | grep -v '\.gen\.go')
