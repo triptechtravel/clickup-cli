@@ -143,11 +143,11 @@ description: Overview of all clickup CLI commands, grouped by category.
 		if i > 0 {
 			b.WriteString("---\n\n")
 		}
-		b.WriteString(fmt.Sprintf("## %s\n\n", cat.label))
+		fmt.Fprintf(&b, "## %s\n\n", cat.label)
 		b.WriteString("| Command | Description |\n")
 		b.WriteString("|---------|-------------|\n")
 		for _, cmd := range cat.commands {
-			b.WriteString(fmt.Sprintf("| [`%s`](/clickup-cli/reference/%s/) | %s |\n", cmd.use, cmd.slug, cmd.short))
+			fmt.Fprintf(&b, "| [`%s`](/clickup-cli/reference/%s/) | %s |\n", cmd.use, cmd.slug, cmd.short)
 		}
 		b.WriteString("\n")
 	}

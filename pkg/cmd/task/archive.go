@@ -86,6 +86,14 @@ func runArchive(f *cmdutil.Factory, opts *archiveOptions, ids []string) error {
 		return err
 	}
 
+	// Custom task IDs (CU-abc123) need custom_task_ids + team_id on every
+	// request, exactly as task edit does. Without this, archive silently only
+	// worked for native IDs.
+	cfg, err := f.Config()
+	if err != nil {
+		return err
+	}
+
 	verb, verbed := "archive", "Archived"
 	if !opts.archive {
 		verb, verbed = "unarchive", "Restored"
@@ -100,7 +108,13 @@ func runArchive(f *cmdutil.Factory, opts *archiveOptions, ids []string) error {
 	// Resolve each named task, and either collect or report its subtasks.
 	for _, raw := range ids {
 		parsed := git.ParseTaskID(raw)
-		task, err := apiv2.GetTaskLocal(ctx, client, parsed.ID, "?include_subtasks=true")
+		qs := cmdutil.CustomIDTaskQuery(cfg, parsed.IsCustomID)
+		if qs == "" {
+			qs = "?include_subtasks=true"
+		} else {
+			qs += "&include_subtasks=true"
+		}
+		task, err := apiv2.GetTaskLocal(ctx, client, parsed.ID, qs)
 		if err != nil {
 			// Reading subtasks is best-effort: if it fails we still act on what
 			// was named, but we must not pretend we checked.

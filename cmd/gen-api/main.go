@@ -126,7 +126,9 @@ func main() {
 
 	// Also parse as raw JSON for $ref resolution.
 	var rawSpec map[string]any
-	json.Unmarshal(data, &rawSpec)
+	if err := json.Unmarshal(data, &rawSpec); err != nil {
+		log.Fatalf("parse spec for $ref resolution: %v", err)
+	}
 
 	if *typesImp == "" {
 		*typesImp = *module + "/api/" + *typesPkg
@@ -366,12 +368,18 @@ func goType(schemaType string) string {
 	}
 }
 
-func writeFile(path string, ops []opInfo, existingTypes map[string]bool) error {
+func writeFile(path string, ops []opInfo, existingTypes map[string]bool) (err error) {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	// A failed flush here truncates generated code and breaks a later build
+	// somewhere unrelated, so the close error is reported.
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("close %s: %w", path, cerr)
+		}
+	}()
 
 	return tmpl.Execute(f, map[string]any{
 		"Pkg":         *pkg,

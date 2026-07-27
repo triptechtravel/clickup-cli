@@ -23,6 +23,12 @@ jobs:
       # Nothing enforced formatting, so every non-generated file had drifted.
       - name: Check formatting
         run: make fmt-check
+      # The linter had never run in CI; 38 issues had accumulated by the time
+      # it was first invoked. It is clean now, so it is enforced.
+      - name: Lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.12.2
       - name: Check docs are up to date
         run: |
           make docs

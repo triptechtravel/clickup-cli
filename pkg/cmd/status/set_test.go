@@ -74,24 +74,6 @@ func registerSpaceHandler(tf *testutil.TestFactory, spaceBody string) {
 	tf.HandleFunc("space/space1/", handler)
 }
 
-// registerUpdateHandler sets up the PUT /task/{id} handler and captures the request body.
-func registerUpdateHandler(tf *testutil.TestFactory, capturedBody *string) {
-	handler := func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-		body, _ := io.ReadAll(r.Body)
-		*capturedBody = string(body)
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("X-RateLimit-Remaining", "99")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"id":"task1","status":{"status":"done"}}`))
-	}
-	tf.HandleFunc("task/task1", handler)
-	tf.HandleFunc("task/task1/", handler)
-}
-
 func TestStatusSet_ExactMatch(t *testing.T) {
 	tf := testutil.NewTestFactory(t)
 

@@ -82,7 +82,7 @@ func (tf *TestFactory) Handle(method, path string, status int, body string) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-RateLimit-Remaining", "99")
 		w.WriteHeader(status)
-		w.Write([]byte(body))
+		_, _ = w.Write([]byte(body))
 	})
 }
 
@@ -98,7 +98,7 @@ func (tf *TestFactory) HandleV3(method, path string, status int, body string) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-RateLimit-Remaining", "99")
 		w.WriteHeader(status)
-		w.Write([]byte(body))
+		_, _ = w.Write([]byte(body))
 	})
 }
 

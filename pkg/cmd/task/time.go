@@ -560,15 +560,16 @@ func runTimeListTimesheet(f *cmdutil.Factory, opts *timeListOptions) error {
 
 	// Resolve assignee IDs.
 	var assigneeIDs []string
-	if opts.assignee == "" || opts.assignee == "me" {
+	switch opts.assignee {
+	case "", "me":
 		userID, err := cmdutil.GetCurrentUserID(client)
 		if err != nil {
 			return fmt.Errorf("could not determine current user: %w", err)
 		}
 		assigneeIDs = []string{fmt.Sprintf("%d", userID)}
-	} else if opts.assignee == "all" {
+	case "all":
 		assigneeIDs = nil // no filter
-	} else {
+	default:
 		assigneeIDs = strings.Split(opts.assignee, ",")
 	}
 

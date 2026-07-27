@@ -172,14 +172,14 @@ func buildClickUpBlock(taskURL, taskName, status, priority string, assignees []s
 	sb.WriteString(clickupBlockStart)
 	sb.WriteString("\n")
 	sb.WriteString("## ClickUp Task\n\n")
-	sb.WriteString(fmt.Sprintf("| | |\n|---|---|\n"))
-	sb.WriteString(fmt.Sprintf("| **Task** | [%s](%s) |\n", taskName, taskURL))
-	sb.WriteString(fmt.Sprintf("| **Status** | %s |\n", status))
+	sb.WriteString("| | |\n|---|---|\n")
+	fmt.Fprintf(&sb, "| **Task** | [%s](%s) |\n", taskName, taskURL)
+	fmt.Fprintf(&sb, "| **Status** | %s |\n", status)
 	if priority != "" {
-		sb.WriteString(fmt.Sprintf("| **Priority** | %s |\n", priority))
+		fmt.Fprintf(&sb, "| **Priority** | %s |\n", priority)
 	}
 	if len(assignees) > 0 {
-		sb.WriteString(fmt.Sprintf("| **Assignees** | %s |\n", strings.Join(assignees, ", ")))
+		fmt.Fprintf(&sb, "| **Assignees** | %s |\n", strings.Join(assignees, ", "))
 	}
 	sb.WriteString("\n")
 	sb.WriteString(clickupBlockEnd)

@@ -66,27 +66,21 @@ Defaults to --team (workspace-level views) if none specified.`,
 				if err != nil {
 					return fmt.Errorf("failed to fetch space views: %w", err)
 				}
-				for _, v := range resp.Views {
-					rawViews = append(rawViews, v)
-				}
+				rawViews = append(rawViews, resp.Views...)
 			case folderID != "":
 				scope = "folder"
 				resp, err := apiv2.GetFolderViews(ctx, client, folderID)
 				if err != nil {
 					return fmt.Errorf("failed to fetch folder views: %w", err)
 				}
-				for _, v := range resp.Views {
-					rawViews = append(rawViews, v)
-				}
+				rawViews = append(rawViews, resp.Views...)
 			case listID != "":
 				scope = "list"
 				resp, err := apiv2.GetListViews(ctx, client, listID)
 				if err != nil {
 					return fmt.Errorf("failed to fetch list views: %w", err)
 				}
-				for _, v := range resp.Views {
-					rawViews = append(rawViews, v)
-				}
+				rawViews = append(rawViews, resp.Views...)
 			default:
 				scope = "team"
 				teamID := cfg.Workspace
@@ -100,9 +94,7 @@ Defaults to --team (workspace-level views) if none specified.`,
 				if err != nil {
 					return fmt.Errorf("failed to fetch team views: %w", err)
 				}
-				for _, v := range resp.Views {
-					rawViews = append(rawViews, v)
-				}
+				rawViews = append(rawViews, resp.Views...)
 			}
 
 			if jsonFlags.WantsJSON() {

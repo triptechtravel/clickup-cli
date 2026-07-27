@@ -284,7 +284,9 @@ func runSprintCurrent(f *cmdutil.Factory, folderID string, jsonFlags *cmdutil.JS
 			}
 			tp.EndRow()
 		}
-		tp.Render()
+		if err := tp.Render(); err != nil {
+			return err
+		}
 		fmt.Fprintln(ios.Out)
 	}
 

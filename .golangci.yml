@@ -1,0 +1,43 @@
+version: "2"
+
+# Lint config added 2026-07-27, when golangci-lint was first actually run
+# against this repo. It had never been wired into CI, so 38 issues had
+# accumulated.
+#
+# The bulk of them were errcheck on fmt.Fprintf/Fprintln writing to the
+# terminal. Prefixing ~270 of those with `_, _ =` was tried and reverted: it
+# touched 70 files, made every user-facing print harder to read, and bought
+# nothing — a failed write to a closed stdout is not actionable in a CLI, which
+# is exactly why golangci-lint shipped this as a default exclusion for years.
+#
+# Writes where the error genuinely matters — closing a file being written,
+# flushing generated code — are still checked, and are not excluded here.
+
+linters:
+  enable:
+    - errcheck
+    - staticcheck
+    - unused
+
+  exclusions:
+    rules:
+      # Terminal output. Nothing can be done if it fails, and the CLI should
+      # not fail a command because a pipe closed early.
+      - linters: [errcheck]
+        source: "^\\s*(_, _ = )?fmt\\.Fprint(f|ln)?\\("
+
+      # Test fixtures: an httptest handler that cannot write its canned
+      # response fails the test by other means, loudly.
+      - linters: [errcheck]
+        path: _test\.go
+        source: "^\\s*w\\.Write\\("
+
+      # Response bodies. Close errors on a read-side body carry no information.
+      - linters: [errcheck]
+        source: "resp\\.Body\\.Close\\(\\)"
+
+      # Test scaffolding: a fixture that cannot write its canned response, or
+      # decode a body it just wrote, fails the assertion it exists to support.
+      - linters: [errcheck]
+        path: _test\.go
+        source: "^\\s*(w\\.(Write|Close)|json\\.Unmarshal|buf\\.ReadFrom|apiv3\\.)"

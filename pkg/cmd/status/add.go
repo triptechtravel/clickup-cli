@@ -128,7 +128,10 @@ func addRun(opts *addOptions) error {
 		fmt.Fprintf(ios.Out, "Statuses affect all tasks in the space. Continue? [y/N] ")
 
 		var answer string
-		fmt.Fscanln(ios.In, &answer)
+		// A failed read must not be mistaken for confirmation.
+		if _, err := fmt.Fscanln(ios.In, &answer); err != nil {
+			answer = ""
+		}
 		if answer != "y" && answer != "Y" {
 			fmt.Fprintln(ios.Out, "Cancelled.")
 			return nil

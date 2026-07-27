@@ -187,14 +187,30 @@ func runAPI(f *cmdutil.Factory, opts *apiOptions, endpoint string) error {
 
 // followPages walks subsequent pages and merges their array fields into the
 // first page's document, so the caller sees one combined result.
+// maxPages bounds the walk. A server that always reports last_page:false —
+// through a bug, a proxy, or an endpoint that does not really paginate — would
+// otherwise loop forever against a live API.
+const maxPages = 500
+
 func followPages(client *api.Client, first *http.Request, firstBody []byte, url string) ([]byte, error) {
+	// Subsequent pages are re-issued without a body, so a request that carried
+	// one cannot be paginated correctly. Refuse rather than silently send an
+	// empty body and merge whatever comes back.
+	if first.Method != http.MethodGet {
+		return nil, fmt.Errorf("--paginate only supports GET; %s requests may carry a body that cannot be replayed", first.Method)
+	}
+
 	merged := map[string]any{}
 	if err := json.Unmarshal(firstBody, &merged); err != nil {
 		// Not an object — nothing sensible to merge into.
 		return firstBody, nil
 	}
 
-	for page := pageOf(url) + 1; ; page++ {
+	start := pageOf(url) + 1
+	for page := start; ; page++ {
+		if page-start >= maxPages {
+			return nil, fmt.Errorf("stopped after %d pages: the API never reported last_page", maxPages)
+		}
 		next, err := withPage(url, page)
 		if err != nil {
 			return nil, err

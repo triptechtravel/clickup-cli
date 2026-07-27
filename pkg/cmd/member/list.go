@@ -121,7 +121,9 @@ func runMemberList(f *cmdutil.Factory, jsonFlags *cmdutil.JSONFlags) error {
 		tp.AddField(cs.Gray(e.Role))
 		tp.EndRow()
 	}
-	tp.Render()
+	if err := tp.Render(); err != nil {
+		return err
+	}
 
 	fmt.Fprintf(ios.Out, "\n%s\n", cs.Gray(fmt.Sprintf("%d members", len(entries))))
 

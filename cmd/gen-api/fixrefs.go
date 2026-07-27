@@ -79,7 +79,7 @@ func fixSelfRefs(specPath, genFile, fixesFile, pkg string) error {
 	if err != nil {
 		return fmt.Errorf("create fixes file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	err = fixesTmpl.Execute(f, map[string]any{
 		"Pkg":        pkg,

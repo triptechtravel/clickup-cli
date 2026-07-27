@@ -111,7 +111,7 @@ func addRun(opts *addOptions) error {
 
 		info, err := f.Stat()
 		if err != nil {
-			f.Close()
+			_ = f.Close() // read-only handle; close error is not actionable
 			return fmt.Errorf("failed to stat %s: %w", filePath, err)
 		}
 
@@ -121,7 +121,7 @@ func addRun(opts *addOptions) error {
 		} else {
 			resp, err = apiv2.CreateTaskAttachment(ctx, client, taskID, filepath.Base(filePath), f)
 		}
-		f.Close()
+		_ = f.Close() // read-only handle; close error is not actionable
 		if err != nil {
 			return fmt.Errorf("failed to upload %s: %w", filepath.Base(filePath), err)
 		}
