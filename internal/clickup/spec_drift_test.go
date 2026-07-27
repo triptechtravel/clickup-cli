@@ -45,6 +45,20 @@ func TestSpecDrift_HandWrittenTypesTrackTheSpec(t *testing.T) {
 			},
 		},
 		{
+			name:      "TaskRequest vs CreateTaskJSONRequest",
+			handWrit:  clickup.TaskRequest{},
+			generated: clickupv2.CreateTaskJSONRequest{},
+			allowed: map[string]string{
+				"group_assignees": "user groups are unsupported by the CLI",
+			},
+		},
+		{
+			name:      "AddDependencyRequest vs AddDependencyJSONRequest",
+			handWrit:  clickup.AddDependencyRequest{},
+			generated: clickupv2.AddDependencyJSONRequest{},
+			allowed:   map[string]string{},
+		},
+		{
 			name:      "Task vs GetTaskJSONResponse",
 			handWrit:  clickup.Task{},
 			generated: clickupv2.GetTaskJSONResponse{},

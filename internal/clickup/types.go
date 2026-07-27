@@ -148,13 +148,6 @@ type Attachment struct {
 	Reader   interface{ Read([]byte) (int, error) }
 }
 
-// TaskAttachementOptions holds options for task attachment operations.
-// Note: the typo "Attachement" is preserved from go-clickup for compatibility.
-type TaskAttachementOptions struct {
-	CustomTaskIDs bool `url:"custom_task_ids,omitempty"`
-	TeamID        int  `url:"team_id,omitempty"`
-}
-
 // Dependence represents a dependency relationship between tasks.
 type Dependence struct {
 	TaskID      string `json:"task_id"`
@@ -221,6 +214,12 @@ type TaskRequest struct {
 	CheckRequiredCustomFields bool                       `json:"check_required_custom_fields,omitempty"`
 	CustomFields              []CustomFieldInTaskRequest `json:"custom_fields,omitempty"`
 	CustomItemId              int                        `json:"custom_item_id,omitempty"`
+
+	// Spec fields kept in step by TestSpecDrift. Pointers so they can be
+	// distinguished from unset — see the note on TaskUpdateRequest.
+	Archived        *bool    `json:"archived,omitempty"`
+	MarkdownContent *string  `json:"markdown_content,omitempty"`
+	Points          *float64 `json:"points,omitempty"`
 }
 
 // TaskUpdateRequest is used to update an existing task.
@@ -269,44 +268,10 @@ type CustomFieldInTaskRequest struct {
 	Value interface{} `json:"value"`
 }
 
-// GetTaskOptions holds options for a single task GET request.
-type GetTaskOptions struct {
-	CustomTaskIDs   bool `url:"custom_task_ids,omitempty"`
-	TeamID          int  `url:"team_id,omitempty"`
-	IncludeSubTasks bool `url:"include_subtasks,omitempty"`
-}
-
-// GetTasksOptions holds options for listing tasks.
-type GetTasksOptions struct {
-	Archived      bool     `url:"archived,omitempty"`
-	Page          int      `url:"page,omitempty"`
-	OrderBy       string   `url:"order_by,omitempty"`
-	Reverse       bool     `url:"reverse,omitempty"`
-	Subtasks      bool     `url:"subtasks,omitempty"`
-	Statuses      []string `url:"statuses[],omitempty"`
-	IncludeClosed bool     `url:"include_closed,omitempty"`
-	Assignees     []string `url:"assignees[],omitempty"`
-	Tags          []string `url:"tags[],omitempty"`
-	DueDateGt     *Date    `url:"due_date_gt,omitempty"`
-	DueDateLt     *Date    `url:"due_date_lt,omitempty"`
-	DateCreatedGt *Date    `url:"date_created_gt,omitempty"`
-	DateCreatedLt *Date    `url:"date_created_lt,omitempty"`
-	DateUpdatedGt *Date    `url:"date_updated_gt,omitempty"`
-	DateUpdatedLt *Date    `url:"date_updated_lt,omitempty"`
-}
-
 // AddDependencyRequest is used to add a dependency to a task.
 type AddDependencyRequest struct {
 	DependsOn    string `json:"depends_on,omitempty"`
 	DependencyOf string `json:"dependency_of,omitempty"`
-}
-
-// DeleteDependencyOptions holds options for deleting a dependency.
-type DeleteDependencyOptions struct {
-	DependsOn     string `url:"depends_on,omitempty"`
-	DependencyOf  string `url:"dependency_of,omitempty"`
-	CustomTaskIDs string `url:"custom_task_ids,omitempty"`
-	TeamID        int    `url:"team_id,omitempty"`
 }
 
 // Checklist represents a task checklist.
@@ -330,19 +295,6 @@ type Item struct {
 	Parent      interface{}   `json:"parent"`
 	DateCreated string        `json:"date_created"`
 	Children    []interface{} `json:"children"`
-}
-
-// ChecklistRequest is used to create/update a checklist.
-type ChecklistRequest struct {
-	Name     string `json:"name"`
-	Position int    `json:"position,omitempty"`
-}
-
-// ChecklistItemRequest is used to create/update a checklist item.
-type ChecklistItemRequest struct {
-	Name     string `json:"name"`
-	Assignee int    `json:"assignee,omitempty"`
-	Resolved bool   `json:"resolved,omitempty"`
 }
 
 // Team represents a ClickUp workspace (team).

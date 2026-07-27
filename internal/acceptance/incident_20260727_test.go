@@ -355,16 +355,31 @@ func TestIncident_ArchiveDoesNotCascadeButReportsOrphans(t *testing.T) {
 // Phase 5 — stop new API surface from going missing
 // ---------------------------------------------------------------------------
 
-// The exact regression that caused all of the above: a command reaching for a
-// hand-written request type instead of the generated one, and thereby
-// inheriting whatever fields that struct happens to lack.
-func TestIncident_NoCommandUsesHandWrittenRequestTypes(t *testing.T) {
-	t.Skip("Phase 5.11 — enable once Phase 4 lands")
-
-	hits := grepRepo(t, "pkg/", `clickup\.\w+Request\b`)
-	assert.Empty(t, hits,
-		"commands must build requests from generated types; the hand-written "+
-			"structs are how archived/locations went missing")
+// RETIRED — the original plan called for banning hand-written request types
+// from commands entirely. Implementing it showed that to be the wrong target.
+//
+// The generated types are authoritative but not ergonomic: Nullable[T] is
+// `map[bool]T`, so porting edit.go's date and time-estimate handling onto them
+// would replace a readable clickup.NullDate() with map juggling. The
+// hand-written request types are not plumbing — they encode ClickUp's
+// null-versus-absent semantics in a form a human can read, which is exactly the
+// value a partially hand-rolled CLI provides over a generated one.
+//
+// What actually caused the incident was not their existence but their *drift*:
+// `archived` was in the spec and missing from the hand-written struct. So the
+// guard belongs on the field level, not the type level, and it lives in
+// internal/clickup.TestSpecDrift — which now covers every hand-written request
+// and response type and fails the build when the spec gains a field they lack.
+//
+// Kept as a signpost so nobody re-derives the banned-types idea from the plan.
+func TestIncident_HandWrittenRequestTypesAreGuardedNotBanned(t *testing.T) {
+	// The real guard is TestSpecDrift. This asserts it exists and is wired to
+	// the types commands actually use.
+	src := readRepoFile(t, "internal/clickup/spec_drift_test.go")
+	for _, typ := range []string{"TaskUpdateRequest", "TaskRequest", "AddDependencyRequest", "Task{}"} {
+		assert.Contains(t, src, typ,
+			"every hand-written type a command builds must be covered by the drift guard")
+	}
 }
 
 // A field present in the spec must reach the CLI without anyone writing Go.

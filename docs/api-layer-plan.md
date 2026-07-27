@@ -253,7 +253,37 @@ Fixes the incident directly.
    *Test:* parent with subtasks; assert default leaves subtasks untouched and
    the warning names every orphan; assert `--cascade` archives all.
 
-## Phase 4 — the adoption half
+## Phase 4 — the adoption half (revised after implementing it)
+
+**The original plan here was wrong, and implementing it proved so.** It called
+for porting all 18 `*Local` helpers and every `clickup.Task` reference to
+generated types. Two findings killed that:
+
+1. **The `*Local` helpers are the ergonomic layer, not plumbing.**
+   `GetTasksLocal` returns `[]clickup.Task`. The generated equivalent returns
+   `[]GetV2ListListIDTask200ResponseJSON2` with pointers throughout. Porting
+   would make every call site worse.
+2. **`Nullable[T]` is `map[bool]T`.** Porting `edit.go`'s date and
+   time-estimate handling onto the generated request would replace a readable
+   `clickup.NullDate()` with map juggling — losing exactly the null-versus-
+   absent clarity a hand-rolled CLI exists to provide.
+
+The incident was never caused by hand-written types existing. It was caused by
+them **drifting**: `archived` was in the spec and absent from the struct. So the
+fix is a field-level guard, not a type-level ban —
+`internal/clickup.TestSpecDrift` compares every hand-written request and
+response type against its generated counterpart and fails the build on a
+missing field. It found six gaps immediately, including the two
+(`markdown_content`, `points`) this document had already recorded as separate
+raw-HTTP workarounds.
+
+**What was actually cleaned up:** six genuinely dead types deleted
+(`TaskAttachementOptions`, `GetTaskOptions`, `GetTasksOptions`,
+`DeleteDependencyOptions`, `ChecklistRequest`, `ChecklistItemRequest`), plus
+`GetUserLocal` which had no callers. Everything remaining is either the
+ergonomic layer or covered by the drift guard.
+
+### The original port plan, kept for reference
 
 Finish the migration `GO_CLICKUP_GAPS.md` started. One command group per PR,
 deleting each hand-written type as its last caller goes. Sequenced by blast
