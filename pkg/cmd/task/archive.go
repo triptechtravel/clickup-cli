@@ -3,6 +3,7 @@ package task
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/spf13/cobra"
 	"github.com/triptechtravel/clickup-cli/api/clickupv2"
@@ -99,8 +100,15 @@ func runArchive(f *cmdutil.Factory, opts *archiveOptions, ids []string) error {
 		verb, verbed = "unarchive", "Restored"
 	}
 
+	// A target carries whether its ID is a custom one: the update call needs
+	// custom_task_ids + team_id, and the fallback path below can hand us a
+	// custom ID when the task could not be read.
+	type target struct {
+		id       string
+		isCustom bool
+	}
 	var (
-		targets []string
+		targets []target
 		orphans []clickup.Task
 		failed  int
 	)
@@ -120,11 +128,12 @@ func runArchive(f *cmdutil.Factory, opts *archiveOptions, ids []string) error {
 			// was named, but we must not pretend we checked.
 			fmt.Fprintf(ios.ErrOut, "%s could not read subtasks of %s: %v\n",
 				cs.Yellow("!"), parsed.ID, err)
-			targets = append(targets, parsed.ID)
+			targets = append(targets, target{id: parsed.ID, isCustom: parsed.IsCustomID})
 			continue
 		}
 
-		targets = append(targets, task.ID)
+		// task.ID is always the native ID, so no custom params are needed.
+		targets = append(targets, target{id: task.ID})
 
 		for _, sub := range task.Subtasks {
 			// Only children whose state would actually change are interesting.
@@ -132,22 +141,35 @@ func runArchive(f *cmdutil.Factory, opts *archiveOptions, ids []string) error {
 				continue
 			}
 			if opts.cascade {
-				targets = append(targets, sub.ID)
+				targets = append(targets, target{id: sub.ID})
 			} else {
 				orphans = append(orphans, sub)
 			}
 		}
 	}
 
-	for _, id := range targets {
+	for _, t := range targets {
 		archived := opts.archive
 		req := &clickupv2.UpdateTaskJSONRequest{Archived: &archived}
-		if _, err := apiv2.UpdateTask(ctx, client, id, req); err != nil {
-			fmt.Fprintf(ios.ErrOut, "%s failed to %s %s: %v\n", cs.Red("x"), verb, id, err)
+
+		var params []apiv2.UpdateTaskParams
+		if t.isCustom {
+			teamID, convErr := strconv.ParseFloat(cfg.Workspace, 64)
+			if convErr != nil {
+				fmt.Fprintf(ios.ErrOut, "%s cannot %s custom ID %s: no valid workspace configured\n",
+					cs.Red("x"), verb, t.id)
+				failed++
+				continue
+			}
+			params = append(params, apiv2.UpdateTaskParams{CustomTaskIds: true, TeamId: teamID})
+		}
+
+		if _, err := apiv2.UpdateTask(ctx, client, t.id, req, params...); err != nil {
+			fmt.Fprintf(ios.ErrOut, "%s failed to %s %s: %v\n", cs.Red("x"), verb, t.id, err)
 			failed++
 			continue
 		}
-		fmt.Fprintf(ios.ErrOut, "%s %s %s\n", cs.Green("✓"), verbed, id)
+		fmt.Fprintf(ios.ErrOut, "%s %s %s\n", cs.Green("✓"), verbed, t.id)
 	}
 
 	// The report that would have caught the three orphans left behind on

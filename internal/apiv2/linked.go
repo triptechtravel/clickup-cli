@@ -99,7 +99,7 @@ func FindLinkedTasks(
 		go func() {
 			defer wg.Done()
 			for id := range jobs {
-				tasks, err := GetTasksLocal(ctx, client, id, qs)
+				tasks, err := GetAllTasksLocal(ctx, client, id, qs)
 				mu.Lock()
 				if err != nil {
 					// One unreadable list must not sink the scan; report at the end.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/triptechtravel/clickup-cli/internal/api"
 	"github.com/triptechtravel/clickup-cli/internal/clickup"
@@ -80,14 +81,50 @@ func GetTaskLocal(ctx context.Context, client *api.Client, taskID, qs string) (*
 
 // GetTasksLocal fetches tasks from a list. qs is a query string.
 func GetTasksLocal(ctx context.Context, client *api.Client, listID, qs string) ([]clickup.Task, error) {
+	tasks, _, err := GetTasksPageLocal(ctx, client, listID, qs)
+	return tasks, err
+}
+
+// GetTasksPageLocal is GetTasksLocal plus ClickUp's last_page marker.
+//
+// The list endpoint caps a page at 100 tasks, and callers that ignore the
+// marker silently return a partial list. That has bitten this CLI repeatedly,
+// so the signal is available rather than discarded.
+func GetTasksPageLocal(ctx context.Context, client *api.Client, listID, qs string) ([]clickup.Task, bool, error) {
 	var resp struct {
-		Tasks []clickup.Task `json:"tasks"`
+		Tasks    []clickup.Task `json:"tasks"`
+		LastPage *bool          `json:"last_page"`
 	}
 	path := fmt.Sprintf("list/%s/task%s", listID, qs)
 	if err := do(ctx, client, "GET", path, nil, &resp); err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return resp.Tasks, nil
+	// Absent marker means the endpoint does not paginate; treat as complete.
+	lastPage := resp.LastPage == nil || *resp.LastPage
+	return resp.Tasks, lastPage, nil
+}
+
+// GetAllTasksLocal walks every page. Used where a partial answer would be
+// wrong rather than merely short — such as scanning for multi-list membership.
+func GetAllTasksLocal(ctx context.Context, client *api.Client, listID, qs string) ([]clickup.Task, error) {
+	const maxPages = 200
+	var all []clickup.Task
+	sep := "?"
+	if strings.Contains(qs, "?") {
+		sep = "&"
+	}
+	for page := 0; page < maxPages; page++ {
+		pageQS := fmt.Sprintf("%s%spage=%d", qs, sep, page)
+		tasks, lastPage, err := GetTasksPageLocal(ctx, client, listID, pageQS)
+		if err != nil {
+			return all, err
+		}
+		all = append(all, tasks...)
+		if lastPage || len(tasks) == 0 {
+			return all, nil
+		}
+	}
+	return all, fmt.Errorf("list %s: stopped after %d pages", listID, maxPages)
 }
 
 // CreateTaskLocal creates a task in a list.

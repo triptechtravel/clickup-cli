@@ -119,7 +119,7 @@ func runList(f *cmdutil.Factory, opts *listOptions) error {
 	}
 
 	ctx := context.Background()
-	tasks, err := apiv2.GetTasksLocal(ctx, client, opts.listID, qs)
+	tasks, lastPage, err := apiv2.GetTasksPageLocal(ctx, client, opts.listID, qs)
 	if err != nil {
 		return fmt.Errorf("failed to list tasks: %w", err)
 	}
@@ -145,12 +145,31 @@ func runList(f *cmdutil.Factory, opts *listOptions) error {
 		tasks = append(tasks, linkedTasks...)
 	}
 
+	// What this view is not showing. Computed before any early return: --json
+	// is exactly where silent truncation does the most damage, because a script
+	// has no human to notice a short list.
+	var omitted []string
+	if !lastPage {
+		omitted = append(omitted,
+			fmt.Sprintf("more tasks on later pages (--page %d)", opts.page+1))
+	}
+	if !opts.linked {
+		omitted = append(omitted, "tasks linked in from other lists (--linked)")
+	}
+	if !opts.includeSubtasks {
+		omitted = append(omitted, "subtasks (--include-subtasks)")
+	}
+
 	if len(tasks) == 0 {
 		fmt.Fprintln(ios.ErrOut, "No tasks found.")
 		return nil
 	}
 
 	if opts.jsonFlags.WantsJSON() {
+		// To stderr, so it reaches the operator without corrupting the JSON.
+		if len(omitted) > 0 {
+			fmt.Fprintf(ios.ErrOut, "%s %s\n", cs.Yellow("Not shown:"), strings.Join(omitted, ", "))
+		}
 		return opts.jsonFlags.OutputJSON(ios.Out, tasks)
 	}
 
@@ -170,13 +189,6 @@ func runList(f *cmdutil.Factory, opts *listOptions) error {
 	// Never let a filtered view read as a complete one. Counting what was
 	// withheld would cost requests the user did not ask for, so name the
 	// omission and the flag that lifts it.
-	var omitted []string
-	if !opts.linked {
-		omitted = append(omitted, "tasks linked in from other lists (--linked)")
-	}
-	if !opts.includeSubtasks {
-		omitted = append(omitted, "subtasks (--include-subtasks)")
-	}
 	if len(omitted) > 0 {
 		fmt.Fprintln(ios.Out)
 		fmt.Fprintf(ios.Out, "%s %s\n", cs.Gray("Not shown:"), cs.Gray(strings.Join(omitted, ", ")))
