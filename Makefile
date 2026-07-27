@@ -102,7 +102,7 @@ api-gen: api-spec
 	@echo "Fixing V3 codegen issues..."
 	perl -0pi -e 's/if s\.Parent == nil \{\n\t\tv := "null"\n\t\ts\.Parent = &v\n\t\}//' api/clickupv3/client.gen.go
 	@echo "Generating API wrappers..."
-	go run ./cmd/gen-api -spec api/specs/clickup-v2.json -pkg apiv2 -types-pkg clickupv2 -out internal/apiv2/operations.gen.go
+	go run ./cmd/gen-api -spec api/specs/clickup-v2.json -pkg apiv2 -types-pkg clickupv2 -out internal/apiv2/operations.gen.go -flags-out internal/apiv2/flags.gen.go
 	go run ./cmd/gen-api -spec api/specs/clickup-v3.yaml -pkg apiv3 -types-pkg clickupv3 -out internal/apiv3/operations.gen.go
 	@echo "Done: V2 + V3 types, fixes, and wrappers generated."
 

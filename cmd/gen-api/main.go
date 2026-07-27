@@ -26,9 +26,9 @@ type spec struct {
 }
 
 type operation struct {
-	OperationID string    `json:"operationId"`
-	Summary     string    `json:"summary"`
-	Parameters  []param   `json:"parameters"`
+	OperationID string  `json:"operationId"`
+	Summary     string  `json:"summary"`
+	Parameters  []param `json:"parameters"`
 	RequestBody *struct {
 		Content map[string]struct {
 			Schema struct {
@@ -91,6 +91,7 @@ var (
 	fixGen   = flag.String("fix-gen", "", "path to generated types file (for -fix mode)")
 	fixOut   = flag.String("fix-out", "", "path to write fixes file (for -fix mode)")
 	fixPkg   = flag.String("fix-pkg", "", "package name for fixes file (for -fix mode)")
+	flagsOut = flag.String("flags-out", "", "if set, also generate cobra flag binding per request field")
 )
 
 var pathParamRe = regexp.MustCompile(`\{([^}]+)\}`)
@@ -137,6 +138,19 @@ func main() {
 
 	ops := extractOperations(s, *typesPkg, existingTypes, rawSpec)
 	sort.Slice(ops, func(i, j int) bool { return ops[i].FuncName < ops[j].FuncName })
+
+	// Flag binding: a scalar request field in the spec becomes a working flag
+	// without anyone writing Go. See cmd/gen-api/flags.go.
+	if *flagsOut != "" {
+		flagOps, err := collectFlagOps(data, ops, *typesPkg)
+		if err != nil {
+			log.Fatalf("collect flags: %v", err)
+		}
+		if err := writeFlags(*flagsOut, *pkg, *typesImp, flagOps); err != nil {
+			log.Fatalf("write flags: %v", err)
+		}
+		fmt.Fprintf(os.Stderr, "Generated flag binding for %d operations -> %s\n", len(flagOps), *flagsOut)
+	}
 
 	if err := writeFile(*outPath, ops, existingTypes); err != nil {
 		log.Fatalf("write: %v", err)
@@ -369,7 +383,7 @@ func writeFile(path string, ops []opInfo, existingTypes map[string]bool) error {
 }
 
 var tmpl = template.Must(template.New("").Funcs(template.FuncMap{
-	"upper":         strings.ToUpper,
+	"upper":          strings.ToUpper,
 	"hasQueryParams": func(qp []queryParam) bool { return len(qp) > 0 },
 	"exportName": func(s string) string {
 		parts := strings.Split(s, "_")

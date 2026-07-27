@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+	"github.com/triptechtravel/clickup-cli/api/clickupv2"
 	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 	"github.com/triptechtravel/clickup-cli/internal/clickup"
 	"github.com/triptechtravel/clickup-cli/internal/git"
@@ -36,7 +38,12 @@ type editOptions struct {
 	customItemID        int
 	fields              []string
 	clearFields         []string
-	jsonFlags           cmdutil.JSONFlags
+	// specFlags is generated from the OpenAPI spec by gen-api. Every scalar
+	// request field the spec gains becomes a flag here with no Go written —
+	// which is how --archived arrived. Fields this command binds itself (fuzzy
+	// status matching, date parsing, assignee add/remove) are skipped below.
+	specFlags apiv2.UpdateTaskFlags
+	jsonFlags cmdutil.JSONFlags
 }
 
 // NewCmdEdit returns a command to edit an existing ClickUp task.
@@ -112,6 +119,15 @@ available custom fields and their types.`,
 	cmd.Flags().StringArrayVar(&opts.fields, "field", nil, `Set a custom field value ("Name=value", repeatable)`)
 	cmd.Flags().StringArrayVar(&opts.clearFields, "clear-field", nil, `Clear a custom field value ("Name", repeatable)`)
 
+	// Generated from the spec. Fields this command binds itself are skipped —
+	// they have better ergonomics here (fuzzy status matching, date parsing,
+	// clearable sentinels) than a generic scalar flag can offer.
+	opts.specFlags.Register(cmd,
+		"name", "description", "markdown-content", "status", "priority",
+		"due-date", "start-date", "points", "parent",
+		"due-date-time", "start-date-time",
+	)
+
 	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 
 	return cmd
@@ -140,28 +156,21 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 	}
 
 	// Ensure at least one field is being updated.
-	if !cmd.Flags().Changed("name") &&
-		!cmd.Flags().Changed("description") &&
-		!cmd.Flags().Changed("markdown-description") &&
-		!cmd.Flags().Changed("status") &&
-		!cmd.Flags().Changed("priority") &&
-		!cmd.Flags().Changed("assignee") &&
-		!cmd.Flags().Changed("remove-assignee") &&
-		!cmd.Flags().Changed("tags") &&
-		!cmd.Flags().Changed("add-tags") &&
-		!cmd.Flags().Changed("remove-tags") &&
-		!cmd.Flags().Changed("due-date") &&
-		!cmd.Flags().Changed("start-date") &&
-		!cmd.Flags().Changed("time-estimate") &&
-		!cmd.Flags().Changed("points") &&
-		!cmd.Flags().Changed("parent") &&
-		!cmd.Flags().Changed("links-to") &&
-		!cmd.Flags().Changed("due-date-time") &&
-		!cmd.Flags().Changed("start-date-time") &&
-		!cmd.Flags().Changed("notify-all") &&
-		!cmd.Flags().Changed("type") &&
-		!cmd.Flags().Changed("field") &&
-		!cmd.Flags().Changed("clear-field") {
+	// Any changed flag that is not output formatting counts as an edit.
+	// This used to be a hand-maintained list of 22 flag names, which went stale
+	// the moment a flag was added — --archived registered fine but was rejected
+	// here, because the list had never heard of it. Generated flags make that
+	// failure mode permanent, so the check is now derived rather than listed.
+	outputOnly := map[string]bool{
+		"json": true, "jq": true, "raw": true, "template": true, "help": true,
+	}
+	edited := false
+	cmd.Flags().Visit(func(fl *pflag.Flag) {
+		if !outputOnly[fl.Name] {
+			edited = true
+		}
+	})
+	if !edited {
 		return fmt.Errorf("at least one field flag must be provided")
 	}
 
@@ -177,6 +186,13 @@ func runEdit(f *cmdutil.Factory, opts *editOptions, cmd *cobra.Command) error {
 
 	// Build the update request once (shared across all tasks).
 	updateReq := &clickup.TaskUpdateRequest{}
+
+	// Spec-generated scalar fields. Bridged onto the hand-written request until
+	// edit.go is ported to the generated type (plan Phase 4); the generated
+	// request is the source of truth for which fields exist at all.
+	var specReq clickupv2.UpdateTaskJSONRequest
+	opts.specFlags.Apply(&specReq)
+	updateReq.Archived = specReq.Archived
 
 	if cmd.Flags().Changed("name") {
 		updateReq.Name = opts.name

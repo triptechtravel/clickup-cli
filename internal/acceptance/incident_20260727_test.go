@@ -370,8 +370,6 @@ func TestIncident_NoCommandUsesHandWrittenRequestTypes(t *testing.T) {
 // A field present in the spec must reach the CLI without anyone writing Go.
 // This is the acceptance criterion for the gen-api refactor.
 func TestIncident_SpecFieldBecomesFlagWithoutHandCoding(t *testing.T) {
-	t.Skip("Phase 5.12 — gen-api emits flag binding per request field")
-
 	tf := testutil.NewTestFactory(t)
 	out, _, err := runCLI(t, tf, "task", "edit", "--help")
 	require.NoError(t, err)
