@@ -67,6 +67,11 @@ type Task struct {
 	Space               SpaceOfTaskBelonging   `json:"space"`
 	Attachments         []TaskAttachment       `json:"attachments"`
 
+	// Subtasks is populated by GET /task/{id}?include_subtasks=true. Needed
+	// because archiving does not cascade: without reading these, a parent can
+	// be archived while its children stay active and nothing reports it.
+	Subtasks []Task `json:"subtasks,omitempty"`
+
 	// Locations is every list this task appears in, including its home list.
 	// ClickUp's multi-list feature means a task can be surfaced in lists other
 	// than the one it lives in, and GET /list/{id}/task returns *only* home-list

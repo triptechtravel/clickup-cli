@@ -175,7 +175,6 @@ func TestIncident_GenericAPIPassthrough(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestIncident_TaskViewShowsLinkedLists(t *testing.T) {
-	
 
 	tf := testutil.NewTestFactory(t)
 	tf.Handle(http.MethodGet, "task/4n6u4xw", 200, `{
@@ -268,17 +267,20 @@ func TestIncident_NoCaveatWhenNothingIsHidden(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestIncident_TaskArchiveAndUnarchive(t *testing.T) {
-	t.Skip("Phase 3.7 — clickup task archive/unarchive <ids...>")
-
 	tf := testutil.NewTestFactory(t)
 	var bodies []map[string]any
 	for _, id := range []string{"4n6u4xw", "4n6u4y9", "4n6u4yb"} {
+		id := id
 		tf.HandleFunc("task/"+id, func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodGet {
+				_, _ = io.WriteString(w, `{"id":"`+id+`","subtasks":[]}`)
+				return
+			}
 			var b map[string]any
 			raw, _ := io.ReadAll(r.Body)
 			_ = json.Unmarshal(raw, &b)
 			bodies = append(bodies, b)
-			_, _ = io.WriteString(w, `{"id":"x"}`)
+			_, _ = io.WriteString(w, `{"id":"`+id+`"}`)
 		})
 	}
 
@@ -290,20 +292,24 @@ func TestIncident_TaskArchiveAndUnarchive(t *testing.T) {
 	}
 
 	bodies = nil
-	_, _, err = runCLI(t, tf, "task", "unarchive", "4n6u4xw")
+	_, unarchiveErrOut, err := runCLI(t, tf, "task", "unarchive", "4n6u4xw")
+	_ = unarchiveErrOut
 	require.NoError(t, err)
 	require.Len(t, bodies, 1)
 	assert.Equal(t, false, bodies[0]["archived"],
 		"unarchive must send archived:false — this is why Archived has to be *bool, "+
 			"not a bare bool with omitempty (which would serialise to nothing)")
+
+	// The API omits archived subtasks, so unarchive cannot cascade to them.
+	// Saying nothing would repeat the original mistake in the other direction.
+	assert.Regexp(t, `(?i)archived subtasks are not returned`, unarchiveErrOut,
+		"unarchive must disclose that it cannot reach archived subtasks")
 }
 
 // MANUAL: I archived 58 parents, then found three `to do` subtasks of an
 // archived parent still live — ClickUp does not cascade, and I had not checked.
 // They were only found because someone looked at the UI and pushed back.
 func TestIncident_ArchiveDoesNotCascadeButReportsOrphans(t *testing.T) {
-	t.Skip("Phase 3.9 — default no-cascade + loud orphan report")
-
 	tf := testutil.NewTestFactory(t)
 	var archived []string
 	tf.HandleFunc("task/865d4q6bf", func(w http.ResponseWriter, r *http.Request) {
@@ -311,10 +317,19 @@ func TestIncident_ArchiveDoesNotCascadeButReportsOrphans(t *testing.T) {
 			archived = append(archived, "865d4q6bf")
 		}
 		_, _ = io.WriteString(w, `{"id":"865d4q6bf","subtasks":[
-			{"id":"865d4q0vh","status":{"status":"to do"}},
-			{"id":"865d4q01q","status":{"status":"to do"}},
-			{"id":"860qq4xkx","status":{"status":"to do"}}]}`)
+			{"id":"865d4q0vh","name":"Integrating CI/CD","archived":false},
+			{"id":"865d4q01q","name":"Android: Implement unit tests","archived":false},
+			{"id":"860qq4xkx","name":"Android: UI testing","archived":false}]}`)
 	})
+	for _, sub := range []string{"865d4q0vh", "865d4q01q", "860qq4xkx"} {
+		sub := sub
+		tf.HandleFunc("task/"+sub, func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodPut {
+				archived = append(archived, sub)
+			}
+			_, _ = io.WriteString(w, `{"id":"`+sub+`","subtasks":[]}`)
+		})
+	}
 
 	// Default: only the named task is touched.
 	_, errOut, err := runCLI(t, tf, "task", "archive", "865d4q6bf")
@@ -324,6 +339,16 @@ func TestIncident_ArchiveDoesNotCascadeButReportsOrphans(t *testing.T) {
 	assert.Contains(t, errOut, "3 subtasks", "must report the orphans it left behind")
 	assert.Contains(t, errOut, "--cascade", "must name the flag that would include them")
 	assert.Contains(t, errOut, "865d4q0vh", "must list orphan IDs, not just a count")
+
+	// Opt in: descendants included, and no orphan warning because none remain.
+	archived = nil
+	_, errOut2, err := runCLI(t, tf, "task", "archive", "865d4q6bf", "--cascade")
+	require.NoError(t, err)
+	assert.ElementsMatch(t,
+		[]string{"865d4q6bf", "865d4q0vh", "865d4q01q", "860qq4xkx"}, archived,
+		"--cascade must archive the parent and every subtask")
+	assert.NotContains(t, errOut2, "--cascade",
+		"no orphan warning when nothing was left behind")
 }
 
 // ---------------------------------------------------------------------------

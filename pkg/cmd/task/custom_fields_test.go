@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/triptechtravel/clickup-cli/internal/clickup"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/triptechtravel/clickup-cli/internal/clickup"
 )
 
 func makeDropdownField(name string, options []map[string]interface{}) *clickup.CustomField {

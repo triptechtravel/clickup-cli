@@ -174,7 +174,10 @@ func TestDedupScored_PreservesOrder(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // teamsJSON returns a JSON body for GET /team with the given members.
-func teamsJSON(members ...struct{ ID int; Username string }) string {
+func teamsJSON(members ...struct {
+	ID       int
+	Username string
+}) string {
 	type user struct {
 		ID       int    `json:"id"`
 		Username string `json:"username"`
@@ -199,11 +202,20 @@ func teamsJSON(members ...struct{ ID int; Username string }) string {
 	return string(b)
 }
 
-func makeMember(id int, username string) struct{ ID int; Username string } {
-	return struct{ ID int; Username string }{ID: id, Username: username}
+func makeMember(id int, username string) struct {
+	ID       int
+	Username string
+} {
+	return struct {
+		ID       int
+		Username string
+	}{ID: id, Username: username}
 }
 
-func setupTeamAndUser(tf *testutil.TestFactory, currentUserID int, members ...struct{ ID int; Username string }) {
+func setupTeamAndUser(tf *testutil.TestFactory, currentUserID int, members ...struct {
+	ID       int
+	Username string
+}) {
 	tf.Handle("GET", "team", 200, teamsJSON(members...))
 	tf.Handle("GET", "user", 200, fmt.Sprintf(`{"user":{"id":%d}}`, currentUserID))
 }

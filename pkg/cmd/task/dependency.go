@@ -26,8 +26,8 @@ func NewCmdDependency(f *cmdutil.Factory) *cobra.Command {
 }
 
 type dependencyAddOptions struct {
-	dependsOn   string
-	blocks      string
+	dependsOn string
+	blocks    string
 }
 
 func newCmdDependencyAdd(f *cmdutil.Factory) *cobra.Command {
@@ -100,8 +100,8 @@ func runDependencyAdd(f *cmdutil.Factory, taskID string, opts *dependencyAddOpti
 }
 
 type dependencyRemoveOptions struct {
-	dependsOn   string
-	blocks      string
+	dependsOn string
+	blocks    string
 }
 
 func newCmdDependencyRemove(f *cmdutil.Factory) *cobra.Command {

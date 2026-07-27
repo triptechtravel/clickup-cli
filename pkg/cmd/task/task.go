@@ -18,6 +18,8 @@ func NewCmdTask(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(NewCmdCreate(f))
 	cmd.AddCommand(NewCmdEdit(f))
 	cmd.AddCommand(NewCmdDelete(f))
+	cmd.AddCommand(NewCmdArchive(f))
+	cmd.AddCommand(NewCmdUnarchive(f))
 	cmd.AddCommand(NewCmdSearch(f))
 	cmd.AddCommand(NewCmdActivity(f))
 	cmd.AddCommand(NewCmdTime(f))

@@ -13,10 +13,10 @@ import (
 )
 
 type moveOptions struct {
-	taskID          string
-	listID          string
+	taskID           string
+	listID           string
 	moveCustomFields bool
-	jsonFlags       cmdutil.JSONFlags
+	jsonFlags        cmdutil.JSONFlags
 }
 
 // NewCmdMove returns a command to move a task to a different list.

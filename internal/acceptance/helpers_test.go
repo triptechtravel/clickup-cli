@@ -15,6 +15,11 @@ import (
 // returns stdout, stderr and the command error.
 func runCLI(t *testing.T, tf *testutil.TestFactory, args ...string) (string, string, error) {
 	t.Helper()
+	// Reset between invocations so a test that runs the CLI twice sees only the
+	// second run's output. Without this, asserting the absence of a string in a
+	// later run silently matches the earlier one.
+	tf.OutBuf.Reset()
+	tf.ErrBuf.Reset()
 	cmd := root.NewCmdRoot(tf.Factory)
 	cmd.SetOut(tf.OutBuf)
 	cmd.SetErr(tf.ErrBuf)

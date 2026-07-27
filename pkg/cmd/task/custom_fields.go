@@ -210,8 +210,8 @@ func parseLocationValue(rawValue, fieldName string) (interface{}, error) {
 		if latErr == nil && lngErr == nil {
 			return map[string]interface{}{
 				"location": map[string]interface{}{
-					"lat":              lat,
-					"lng":              lng,
+					"lat":               lat,
+					"lng":               lng,
 					"formatted_address": strings.TrimSpace(parts[2]),
 				},
 			}, nil

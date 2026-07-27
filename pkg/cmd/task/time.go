@@ -440,16 +440,16 @@ type timeEntryTaskLocation struct {
 }
 
 type timeEntry struct {
-	ID          string         `json:"id"`
-	Duration    string         `json:"duration"`
-	Description string         `json:"description"`
-	Start       string         `json:"start"`
-	End         string         `json:"end"`
+	ID          string `json:"id"`
+	Duration    string `json:"duration"`
+	Description string `json:"description"`
+	Start       string `json:"start"`
+	End         string `json:"end"`
 	User        struct {
 		Username string `json:"username"`
 	} `json:"user"`
-	Billable     bool                  `json:"billable"`
-	Task         *timeEntryTask        `json:"task,omitempty"`
+	Billable     bool                   `json:"billable"`
+	Task         *timeEntryTask         `json:"task,omitempty"`
 	TaskLocation *timeEntryTaskLocation `json:"task_location,omitempty"`
 }
 
