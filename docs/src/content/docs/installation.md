@@ -1,9 +1,63 @@
 ---
 title: Installation
-description: Install the clickup CLI via Go, Homebrew, or binary release.
+description: Install the clickup CLI via the install script, Go, Homebrew, or binary release.
 ---
 
-There are three ways to install the `clickup` CLI.
+There are four ways to install the `clickup` CLI.
+
+## Install script
+
+On Linux and macOS, the quickest option:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/triptechtravel/clickup-cli/main/scripts/install.sh | sh
+```
+
+This detects your OS and architecture, downloads the matching release, verifies its SHA-256 checksum, and installs the binary to `/usr/local/bin` (falling back to `~/.local/bin` if that isn't writable).
+
+To review the script before running it — always a good idea for `curl | sh` — download it first:
+
+```sh
+curl -fsSL -o install.sh https://raw.githubusercontent.com/triptechtravel/clickup-cli/main/scripts/install.sh
+less install.sh
+sh install.sh
+```
+
+The script honours a few environment variables:
+
+| Variable | Purpose |
+| --- | --- |
+| `CLICKUP_VERSION` | Install a specific tag (e.g. `v0.35.1`) instead of the latest release. |
+| `CLICKUP_INSTALL_DIR` | Install to a specific directory. |
+| `CLICKUP_NO_SUDO` | Set to `1` to never escalate; installs to `~/.local/bin` instead. |
+
+```sh
+# Pin a version and install somewhere on your own PATH
+CLICKUP_VERSION=v0.35.1 CLICKUP_INSTALL_DIR="$HOME/bin" sh install.sh
+```
+
+Windows isn't supported by the script — use a [binary release](#binary-releases).
+
+### Supported platforms
+
+The script installs prebuilt binaries for Linux and macOS on `amd64` and `arm64`. On any other architecture it exits with a message telling you what's available.
+
+Because the binaries are statically linked with no libc dependency, a few environments work without any special handling:
+
+| Environment | Notes |
+| --- | --- |
+| **WSL2** | A normal Linux install — use the script as-is. |
+| **Docker and CI containers** | Works on Alpine and other musl-based images, not just glibc ones. |
+| **Raspberry Pi** | Works on 64-bit Raspberry Pi OS (`arm64`). The older 32-bit builds aren't supported. |
+| **Headless servers** | No desktop keyring required — see below. |
+
+On a machine with no OS keyring (a container, or a headless server without a D-Bus secret service), `clickup auth login` falls back to storing your token as plain text in the config directory and prints a warning. That's expected. In CI, pipe the token in from a secret rather than logging in interactively — see [CI usage](/clickup-cli/ci-usage/):
+
+```sh
+echo "$CLICKUP_TOKEN" | clickup auth login --with-token
+```
+
+Set `CLICKUP_CONFIG_DIR` to control where that config lives, which is useful for keeping it on a writable volume in a container.
 
 ## Go
 

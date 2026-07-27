@@ -11,6 +11,9 @@ A command-line tool for working with ClickUp tasks, comments, and sprints -- des
 ## Install
 
 ```sh
+# Install script (Linux and macOS)
+curl -fsSL https://raw.githubusercontent.com/triptechtravel/clickup-cli/main/scripts/install.sh | sh
+
 # Homebrew
 brew install triptechtravel/tap/clickup
 
@@ -70,7 +73,7 @@ Full command list with flags and examples: **[Command reference](https://triptec
 
 **[triptechtravel.github.io/clickup-cli](https://triptechtravel.github.io/clickup-cli/)**
 
-- [Installation](https://triptechtravel.github.io/clickup-cli/installation/) -- Homebrew, Go, binaries, shell completions
+- [Installation](https://triptechtravel.github.io/clickup-cli/installation/) -- install script, Homebrew, Go, binaries, shell completions
 - [Getting started](https://triptechtravel.github.io/clickup-cli/getting-started/) -- first-time setup walkthrough
 - [Configuration](https://triptechtravel.github.io/clickup-cli/configuration/) -- config file, per-directory defaults, aliases
 - [Git integration](https://triptechtravel.github.io/clickup-cli/git-integration/) -- branch naming, GitHub linking strategy
