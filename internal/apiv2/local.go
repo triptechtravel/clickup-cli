@@ -121,22 +121,22 @@ func DeleteTaskLocal(ctx context.Context, client *api.Client, taskID, qs string)
 
 // FilteredTeamTasksParams holds parameters for GetFilteredTeamTasksLocal.
 type FilteredTeamTasksParams struct {
-	OrderBy        string
-	Reverse        bool
-	Subtasks       bool
-	Assignees      []string
-	Page           int
-	ListIDs        []string
-	Statuses       []string
-	Tags           []string
-	DateUpdGt      int64
-	DateUpdLt      int64
-	DateCreatedGt  int64
-	DateCreatedLt  int64
-	DueDateGt      int64
-	DueDateLt      int64
-	IncludeClosed  bool
-	Archived       bool
+	OrderBy       string
+	Reverse       bool
+	Subtasks      bool
+	Assignees     []string
+	Page          int
+	ListIDs       []string
+	Statuses      []string
+	Tags          []string
+	DateUpdGt     int64
+	DateUpdLt     int64
+	DateCreatedGt int64
+	DateCreatedLt int64
+	DueDateGt     int64
+	DueDateLt     int64
+	IncludeClosed bool
+	Archived      bool
 }
 
 // GetFilteredTeamTasksLocal fetches filtered tasks across a team/workspace.
@@ -340,20 +340,8 @@ type UserInfo struct {
 	Username string `json:"username"`
 }
 
-// GetUserLocal fetches the currently authenticated user.
-func GetUserLocal(ctx context.Context, client *api.Client) (*UserInfo, error) {
-	var resp struct {
-		User UserInfo `json:"user"`
-	}
-	if err := do(ctx, client, "GET", "user", nil, &resp); err != nil {
-		return nil, err
-	}
-	return &resp.User, nil
-}
-
 // Do is a public wrapper around the unexported do() helper, for use by the
 // attachments module.
 func Do(ctx context.Context, client *api.Client, method, path string, body any, result any) error {
 	return do(ctx, client, method, path, body, result)
 }
-

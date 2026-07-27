@@ -67,6 +67,12 @@ type Task struct {
 	Space               SpaceOfTaskBelonging   `json:"space"`
 	Attachments         []TaskAttachment       `json:"attachments"`
 
+	// DateDone is when the task entered a "done"-type status, distinct from
+	// DateClosed. TopLevelParent is the root of a subtask chain. Both are in
+	// the spec; both were missing until TestSpecDrift flagged them.
+	DateDone       string `json:"date_done,omitempty"`
+	TopLevelParent string `json:"top_level_parent,omitempty"`
+
 	// Subtasks is populated by GET /task/{id}?include_subtasks=true. Needed
 	// because archiving does not cascade: without reading these, a parent can
 	// be archived while its children stay active and nothing reports it.
@@ -236,6 +242,19 @@ type TaskUpdateRequest struct {
 	CheckRequiredCustomFields bool                       `json:"check_required_custom_fields,omitempty"`
 	CustomFields              []CustomFieldInTaskRequest `json:"custom_fields,omitempty"`
 	CustomItemId              int                        `json:"custom_item_id,omitempty"`
+
+	// The fields below exist in the spec and were missing here, which is how
+	// `archived` became unreachable and why points/markdown_content needed raw
+	// HTTP workarounds (see api/GO_CLICKUP_GAPS.md).
+	//
+	// All are pointers on purpose. With a bare value plus omitempty a zero is
+	// indistinguishable from unset, so the field could never be *cleared* — a
+	// `bool` archived would make unarchive serialise to nothing and silently
+	// no-op. TestSpecDrift keeps this list honest.
+	Archived        *bool                      `json:"archived,omitempty"`
+	MarkdownContent *string                    `json:"markdown_content,omitempty"`
+	Points          *float64                   `json:"points,omitempty"`
+	Watchers        *TaskAssigneeUpdateRequest `json:"watchers,omitempty"`
 }
 
 // TaskAssigneeUpdateRequest is used to add/remove assignees on a task update.
