@@ -190,8 +190,14 @@ Releases use [GoReleaser](https://goreleaser.com/) via GitHub Actions:
 2. Push the tag: `git push origin v0.x.0`
 3. GitHub Actions runs `make api-gen`, builds binaries for all platforms
 4. Homebrew formula is auto-updated in `triptechtravel/homebrew-tap`
+5. The `verify-install` job installs the new tag via `scripts/install.sh` on
+   Linux and macOS, so a broken release surfaces immediately
 
 Install: `brew install triptechtravel/tap/clickup`
+
+To exercise the install script without cutting a release, run `make test-install`
+(requires Docker). It runs the installer across shells, downloaders, and
+privilege levels, and asserts it aborts on a checksum mismatch.
 
 ## License
 
