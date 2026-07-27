@@ -1,11 +1,14 @@
 ---
 name: clickup-cli
-description: ClickUp CLI for managing tasks, sprints, comments, statuses, and Docs. Use when the user needs to interact with ClickUp — creating/editing tasks, checking sprint status, adding comments, linking PRs, managing Docs and pages, or searching tasks. Prefer this CLI over raw API calls.
+description: ClickUp CLI for managing tasks, sprints, comments, statuses, Docs, and archiving. Use when the user needs to interact with ClickUp — creating/editing/archiving tasks, checking sprint status, adding comments, linking PRs, managing Docs and pages, or searching tasks. Includes a generic `clickup api` passthrough covering every endpoint, so prefer this CLI over raw API calls in all cases.
 ---
 
 # ClickUp CLI (`clickup`)
 
 Use the `clickup` CLI instead of raw ClickUp API calls. It handles authentication, git integration, fuzzy status matching, and custom fields automatically.
+
+If a capability looks missing, it almost certainly is not: `clickup api` reaches
+every endpoint the API exposes. Reach for that before writing curl.
 
 ## When to Use
 
@@ -652,7 +655,10 @@ clickup task checklist item edit <checklist-id> <item-id1> <item-id2> --assignee
 - **Subtask discovery**: `task search` and `task list` accept `--include-subtasks` so you can find subtasks by name without already knowing the parent task ID
 - **Bulk operations**: `task create --from-file` creates many tasks from JSON; `task edit ID1 ID2 ...` applies the same changes to multiple tasks. To bulk-edit subtasks: view the parent with `--json`, extract subtask IDs from `.subtasks[].id`, then pass them all to `task edit`
 - **Subtask visibility**: `task view` shows subtask due/start dates inline, so you can spot-check deadlines without viewing each subtask individually
-- **Multi-list**: `task list-add`/`task list-remove` manage secondary list memberships — useful for cross-team sprint planning
+- **Multi-list**: `task list-add`/`task list-remove` manage secondary list memberships — useful for cross-team sprint planning. A task can appear in a list without living there, and **a plain `task list` will not show it** — use `--linked`, and read `task view`'s "Also in:" line
+- **Listings disclose what they hide**: `task list` prints a `Not shown:` line naming excluded subtasks, linked tasks and later pages (on stderr under `--json`). Never conclude a list is empty from an absence of rows — check that line
+- **Unknown verbs fail**: a mistyped subcommand exits non-zero and names itself, rather than printing help and exiting 0. Safe to rely on exit codes when scripting
+- **Escape hatch**: if a capability seems missing, reach for `clickup api <path>` before concluding it is unsupported — it covers every endpoint, including ones with no dedicated command
 - **Naming conventions**: Task names follow `[Work Type] Context — Action (Platform)` format for sprint-board scannability. Check existing tasks in the list for the prevailing convention before creating
 - **Tag reuse**: Always check available tags with `clickup tag list` before creating tasks. Use existing tags for consistency; don't invent new ones without user confirmation
 - **Per-directory config**: `folder select --local` and `list select --local` store defaults in the current directory, useful for monorepos with different ClickUp contexts
