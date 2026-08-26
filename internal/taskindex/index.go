@@ -146,13 +146,23 @@ func (i *Index) Replace(entries []Entry, at time.Time) {
 // The reconcile clock is still stamped: without that, an index too large to
 // rebuild in one pass would retry the same oversized sync on every search.
 func (i *Index) MergePartial(entries []Entry, at time.Time) bool {
-	changed := i.Merge(entries)
+	i.Merge(entries)
 	i.FullSyncAt = at.UnixMilli()
-	if !i.Partial {
-		i.Partial = true
-		changed = true
-	}
-	return changed
+	i.Partial = true
+	// Always a change: FullSyncAt moved. Reporting otherwise let the caller
+	// skip the write, leaving the reconcile clock stale on disk — so the next
+	// search redid the same oversized rebuild, and so did the one after that.
+	return true
+}
+
+// RequestFullSync clears the reconcile clock so the next search rebuilds.
+//
+// For a fetch that was cut short and cannot catch up on its own: an
+// incremental sync holds its watermark when truncated, which is what keeps the
+// unread gap from being stranded, but it also means repeating the same capped
+// read forever. A rebuild is the way out.
+func (i *Index) RequestFullSync() {
+	i.FullSyncAt = 0
 }
 
 // Since returns the date_updated_gt value for the next incremental sync, or 0
@@ -220,5 +230,29 @@ func Save(dir string, idx *Index) error {
 	if err != nil {
 		return fmt.Errorf("encode index: %w", err)
 	}
-	return os.WriteFile(path(dir, idx.Workspace), b, 0o600)
+
+	// Write-then-rename. os.WriteFile truncates in place, so a reader racing a
+	// writer — two searches at once, which is routine when agents drive this
+	// CLI — sees half a file. Load treats that as an empty index, so the
+	// symptom is a surprise multi-minute rebuild rather than an error.
+	final := path(dir, idx.Workspace)
+	tmp, err := os.CreateTemp(dir, ".index-*.tmp")
+	if err != nil {
+		return fmt.Errorf("create temp index: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }()
+
+	if _, err := tmp.Write(b); err != nil {
+		tmp.Close()
+		return fmt.Errorf("write index: %w", err)
+	}
+	if err := tmp.Chmod(0o600); err != nil {
+		tmp.Close()
+		return fmt.Errorf("chmod index: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close index: %w", err)
+	}
+	return os.Rename(tmpName, final)
 }

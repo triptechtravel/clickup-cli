@@ -3,6 +3,7 @@ package taskindex
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -260,4 +261,49 @@ func TestIndex_KeepsPriority(t *testing.T) {
 	idx.Merge([]Entry{{ID: "a", Name: "A", Priority: "high", DateUpdated: 100}})
 
 	assert.Equal(t, "high", idx.Entries["a"].Priority)
+}
+
+// A truncated sync must leave a way to catch up, or every later search repeats
+// the same capped read.
+func TestIndex_RequestFullSyncForcesARebuild(t *testing.T) {
+	idx := New("12345")
+	idx.Replace(nil, time.Now())
+	assert.False(t, idx.NeedsFullSync(time.Now(), time.Hour))
+
+	idx.RequestFullSync()
+
+	assert.True(t, idx.NeedsFullSync(time.Now(), time.Hour))
+}
+
+// The reconcile clock moves on every partial rebuild, so the caller must be
+// told to persist even when no entry changed.
+func TestIndex_MergePartialAlwaysReportsAChange(t *testing.T) {
+	idx := New("12345")
+	idx.MergePartial(nil, time.UnixMilli(1))
+
+	assert.True(t, idx.MergePartial(nil, time.UnixMilli(2)), "clock moved but no write requested")
+}
+
+// A half-written index must never be observable: readers see the old file or
+// the new one, nothing in between.
+func TestSave_LeavesNoPartialFileBehind(t *testing.T) {
+	dir := t.TempDir()
+	idx := New("12345")
+	idx.Merge([]Entry{entry("a", "A", 100)})
+	if err := Save(dir, idx); err != nil {
+		t.Fatal(err)
+	}
+	idx.Merge([]Entry{entry("b", "B", 200)})
+	if err := Save(dir, idx); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := Load(dir, "12345")
+	assert.NoError(t, err)
+	assert.Len(t, got.Entries, 2)
+
+	files, _ := os.ReadDir(dir)
+	for _, f := range files {
+		assert.False(t, strings.HasPrefix(f.Name(), ".index-"), "temp file left behind: %s", f.Name())
+	}
 }
