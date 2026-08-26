@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -317,36 +319,30 @@ func TestResolveAssignee_NotFound(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Server-side search test
+// Workspace fetch
 // ---------------------------------------------------------------------------
 
-func TestSearchServerSide(t *testing.T) {
+// This test used to assert that `search=Bug` reached the API. It does not any
+// more: ClickUp ignores that param, and sending it made a client-side filter
+// look like a server-side one. TestSearch_OmitsIgnoredServerSideSearchParam
+// now pins the opposite. What is left here is what always mattered — a match
+// in the fetched page reaches the output.
+func TestSearch_MatchFromWorkspaceReachesOutput(t *testing.T) {
 	tf := testutil.NewTestFactory(t)
 
-	// Mock the team tasks endpoint — verify search= param is passed.
-	var capturedURL string
 	tf.HandleFunc("team/12345/task", func(w http.ResponseWriter, r *http.Request) {
-		capturedURL = r.URL.String()
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-RateLimit-Remaining", "99")
 		w.WriteHeader(200)
-		w.Write([]byte(`{"tasks":[{"id":"abc","name":"Server Bug Fix","status":{"status":"open"},"assignees":[]}]}`))
+		_, _ = w.Write([]byte(`{"tasks":[{"id":"abc","name":"Server Bug Fix","status":{"status":"open"},"assignees":[]}]}`))
 	})
-
-	// User endpoint for Level 2 drill-down (won't reach it since Level 0 succeeds).
 	tf.Handle("GET", "user", 200, `{"user":{"id":100}}`)
 
 	cmd := NewCmdSearch(tf.Factory)
-	err := testutil.RunCommand(t, cmd, "Bug")
-	if err != nil {
+	if err := testutil.RunCommand(t, cmd, "Bug"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify search= was passed to the API.
-	assert.True(t, strings.Contains(capturedURL, "search=Bug"),
-		"expected search=Bug in URL, got: %s", capturedURL)
-
-	// Verify the task appeared in output.
 	out := tf.OutBuf.String()
 	assert.Contains(t, out, "abc")
 	assert.Contains(t, out, "Server Bug Fix")
@@ -374,4 +370,213 @@ func TestSearchIncludeSubtasks(t *testing.T) {
 
 	assert.True(t, strings.Contains(capturedURL, "subtasks=true"),
 		"expected subtasks=true in URL, got: %s", capturedURL)
+}
+
+// ---------------------------------------------------------------------------
+// Workspace sweep
+//
+// ClickUp has no server-side text search: the `search=` param on
+// GET team/{id}/task is accepted and then ignored, returning the same
+// date-ordered page regardless of the query. Every match is therefore found by
+// filtering full pages client-side, and any design that stops at the first
+// tier returning *something* will silently drop better matches living further
+// in. These tests pin the sweep to "read every page, return every match".
+// ---------------------------------------------------------------------------
+
+// searchTasksJSON builds a team/{id}/task response body from id/name pairs.
+func searchTasksJSON(pairs ...[2]string) string {
+	list := make([]map[string]any, 0, len(pairs))
+	for _, p := range pairs {
+		list = append(list, map[string]any{
+			"id":        p[0],
+			"name":      p[1],
+			"status":    map[string]any{"status": "open"},
+			"assignees": []any{},
+		})
+	}
+	b, _ := json.Marshal(map[string]any{"tasks": list})
+	return string(b)
+}
+
+// fillerPairs returns n non-matching id/name pairs, enough to make a page look
+// full so the sweep keeps paginating.
+func fillerPairs(n int) [][2]string {
+	out := make([][2]string, n)
+	for i := range out {
+		out[i] = [2]string{fmt.Sprintf("filler%d", i), fmt.Sprintf("Unrelated task %d", i)}
+	}
+	return out
+}
+
+// sweepMux wires the team task endpoint to a per-page body table, recording
+// every URL requested. Requests carrying a filter param (assignees[], list_ids[],
+// space_ids[]) are served from filtered instead.
+func sweepMux(tf *testutil.TestFactory, pages map[int]string, filtered string) *[]string {
+	var urls []string
+	var mu sync.Mutex
+	tf.HandleFunc("team/12345/task", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		urls = append(urls, r.URL.String())
+		mu.Unlock()
+
+		q := r.URL.RawQuery
+		body := `{"tasks":[]}`
+		switch {
+		case strings.Contains(q, "assignees%5B%5D=") || strings.Contains(q, "assignees[]=") ||
+			strings.Contains(q, "list_ids") || strings.Contains(q, "space_ids"):
+			body = filtered
+		default:
+			page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+			if b, ok := pages[page]; ok {
+				body = b
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-RateLimit-Remaining", "99")
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(body))
+	})
+	return &urls
+}
+
+// A match on a later page must survive even when an earlier, narrower fetch
+// already produced one. This is the 5.6.1 defect: the sprint/assignee tier hit
+// first and returned, so the release card two pages in was never seen.
+func TestSearch_ReturnsMatchesFromEveryPage(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	tf.Handle("GET", "user", 200, `{"user":{"id":100}}`)
+
+	page0 := append(fillerPairs(99), [2]string{"A", "Tech debt 5.6.1 offline DB"})
+	page1 := [][2]string{{"B", "iOS 5.6.1 Release Card"}}
+
+	sweepMux(tf, map[int]string{
+		0: searchTasksJSON(page0...),
+		1: searchTasksJSON(page1...),
+	}, searchTasksJSON([2]string{"A", "Tech debt 5.6.1 offline DB"}))
+
+	cmd := NewCmdSearch(tf.Factory)
+	if err := testutil.RunCommand(t, cmd, "5.6.1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	out := tf.OutBuf.String()
+	assert.Contains(t, out, "Tech debt 5.6.1 offline DB", "page 0 match missing")
+	assert.Contains(t, out, "iOS 5.6.1 Release Card", "page 1 match missing — sweep stopped early")
+}
+
+// Only an empty page ends the sweep. ClickUp does not return a reliably full
+// page — a live page 0 comes back with 99 rows against a nominal size of 100 —
+// so treating "shorter than a full page" as "workspace exhausted" stops the
+// sweep dead on page 0 and hides everything behind it.
+func TestSearch_ContinuesPastUnderFullPage(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	tf.Handle("GET", "user", 200, `{"user":{"id":100}}`)
+
+	sweepMux(tf, map[int]string{
+		0: searchTasksJSON(fillerPairs(99)...), // one short of nominal, as ClickUp does
+		1: searchTasksJSON([2]string{"B", "Tech debt 5.6.1 profiling"}),
+	}, `{"tasks":[]}`)
+
+	cmd := NewCmdSearch(tf.Factory)
+	if err := testutil.RunCommand(t, cmd, "5.6.1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	assert.Contains(t, tf.OutBuf.String(), "Tech debt 5.6.1 profiling",
+		"sweep stopped on an under-full page")
+}
+
+// An empty page is the only trustworthy end-of-corpus signal; once seen, stop.
+func TestSearch_StopsPaginatingOnEmptyPage(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	tf.Handle("GET", "user", 200, `{"user":{"id":100}}`)
+
+	urls := sweepMux(tf, map[int]string{
+		0: searchTasksJSON([2]string{"A", "Only 5.6.1 card"}),
+	}, `{"tasks":[]}`)
+
+	cmd := NewCmdSearch(tf.Factory)
+	if err := testutil.RunCommand(t, cmd, "5.6.1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	for _, u := range *urls {
+		assert.NotContains(t, u, "page=2", "kept paginating past an empty page")
+	}
+}
+
+// When the page cap bites, say so. An absence of rows must never be readable
+// as "there is nothing else".
+func TestSearch_DisclosesTruncationAtPageCap(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	tf.Handle("GET", "user", 200, `{"user":{"id":100}}`)
+
+	full := searchTasksJSON(append(fillerPairs(99), [2]string{"A", "5.6.1 card"})...)
+	pages := map[int]string{}
+	for i := 0; i < maxSweepPages+2; i++ {
+		pages[i] = full
+	}
+	urls := sweepMux(tf, pages, `{"tasks":[]}`)
+
+	cmd := NewCmdSearch(tf.Factory)
+	if err := testutil.RunCommand(t, cmd, "5.6.1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	assert.Contains(t, tf.ErrBuf.String(), "Not shown:", "no truncation disclosure")
+
+	var swept int
+	for _, u := range *urls {
+		if !strings.Contains(u, "assignees") {
+			swept++
+		}
+	}
+	assert.Equal(t, maxSweepPages, swept, "sweep should stop exactly at the cap")
+}
+
+// The `search=` param is dead weight: ClickUp accepts it and ignores it, so
+// sending it invites the reader to believe filtering happened server-side.
+func TestSearch_OmitsIgnoredServerSideSearchParam(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	tf.Handle("GET", "user", 200, `{"user":{"id":100}}`)
+
+	urls := sweepMux(tf, map[int]string{
+		0: searchTasksJSON([2]string{"A", "Bug in the thing"}),
+	}, `{"tasks":[]}`)
+
+	cmd := NewCmdSearch(tf.Factory)
+	if err := testutil.RunCommand(t, cmd, "Bug"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	for _, u := range *urls {
+		assert.NotContains(t, u, "search=", "sent a search param ClickUp ignores")
+	}
+}
+
+// The sweep only ever reads a prefix of the workspace (maxSweepPages), so the
+// order that prefix arrives in decides what is reachable at all. `reverse=true`
+// on order_by=updated means *oldest* first, which pointed the whole sweep at
+// the least relevant end of the workspace: the tasks people are actually
+// working on sit at the newest end. The old drill-down hid this because its
+// narrow tiers returned fewer tasks than a page, so ordering never bit.
+func TestSearch_SweepsNewestFirst(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	tf.Handle("GET", "user", 200, `{"user":{"id":100}}`)
+
+	urls := sweepMux(tf, map[int]string{
+		0: searchTasksJSON([2]string{"A", "5.6.1 card"}),
+	}, `{"tasks":[]}`)
+
+	cmd := NewCmdSearch(tf.Factory)
+	if err := testutil.RunCommand(t, cmd, "5.6.1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	assert.NotEmpty(t, *urls)
+	for _, u := range *urls {
+		assert.Contains(t, u, "order_by=updated")
+		assert.NotContains(t, u, "reverse=true", "reverse=true orders oldest-first")
+	}
 }

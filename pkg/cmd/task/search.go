@@ -209,10 +209,12 @@ func runSearch(opts *searchOptions) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
-	scored, err := doSearch(ctx, opts)
+	res, err := doSearch(ctx, opts)
 	if err != nil {
 		return err
 	}
+	scored := res.tasks
+	truncated := res.truncated
 
 	// Deduplicate by task ID (keep best match kind per task).
 	scored = dedupScored(scored)
@@ -269,11 +271,12 @@ func runSearch(opts *searchOptions) error {
 				}
 				wordOpts := *opts
 				wordOpts.query = word
-				wordTasks, err := doSearch(ctx, &wordOpts)
+				wordRes, err := doSearch(ctx, &wordOpts)
 				if err != nil {
 					continue
 				}
-				scored = append(scored, wordTasks...)
+				truncated = truncated || wordRes.truncated
+				scored = append(scored, wordRes.tasks...)
 			}
 			scored = dedupScored(scored)
 			sortScoredTasks(scored)
@@ -281,6 +284,11 @@ func runSearch(opts *searchOptions) error {
 				fmt.Fprintf(ios.ErrOut, "Found %d potentially related tasks.\n", len(scored))
 			}
 		}
+	}
+
+	if truncated {
+		fmt.Fprintf(ios.ErrOut, "Not shown: the sweep stopped at its %d-page cap (~%d most recently updated tasks); older matches may exist. Narrow with --space/--folder to walk the full tree.\n",
+			maxSweepPages, maxSweepPages*tasksPerPage)
 	}
 
 	// Convert scored tasks back to plain tasks for output.
@@ -391,7 +399,11 @@ func runSearch(opts *searchOptions) error {
 
 // fetchTeamTasks fetches one page of tasks from the team endpoint with optional extra query params.
 func fetchTeamTasks(ctx context.Context, client *api.Client, teamID string, page int, extraParams string) ([]searchTask, error) {
-	path := fmt.Sprintf("team/%s/task?include_closed=true&page=%d&order_by=updated&reverse=true",
+	// Newest first. ClickUp reads reverse=true on order_by=updated as *ascending*,
+	// so asking for it pointed the sweep at the oldest tasks in the workspace —
+	// and since the sweep only ever reads a prefix, the tasks people are working
+	// on were the ones it could never reach.
+	path := fmt.Sprintf("team/%s/task?include_closed=true&page=%d&order_by=updated",
 		teamID, page)
 	if extraParams != "" {
 		path += "&" + extraParams
@@ -405,9 +417,23 @@ func fetchTeamTasks(ctx context.Context, client *api.Client, teamID string, page
 	return result.Tasks, nil
 }
 
-// searchLevel searches tasks at a given drill-down level and returns scored matches.
-func searchLevel(ctx context.Context, client *api.Client, teamID, query string, extraParams string, maxPages int, comments bool, ios *iostreams.IOStreams) ([]scoredTask, error) {
-	var allScored []scoredTask
+// tasksPerPage is ClickUp's nominal page size for GET team/{id}/task. It is
+// nominal only: a live page 0 comes back with 99 rows, so a short page proves
+// nothing about the corpus and only an empty one ends the sweep. Used for
+// sizing the comment probe and for reporting the reach of the page cap.
+const tasksPerPage = 100
+
+// sweepResult is what one paginated pass produced, together with whether the
+// page cap cut it short.
+type sweepResult struct {
+	tasks     []scoredTask
+	truncated bool
+}
+
+// sweepPages pulls up to maxPages of tasks and filters them here, returning
+// every match rather than stopping at the first page that yields one.
+func sweepPages(ctx context.Context, client *api.Client, teamID, query, extraParams string, maxPages int, comments bool) (sweepResult, error) {
+	var res sweepResult
 	for page := 0; page < maxPages; page++ {
 		if ctx.Err() != nil {
 			break
@@ -415,25 +441,28 @@ func searchLevel(ctx context.Context, client *api.Client, teamID, query string, 
 
 		tasks, err := fetchTeamTasks(ctx, client, teamID, page, extraParams)
 		if err != nil {
-			return nil, err
+			return res, err
 		}
 		if len(tasks) == 0 {
-			break
+			return res, nil
 		}
 
 		matched, unmatched := filterTasks(query, tasks)
-		allScored = append(allScored, matched...)
+		res.tasks = append(res.tasks, matched...)
 
 		if comments && len(unmatched) > 0 {
 			limit := len(unmatched)
-			if limit > 100 {
-				limit = 100
+			if limit > tasksPerPage {
+				limit = tasksPerPage
 			}
-			commentMatches := searchTaskComments(ctx, client, query, unmatched[:limit])
-			allScored = append(allScored, commentMatches...)
+			res.tasks = append(res.tasks, searchTaskComments(ctx, client, query, unmatched[:limit])...)
 		}
+
 	}
-	return allScored, nil
+
+	// Every page came back full and the budget ran out: there is more behind it.
+	res.truncated = true
+	return res, nil
 }
 
 // resolveAssignee resolves a user input (name, username, numeric ID, or "me")
@@ -521,24 +550,35 @@ func resolveAssigneeFromMembers(members []clickup.TeamUser, input string, curren
 	return 0, "", fmt.Errorf("no workspace member found matching %q", input)
 }
 
+// maxSweepPages bounds the live workspace sweep.
+//
+// ClickUp exposes no server-side text search: the `search=` param on
+// GET team/{id}/task is accepted and then ignored, returning the same
+// date-ordered page whatever the query. Every match is therefore found by
+// pulling full pages and filtering them here, so the only cost lever is how
+// many pages we pull. The cap keeps a cold search from walking an unbounded
+// workspace; when it bites, sweepResult.truncated says so rather than letting
+// an absence of rows read as "there is nothing else".
+const maxSweepPages = 10
+
 // doSearch performs the actual search using progressive drill-down or
 // the space/folder hierarchy (when --space or --folder is specified).
-func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
+func doSearch(ctx context.Context, opts *searchOptions) (sweepResult, error) {
 	ios := opts.factory.IOStreams
 
 	client, err := opts.factory.ApiClient()
 	if err != nil {
-		return nil, err
+		return sweepResult{}, err
 	}
 
 	cfg, err := opts.factory.Config()
 	if err != nil {
-		return nil, err
+		return sweepResult{}, err
 	}
 
 	teamID := cfg.Workspace
 	if teamID == "" {
-		return nil, fmt.Errorf("workspace ID required. Set with 'clickup auth login'")
+		return sweepResult{}, fmt.Errorf("workspace ID required. Set with 'clickup auth login'")
 	}
 
 	// Resolve --assignee to a numeric ID if provided.
@@ -547,7 +587,7 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 	if opts.assignee != "" {
 		assigneeID, name, err := resolveAssignee(ctx, client, opts.assignee)
 		if err != nil {
-			return nil, err
+			return sweepResult{}, err
 		}
 		assigneeParam = fmt.Sprintf("assignees[]=%d", assigneeID)
 		assigneeName = name
@@ -556,7 +596,8 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 
 	// If --space or --folder is specified, go directly to targeted search.
 	if opts.space != "" || opts.folder != "" {
-		return searchViaSpaces(ctx, opts)
+		tasks, err := searchViaSpaces(ctx, opts)
+		return sweepResult{tasks: tasks}, err
 	}
 
 	// Build extra params combining assignee filter and subtasks toggle if present.
@@ -579,79 +620,36 @@ func doSearch(ctx context.Context, opts *searchOptions) ([]scoredTask, error) {
 		fmt.Fprintf(ios.ErrOut, "  fetching tasks for %s...\n", assigneeName)
 		tasks, err := fetchTeamTasks(ctx, client, teamID, 0, buildParams(""))
 		if err != nil {
-			return nil, err
+			return sweepResult{}, err
 		}
 		var scored []scoredTask
 		for _, t := range tasks {
 			scored = append(scored, scoredTask{searchTask: t, kind: matchSubstring})
 		}
-		return scored, nil
+		return sweepResult{tasks: scored}, nil
 	}
 
 	query := strings.ToLower(opts.query)
 
-	// Progressive drill-down: server-side → sprint → user → space → workspace.
-
-	// Level 0: Server-side search (fastest — single API call).
-	fmt.Fprintf(ios.ErrOut, "  searching (server-side)...\n")
-	scored, err := searchLevel(ctx, client, teamID, query, buildParams("search="+url.QueryEscape(opts.query)), 1, opts.comments, ios)
-	if err == nil && len(scored) > 0 {
-		return scored, nil
-	}
-
-	// Level 1: Sprint list (if sprint_folder configured).
-	if cfg.SprintFolder != "" {
-		fmt.Fprintf(ios.ErrOut, "  searching sprint...\n")
-		listID, err := cmdutil.ResolveCurrentSprintListID(ctx, client, cfg.SprintFolder)
-		if err == nil && listID != "" {
-			scored, err := searchLevel(ctx, client, teamID, query, buildParams("list_ids[]="+listID), 1, opts.comments, ios)
-			if err != nil {
-				return nil, err
-			}
-			if len(scored) > 0 {
-				return scored, nil
-			}
-		}
-	}
-
-	// Level 2: User's assigned tasks.
-	fmt.Fprintf(ios.ErrOut, "  searching your tasks...\n")
-	userID, err := cmdutil.GetCurrentUserID(client)
-	if err == nil {
-		scored, err := searchLevel(ctx, client, teamID, query, buildParams(fmt.Sprintf("assignees[]=%d", userID)), 1, opts.comments, ios)
-		if err != nil {
-			return nil, err
-		}
-		if len(scored) > 0 {
-			return scored, nil
-		}
-	}
-
-	// Level 3: Configured space.
-	if cfg.Space != "" {
-		fmt.Fprintf(ios.ErrOut, "  searching space...\n")
-		scored, err := searchLevel(ctx, client, teamID, query, buildParams("space_ids[]="+cfg.Space), 3, opts.comments, ios)
-		if err != nil {
-			return nil, err
-		}
-		if len(scored) > 0 {
-			return scored, nil
-		}
-	}
-
-	// Level 4: Full workspace (up to 10 pages).
+	// One pass over the workspace, filtered here. There is no cheaper place to
+	// do it (see maxSweepPages) and no tier worth stopping at: the old
+	// drill-down returned the moment any narrower slice produced a match, which
+	// is how an exactly-matching card two pages in went missing while a weaker
+	// match from the current sprint was reported as the whole answer.
 	fmt.Fprintf(ios.ErrOut, "  searching workspace...\n")
-	scored, err = searchLevel(ctx, client, teamID, query, buildParams(""), 10, opts.comments, ios)
+	res, err := sweepPages(ctx, client, teamID, query, buildParams(""), maxSweepPages, opts.comments)
 	if err != nil {
-		return nil, err
+		return sweepResult{}, err
 	}
-	if len(scored) > 0 {
-		return scored, nil
+	if len(res.tasks) > 0 {
+		return res, nil
 	}
 
-	// Level 5: If nothing found via pagination, fall back to space traversal.
+	// Nothing in the recent window. Walk the space/folder tree, which reaches
+	// tasks too old to surface in the sweep at all.
 	fmt.Fprintf(ios.ErrOut, "Falling back to space/folder search...\n")
-	return searchViaSpaces(ctx, opts)
+	tasks, err := searchViaSpaces(ctx, opts)
+	return sweepResult{tasks: tasks}, err
 }
 
 // filterTasks scores tasks by name and description, separating matched from unmatched.
