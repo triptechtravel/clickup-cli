@@ -316,3 +316,14 @@ func TestCacheDir_Default(t *testing.T) {
 		t.Errorf("CacheDir() = %q, want %q", got, want)
 	}
 }
+
+// With HOME unset the old fallback produced a relative path, so a cron or
+// container run wrote the cached workspace into its working directory.
+func TestCacheDir_NeverRelativeWithoutHome(t *testing.T) {
+	t.Setenv("CLICKUP_CACHE_DIR", "")
+	t.Setenv("HOME", "")
+
+	if got := CacheDir(); !filepath.IsAbs(got) {
+		t.Errorf("CacheDir() = %q, want an absolute path", got)
+	}
+}

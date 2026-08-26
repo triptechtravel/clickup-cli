@@ -537,7 +537,10 @@ func TestSearch_DisclosesTruncationAtPageCap(t *testing.T) {
 			swept++
 		}
 	}
-	assert.Equal(t, maxSweepPages, swept, "sweep should stop exactly at the cap")
+	// Cap plus one probe: exactly filling the budget is not evidence of more
+	// behind it, so the sweep asks once more before claiming truncation. Here
+	// every page is full, so the probe confirms it and the claim stands.
+	assert.Equal(t, maxSweepPages+1, swept, "sweep should read the cap plus one probe")
 }
 
 // The `search=` param is dead weight: ClickUp accepts it and ignores it, so

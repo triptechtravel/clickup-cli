@@ -36,7 +36,14 @@ func CacheDir() string {
 	if dir := os.Getenv("CLICKUP_CACHE_DIR"); dir != "" {
 		return dir
 	}
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		// Never a relative path. With HOME unset — cron, CI, a container — the
+		// old fallback resolved against the working directory and wrote a
+		// plaintext mirror of the whole workspace into whatever the CLI was run
+		// from, typically a git checkout.
+		return filepath.Join(os.TempDir(), "clickup-cache")
+	}
 	return filepath.Join(home, ".cache", "clickup")
 }
 

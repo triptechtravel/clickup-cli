@@ -666,13 +666,24 @@ clickup task checklist item edit <checklist-id> <item-id1> <item-id2> --assignee
 - **Per-directory config**: `folder select --local` and `list select --local` store defaults in the current directory, useful for monorepos with different ClickUp contexts
 - **There is no server-side search**: ClickUp accepts `search=` on the task
   endpoint and ignores it, so `task search` matches locally against a cached
-  index of the workspace. Consequences worth knowing: the first search on a
-  machine is slow while the index builds; `--no-cache`, `--comments` and
-  `--assignee` bypass the index and only read the most recently updated tasks;
-  and that bypass path prints a `Not shown:` line when it hits its page cap.
-  Never read an empty result as proof of absence without checking that line —
-  and if a task is old and the index is cold, `--space`/`--folder` walks the
-  full tree
+  index of the workspace (`~/.cache/clickup`, or `CLICKUP_CACHE_DIR`). The first
+  search on a machine builds it and is slow (~25s for 4,000 tasks); later ones
+  cost about one request. A workspace too large for one pass is continued by the
+  next search. `--no-cache`, `--comments` and `--assignee` bypass the index and
+  read only recently updated tasks; `--space`/`--folder` walk the tree instead
+  and reach tasks of any age
+- **Read the `Not shown:` lines**: every path that returns fewer results than
+  exist prints them on stderr — the index while it is still building, the live
+  sweep's page cap, lists the space walk could not read, matches hidden by
+  `--exact`, the 200-row result cap, comments checked on only the first 100
+  tasks. They appear under `--json` too (on stderr), and an empty result with a
+  `Not shown:` line is not proof of absence
+- **Deletions lag**: incremental syncs cannot see deletions, so a task deleted
+  upstream can appear in results until the weekly reconcile. `--refresh` rebuilds
+  the index immediately; renames are picked up straight away
+- **In ephemeral environments** (fresh container, no persisted `~/.cache`), the
+  first search pays the full build. Prefer `--no-cache` there, or `--space` to
+  scope the work
 - **Assignee shortcut**: `task search --assignee me` filters results to the authenticated user; also accepts names, usernames, or IDs
 - **Contextual task list**: `task list` falls back to the configured default list (via `list select`) when no `--list-id` is given
 - **Bulk delete**: `task delete ID1 ID2 ID3 -y` deletes multiple tasks in one command

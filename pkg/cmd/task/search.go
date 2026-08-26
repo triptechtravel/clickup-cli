@@ -36,6 +36,7 @@ type searchOptions struct {
 	exact           bool
 	includeSubtasks bool
 	noCache         bool
+	refresh         bool
 	// skipSync suppresses the index refresh for the per-word retry, which
 	// re-reads an index the first pass has already synced.
 	skipSync  bool
@@ -135,25 +136,36 @@ func NewCmdSearch(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "search [query]",
 		Short: "Search tasks by name and description",
-		Long: `Search ClickUp tasks across the workspace by name and description.
+		Long: fmt.Sprintf(`Search ClickUp tasks across the workspace by name and description.
 
 Returns tasks whose names or descriptions match the search query. Matching
 priority: name substring > name fuzzy > description substring.
 
-ClickUp has no server-side text search, so matching happens locally. To keep
-that from meaning "paginate the workspace on every search", the CLI keeps an
-index of the workspace under ~/.cache/clickup (override with CLICKUP_CACHE_DIR)
-and tops it up with only what changed since the last run. The first search
-builds the index and is slow; later ones read every task in the workspace for
-about one request. The index is rebuilt weekly so that deleted and archived
-tasks fall out of it.
+ClickUp has no server-side text search, so matching happens locally. To avoid
+paginating the workspace on every search, the CLI keeps an index under
+~/.cache/clickup (override with CLICKUP_CACHE_DIR) and tops it up with only
+what changed. The first search builds it and is slow — around 25s for 4,000
+tasks; a workspace too large to build in one pass is continued by the next
+search rather than left incomplete. Later searches read every indexed task for
+about one request.
 
-Use --no-cache to skip the index and query the API directly. That path reads
-only the most recently updated tasks and says so when it runs out of budget.
---comments and --assignee also bypass the index.
+Limits, all of which are disclosed on stderr when they bite:
+  - at most %d rows are returned
+  - descriptions are indexed to their first %d bytes
+  - with --comments, comments are checked on at most %d tasks
+  - the index is reconciled weekly, so a task deleted upstream can linger
+    until then; --refresh rebuilds it immediately
 
-Use --space and --folder to search a specific part of the tree instead; this
-reaches tasks of any age, at the cost of walking every list.
+Use --no-cache to skip the index and sweep the API directly; that path reads
+only the most recently updated tasks. --comments and --assignee bypass the
+index too. --space and --folder search a specific part of the tree instead,
+reaching tasks of any age at the cost of walking every list.
+
+The index holds task names and descriptions in plaintext. 'clickup auth
+logout' deletes it.
+
+--json emits `+"`parent`"+` (empty for top-level tasks) and `+"`date_updated`"+` (epoch
+milliseconds, as a string) alongside the task fields.
 
 In interactive mode (TTY), if many results are found you will be asked
 whether to refine the search. Use --pick to interactively select a single
@@ -163,7 +175,7 @@ When no exact match is found, the search automatically tries individual
 words from the query and shows potentially related tasks.
 
 If search returns no results, use 'clickup task recent' to see your
-recently updated tasks and discover which folders/lists to search in.`,
+recently updated tasks and discover which folders/lists to search in.`, maxResults, taskindex.MaxDescriptionBytes, maxCommentProbes),
 		Example: `  # Search for tasks mentioning "payload"
   clickup task search payload
 
@@ -214,6 +226,7 @@ recently updated tasks and discover which folders/lists to search in.`,
 	cmd.Flags().BoolVar(&opts.exact, "exact", false, "Only show exact substring matches (no fuzzy results)")
 	cmd.Flags().BoolVar(&opts.includeSubtasks, "include-subtasks", false, "Include subtasks in search results")
 	cmd.Flags().BoolVar(&opts.noCache, "no-cache", false, "Bypass the local task index and query the API directly")
+	cmd.Flags().BoolVar(&opts.refresh, "refresh", false, "Rebuild the local task index from scratch before searching")
 	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 
 	return cmd
@@ -241,16 +254,9 @@ func runSearch(opts *searchOptions) error {
 	// Sort by relevance.
 	sortScoredTasks(scored)
 
-	// --exact: filter out fuzzy matches, keeping only substring and comment matches.
-	if opts.exact {
-		var exactOnly []scoredTask
-		for _, s := range scored {
-			if s.kind != matchFuzzy {
-				exactOnly = append(exactOnly, s)
-			}
-		}
-		scored = exactOnly
-	}
+	// --exact is applied after the per-word retry below, not here. Filtering
+	// first let the retry append fuzzy rows afterwards, so a flag documented as
+	// "no fuzzy results" printed rows whose own MATCH column said fuzzy.
 
 	// Interactive: if too many results, offer to narrow down.
 	if interactive && len(scored) > 15 {
@@ -308,11 +314,36 @@ func runSearch(opts *searchOptions) error {
 		}
 	}
 
-	// Print every limit that bit, naming the mechanism rather than a generic
-	// one: an absence of rows must never read as an absence of tasks, and a
-	// disclosure that names the wrong cap sends the reader after the wrong fix.
-	for _, n := range disclosures.notShown {
-		fmt.Fprintf(ios.ErrOut, "Not shown: %s\n", n)
+	if opts.exact {
+		var exactOnly []scoredTask
+		for _, sc := range scored {
+			if sc.kind != matchFuzzy {
+				exactOnly = append(exactOnly, sc)
+			}
+		}
+		// Suppression is not absence. Without this, --exact on a near-miss
+		// query printed "No tasks found" while holding matches it had just
+		// discarded — and an agent defaulting to --exact for determinism
+		// reports the task does not exist.
+		if dropped := len(scored) - len(exactOnly); dropped > 0 {
+			disclosures.discloseF("%d fuzzy match(es) hidden by --exact; re-run without it to see them.", dropped)
+		}
+		scored = exactOnly
+	}
+
+	if len(scored) > maxResults {
+		disclosures.discloseF("%d further match(es) beyond the first %d; narrow the query, or use --space/--folder.",
+			len(scored)-maxResults, maxResults)
+		scored = scored[:maxResults]
+	}
+
+	// Every limit that bit, named by mechanism rather than generically: an
+	// absence of rows must never read as an absence of tasks, and a disclosure
+	// that names the wrong cap sends the reader after the wrong fix.
+	printDisclosures := func() {
+		for _, n := range disclosures.notShown {
+			fmt.Fprintf(ios.ErrOut, "Not shown: %s\n", n)
+		}
 	}
 
 	// Convert scored tasks back to plain tasks for output.
@@ -325,6 +356,9 @@ func runSearch(opts *searchOptions) error {
 
 	if len(allTasks) == 0 {
 		fmt.Fprintf(ios.ErrOut, "No tasks found matching %q\n", opts.query)
+		// Before the early return, not after: "no tasks found" is exactly the
+		// message that must never stand alone when something was withheld.
+		printDisclosures()
 		if interactive {
 			return noResultsPrompt(ios, opts)
 		}
@@ -409,6 +443,10 @@ func runSearch(opts *searchOptions) error {
 		return err
 	}
 
+	// After the table, matching `task list`. Printed above it, the disclosure
+	// scrolls off the top of a terminal on any sizeable result.
+	printDisclosures()
+
 	// Quick actions footer
 	fmt.Fprintln(ios.Out)
 	fmt.Fprintln(ios.Out, cs.Gray("---"))
@@ -484,6 +522,8 @@ func (r *sweepResult) mergeDisclosures(other sweepResult) {
 // every match rather than stopping at the first page that yields one.
 func sweepPages(ctx context.Context, client *api.Client, teamID, query, extraParams string, maxPages int, comments bool) (sweepResult, error) {
 	var res sweepResult
+	var commentsProbed int
+	var probeCapDisclosed bool
 	for page := 0; page < maxPages; page++ {
 		if ctx.Err() != nil {
 			res.cancelled = true
@@ -503,18 +543,71 @@ func sweepPages(ctx context.Context, client *api.Client, teamID, query, extraPar
 		res.tasks = append(res.tasks, matched...)
 
 		if comments && len(unmatched) > 0 {
-			limit := len(unmatched)
-			if limit > tasksPerPage {
-				limit = tasksPerPage
+			// Bounded across the whole sweep, not per page. The per-page cap
+			// was written when only one page was read; once the sweep covered
+			// ten, --comments went from ~97 requests to ~970 and stopped
+			// finishing at all — worse than what it replaced.
+			budget := maxCommentProbes - commentsProbed
+			if budget > 0 {
+				if budget > len(unmatched) {
+					budget = len(unmatched)
+				}
+				res.tasks = append(res.tasks, searchTaskComments(ctx, client, query, unmatched[:budget])...)
+				commentsProbed += budget
 			}
-			res.tasks = append(res.tasks, searchTaskComments(ctx, client, query, unmatched[:limit])...)
+			if commentsProbed >= maxCommentProbes && !probeCapDisclosed {
+				probeCapDisclosed = true
+				res.truncated = true
+				res.discloseF("comments were checked on the first %d tasks only; matches in comments on older tasks are missing.", maxCommentProbes)
+			}
 		}
 
 	}
 
-	// Every page came back full and the budget ran out: there is more behind it.
+	// One probe past the cap. Exactly filling the budget is not evidence that
+	// anything is behind it, and without this a workspace holding exactly
+	// maxPages*tasksPerPage tasks was told on every single search that results
+	// had been withheld.
+	if ctx.Err() == nil {
+		probe, err := fetchTeamTasks(ctx, client, teamID, maxPages, extraParams)
+		if err == nil && len(probe) == 0 {
+			return res, nil
+		}
+		if err == nil {
+			matched, _ := filterTasks(query, probe)
+			res.tasks = append(res.tasks, matched...)
+		}
+	}
+
 	res.truncated = true
-	res.discloseF("the live sweep stopped at its %d-page cap (~%d most recently updated tasks); older matches may exist. Drop --no-cache to search the local index, or use --space/--folder.",
+	res.discloseF("the live sweep stopped at its %d-page cap (~%d most recently updated tasks); older matches may exist. %s",
+		maxPages, maxPages*tasksPerPage, capRemedy)
+	return res, nil
+}
+
+// sweepPagesAll collects every task rather than filtering by a query. Used by
+// the assignee listing, which has no query to match against.
+func sweepPagesAll(ctx context.Context, client *api.Client, teamID, extraParams string, maxPages int) (sweepResult, error) {
+	var res sweepResult
+	for page := 0; page < maxPages; page++ {
+		if ctx.Err() != nil {
+			res.cancelled = true
+			res.discloseF("the listing ran out of time after %d page(s); it is partial.", page)
+			return res, nil
+		}
+		tasks, err := fetchTeamTasks(ctx, client, teamID, page, extraParams)
+		if err != nil {
+			return res, err
+		}
+		if len(tasks) == 0 {
+			return res, nil
+		}
+		for _, t := range tasks {
+			res.tasks = append(res.tasks, scoredTask{searchTask: t, kind: matchSubstring})
+		}
+	}
+	res.truncated = true
+	res.discloseF("the listing stopped at its %d-page cap (~%d tasks); there may be more.",
 		maxPages, maxPages*tasksPerPage)
 	return res, nil
 }
@@ -626,6 +719,29 @@ const cacheTTL = 7 * 24 * time.Hour
 // the whole command deadline and return nothing.
 const syncBudget = 60 * time.Second
 
+// capRemedy is the advice appended to the live sweep's page-cap disclosure.
+//
+// It is a variable rather than fixed text because three different flags route
+// to the live sweep, and telling a --comments or --assignee caller to "drop
+// --no-cache" — a flag they never passed, and whose absence changes nothing
+// because those paths bypass the index regardless — is advice that cannot be
+// acted on. Naming the wrong remedy is the same defect as naming the wrong
+// mechanism.
+var capRemedy = "Use --space/--folder to walk the full tree."
+
+// maxCommentProbes bounds how many tasks a single search will fetch comments
+// for. Each probe is its own request, so this is the difference between a slow
+// search and one that cannot finish inside any deadline.
+const maxCommentProbes = 100
+
+// maxResults bounds how many rows one search returns.
+//
+// The index made broad queries genuinely expensive to consume rather than to
+// run: "the" matched 1,763 tasks and produced 2MB of JSON, against 48 rows
+// before. This CLI is driven by agents as well as people, and dumping megabytes
+// into a caller's context is its own kind of wrong answer.
+const maxResults = 200
+
 // maxListPages bounds how deep the space walk reads a single list. Generous,
 // because this is the path advertised as reaching everything, but not
 // unbounded — a runaway list should not hang the search.
@@ -668,7 +784,14 @@ func fromEntry(e taskindex.Entry) searchTask {
 	t.Priority.Priority = e.Priority
 	t.Parent = e.Parent
 	t.URL = e.URL
-	t.DateUpdated = strconv.FormatInt(e.DateUpdated, 10)
+	if e.DateUpdated != 0 {
+		t.DateUpdated = strconv.FormatInt(e.DateUpdated, 10)
+	}
+	// Non-nil, so --json emits [] like the live paths do rather than null. The
+	// only field that differed between a warm and a cold cache was this one.
+	t.Assignees = []struct {
+		Username string `json:"username"`
+	}{}
 	for _, n := range e.Assignees {
 		t.Assignees = append(t.Assignees, struct {
 			Username string `json:"username"`
@@ -793,6 +916,15 @@ func syncIndex(ctx context.Context, opts *searchOptions, client *api.Client, tea
 	// that had to be made context-aware.
 	syncCtx, cancel := context.WithTimeout(ctx, syncBudget)
 	defer cancel()
+
+	if opts.refresh {
+		// The only lever for "a task was deleted and I want it gone now":
+		// incremental syncs cannot see deletions, and waiting out the reconcile
+		// window is not an answer.
+		idx.RequestFullSync()
+		idx.RebuildFloor = 0
+		idx.RebuildStartedAt = 0
+	}
 
 	// An index holding nothing has nothing to be incremental about, whatever
 	// its bookkeeping says — this is the state a failed first run leaves.
@@ -947,6 +1079,14 @@ func doSearch(ctx context.Context, opts *searchOptions) (sweepResult, error) {
 		fmt.Fprintf(ios.ErrOut, "  assignee: %s (ID: %d)\n", assigneeName, assigneeID)
 	}
 
+	// Advice the caller can act on: only --no-cache is worth suggesting
+	// removing, and only if they passed it.
+	if opts.noCache {
+		capRemedy = "Drop --no-cache to search the local index, or use --space/--folder."
+	} else {
+		capRemedy = "Use --space/--folder to walk the full tree."
+	}
+
 	// If --space or --folder is specified, go directly to targeted search.
 	if opts.space != "" || opts.folder != "" {
 		return searchViaSpaces(ctx, opts)
@@ -970,15 +1110,19 @@ func doSearch(ctx context.Context, opts *searchOptions) (sweepResult, error) {
 	// If --assignee with no query: fetch all tasks for that assignee.
 	if opts.query == "" && assigneeParam != "" {
 		fmt.Fprintf(ios.ErrOut, "  fetching tasks for %s...\n", assigneeName)
-		tasks, err := fetchTeamTasks(ctx, client, teamID, 0, buildParams(""))
-		if err != nil {
+		// Paginated and disclosed like every other read. A single page meant
+		// someone with 250 open tasks was shown 100 and told nothing, which is
+		// the failure this whole branch exists to remove — in the one path that
+		// never got a sweepResult around it.
+		res, err := sweepPagesAll(ctx, client, teamID, buildParams(""), maxSweepPages)
+		if err != nil && len(res.tasks) == 0 {
 			return sweepResult{}, err
 		}
-		var scored []scoredTask
-		for _, t := range tasks {
-			scored = append(scored, scoredTask{searchTask: t, kind: matchSubstring})
+		if err != nil {
+			res.truncated = true
+			res.discloseF("the listing stopped early (%v); some of %s's tasks are missing.", err, assigneeName)
 		}
-		return sweepResult{tasks: scored}, nil
+		return res, nil
 	}
 
 	query := strings.ToLower(opts.query)
@@ -1013,7 +1157,17 @@ func doSearch(ctx context.Context, opts *searchOptions) (sweepResult, error) {
 	fmt.Fprintf(ios.ErrOut, "  searching workspace...\n")
 	res, err := sweepPages(ctx, client, teamID, query, buildParams(""), maxSweepPages, opts.comments)
 	if err != nil {
-		return sweepResult{}, err
+		// Keep what was already found. sweepPages returns its partial result
+		// alongside the error for exactly this reason, and discarding it meant
+		// a 500 on page 9 threw away eight pages of confirmed matches and
+		// exited non-zero — the opposite of the index path's stated policy for
+		// the same failure.
+		if len(res.tasks) == 0 {
+			return sweepResult{}, err
+		}
+		res.truncated = true
+		res.discloseF("the sweep stopped early (%v); later pages were not read.", err)
+		return res, nil
 	}
 	if len(res.tasks) > 0 {
 		return res, nil
@@ -1023,10 +1177,31 @@ func doSearch(ctx context.Context, opts *searchOptions) (sweepResult, error) {
 	// tasks too old to surface in the sweep at all.
 	fmt.Fprintf(ios.ErrOut, "Falling back to space/folder search...\n")
 	walk, err := searchViaSpaces(ctx, opts)
+	if assigneeName != "" {
+		// searchViaSpaces matches on text only. Without this the fallback
+		// printed other people's tasks as the requested assignee's, while
+		// stderr echoed the filter it had just discarded — a wrong answer, not
+		// a missing one.
+		walk.tasks = keepAssignee(walk.tasks, assigneeName)
+	}
 	// The sweep's own limits still applied; dropping them here turned a
 	// partial search into a confident "no such task".
 	walk.mergeDisclosures(res)
 	return walk, err
+}
+
+// keepAssignee drops tasks the named user is not assigned to.
+func keepAssignee(tasks []scoredTask, username string) []scoredTask {
+	kept := tasks[:0]
+	for _, t := range tasks {
+		for _, a := range t.Assignees {
+			if strings.EqualFold(a.Username, username) {
+				kept = append(kept, t)
+				break
+			}
+		}
+	}
+	return kept
 }
 
 // filterTasks scores tasks by name and description, separating matched from unmatched.
@@ -1327,6 +1502,17 @@ func searchViaSpaces(ctx context.Context, opts *searchOptions) (sweepResult, err
 
 	query := strings.ToLower(opts.query)
 
+	// Counted so a space that could not be opened is disclosed rather than
+	// silently dropping every list inside it. Phase 2 already did this; phase 1
+	// had no counter at all, and its blast radius is larger.
+	var discoveryFailed atomic.Int64
+	var spacesMatched atomic.Int64
+
+	// Guards the shared progress writer below. Without it the per-space
+	// goroutines race on ErrOut; against a bytes.Buffer that is a genuine
+	// memory race, not just interleaved lines.
+	var errOutMu sync.Mutex
+
 	// Phase 1: Discover all list IDs across spaces (parallel per space).
 	type spaceListIDs struct {
 		listIDs []string
@@ -1340,12 +1526,15 @@ func searchViaSpaces(ctx context.Context, opts *searchOptions) (sweepResult, err
 			if !strings.EqualFold(space.Name, opts.space) && space.ID != opts.space {
 				continue
 			}
+			spacesMatched.Add(1)
 		}
 
 		discoverWg.Add(1)
 		go func(idx int, sp clickup.Space) {
 			defer discoverWg.Done()
+			errOutMu.Lock()
 			fmt.Fprintf(ios.ErrOut, "  searching space %q...\n", sp.Name)
+			errOutMu.Unlock()
 
 			var listIDs []string
 
@@ -1359,6 +1548,9 @@ func searchViaSpaces(ctx context.Context, opts *searchOptions) (sweepResult, err
 				defer innerWg.Done()
 				folders, err := apiv2.GetFoldersLocal(ctx, client, sp.ID, false)
 				if err != nil {
+					if ctx.Err() == nil {
+						discoveryFailed.Add(1)
+					}
 					return
 				}
 				for _, folder := range folders {
@@ -1370,6 +1562,9 @@ func searchViaSpaces(ctx context.Context, opts *searchOptions) (sweepResult, err
 					}
 					lists, err := apiv2.GetListsLocal(ctx, client, folder.ID, false)
 					if err != nil {
+						if ctx.Err() == nil {
+							discoveryFailed.Add(1)
+						}
 						continue
 					}
 					mu.Lock()
@@ -1387,6 +1582,9 @@ func searchViaSpaces(ctx context.Context, opts *searchOptions) (sweepResult, err
 					defer innerWg.Done()
 					lists, err := apiv2.GetFolderlessListsLocal(ctx, client, sp.ID, false)
 					if err != nil {
+						if ctx.Err() == nil {
+							discoveryFailed.Add(1)
+						}
 						return
 					}
 					mu.Lock()
@@ -1503,9 +1701,19 @@ func searchViaSpaces(ctx context.Context, opts *searchOptions) (sweepResult, err
 	// A list that could not be read, or one deeper than the page budget, is a
 	// hole in the result. Saying nothing about it is what let a partial walk
 	// pass for a complete one.
+	if n := discoveryFailed.Load(); n > 0 {
+		out.truncated = true
+		out.discloseF("%d folder/list listing(s) could not be read, so whole spaces may be missing from this search.", n)
+	}
 	if n := unreadable.Load(); n > 0 {
 		out.truncated = true
-		out.discloseF("%d list(s) could not be read and were skipped; matches in them are missing.", n)
+		// "partly read", not "skipped": pages that succeeded before the failure
+		// did contribute results, and telling someone their matches are missing
+		// when they are on screen sends them hunting a permissions problem.
+		out.discloseF("%d list(s) could only be read partway; later pages of them are missing.", n)
+	}
+	if opts.space != "" && spacesMatched.Load() == 0 {
+		out.discloseF("no space matched %q — this is a filter that matched nothing, not a workspace without the task.", opts.space)
 	}
 	if n := capped.Load(); n > 0 {
 		out.truncated = true

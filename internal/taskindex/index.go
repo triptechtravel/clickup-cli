@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 )
 
@@ -29,6 +31,17 @@ import (
 // be newer than the watermark, so it would stay invisible forever. A minute of
 // overlap costs a handful of redundant rows and closes the hole.
 const overlapMillis int64 = 60_000
+
+// maxDescriptionBytes bounds what is kept of a task description.
+//
+// Descriptions are matched against, so they have to be stored — but they are
+// also two thirds of the index by size, with a median of 97 bytes and a tail
+// running to 35KB. Bounding the tail halves the file for a recall loss confined
+// to text buried deep inside unusually long bodies.
+const maxDescriptionBytes = 4096
+
+// MaxDescriptionBytes exposes the description bound so the command can state it.
+const MaxDescriptionBytes = maxDescriptionBytes
 
 // Entry is the searchable projection of a task. Descriptions are kept in full
 // because search matches against them.
@@ -97,6 +110,40 @@ type Index struct {
 }
 
 // New returns an empty index for a workspace.
+// validWorkspace guards the one piece of caller-controlled text that becomes a
+// filename. It arrives from the ClickUp API and is normally numeric, but
+// nothing checked, so a value containing ../ escaped the cache directory
+// entirely and overwrote whatever .json file it landed on.
+var validWorkspace = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
+func checkWorkspace(workspace string) error {
+	if !validWorkspace.MatchString(workspace) {
+		return fmt.Errorf("refusing to use %q as a workspace id: it is not a plain identifier and would name a file outside the cache", workspace)
+	}
+	return nil
+}
+
+// sanitizeText removes control characters from text that came off disk.
+//
+// The renderer writes names straight to a terminal, and the cache is a local
+// file: anything able to write it could replay escape sequences into the user's
+// terminal on every search, or dress up a task id an agent then acts on.
+func sanitizeText(in string) string {
+	if !strings.ContainsFunc(in, isControl) {
+		return in
+	}
+	return strings.Map(func(r rune) rune {
+		if isControl(r) {
+			return -1
+		}
+		return r
+	}, in)
+}
+
+func isControl(r rune) bool {
+	return r == 0x7f || (r < 0x20 && r != '\t' && r != '\n')
+}
+
 func New(workspace string) *Index {
 	return &Index{Workspace: workspace, Entries: map[string]Entry{}}
 }
@@ -132,6 +179,9 @@ func (i *Index) upsert(entries []Entry) bool {
 	}
 	changed := false
 	for _, e := range entries {
+		if len(e.Description) > maxDescriptionBytes {
+			e.Description = e.Description[:maxDescriptionBytes]
+		}
 		if existing, ok := i.Entries[e.ID]; ok && existing.equal(e) {
 			continue
 		}
@@ -302,10 +352,36 @@ func path(dir, workspace string) string {
 	return filepath.Join(dir, fmt.Sprintf("index-%s.json", workspace))
 }
 
+// reapTemps removes abandoned temp files.
+//
+// The write-then-rename cleanup is deferred, which covers error returns but not
+// signal death — and the first build is advertised as slow, so Ctrl-C during it
+// is the expected reaction. Each interrupt left a temp file holding every task
+// name and description fetched so far, and nothing ever removed them.
+func reapTemps(dir string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasPrefix(e.Name(), ".index-") || !strings.HasSuffix(e.Name(), ".tmp") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil || time.Since(info.ModTime()) < time.Hour {
+			continue
+		}
+		_ = os.Remove(filepath.Join(dir, e.Name()))
+	}
+}
+
 // Load reads a workspace's index. A missing or unreadable cache is not an
 // error: it yields an empty index, so the caller does a cold sync rather than
 // failing. A corrupt cache is a performance problem, never a correctness one.
 func Load(dir, workspace string) (*Index, error) {
+	if err := checkWorkspace(workspace); err != nil {
+		return nil, err
+	}
 	b, err := os.ReadFile(path(dir, workspace))
 	if err != nil {
 		return New(workspace), nil
@@ -318,6 +394,12 @@ func Load(dir, workspace string) (*Index, error) {
 	if idx.Entries == nil {
 		idx.Entries = map[string]Entry{}
 	}
+	for id, e := range idx.Entries {
+		e.Name = sanitizeText(e.Name)
+		e.Description = sanitizeText(e.Description)
+		e.Status = sanitizeText(e.Status)
+		idx.Entries[id] = e
+	}
 	idx.Workspace = workspace
 	return &idx, nil
 }
@@ -325,9 +407,16 @@ func Load(dir, workspace string) (*Index, error) {
 // Save writes the index, creating the cache directory if needed. The file
 // holds task names and descriptions, so it is owner-only.
 func Save(dir string, idx *Index) error {
+	if err := checkWorkspace(idx.Workspace); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("create cache dir: %w", err)
 	}
+	// MkdirAll leaves an existing directory's mode alone, and this one holds
+	// the whole workspace in plaintext.
+	_ = os.Chmod(dir, 0o700)
+	reapTemps(dir)
 	b, err := json.Marshal(idx)
 	if err != nil {
 		return fmt.Errorf("encode index: %w", err)

@@ -9,6 +9,10 @@ Log out of ClickUp
 
 Remove stored authentication credentials for the ClickUp CLI.
 
+Also deletes the local task index, which mirrors every task name and
+description in the workspace to disk. Revoking access should not leave that
+readable on the machine.
+
 ```
 clickup auth logout [flags]
 ```

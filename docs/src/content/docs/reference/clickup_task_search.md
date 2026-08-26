@@ -12,20 +12,31 @@ Search ClickUp tasks across the workspace by name and description.
 Returns tasks whose names or descriptions match the search query. Matching
 priority: name substring > name fuzzy > description substring.
 
-ClickUp has no server-side text search, so matching happens locally. To keep
-that from meaning "paginate the workspace on every search", the CLI keeps an
-index of the workspace under ~/.cache/clickup (override with CLICKUP_CACHE_DIR)
-and tops it up with only what changed since the last run. The first search
-builds the index and is slow; later ones read every task in the workspace for
-about one request. The index is rebuilt weekly so that deleted and archived
-tasks fall out of it.
+ClickUp has no server-side text search, so matching happens locally. To avoid
+paginating the workspace on every search, the CLI keeps an index under
+~/.cache/clickup (override with CLICKUP_CACHE_DIR) and tops it up with only
+what changed. The first search builds it and is slow — around 25s for 4,000
+tasks; a workspace too large to build in one pass is continued by the next
+search rather than left incomplete. Later searches read every indexed task for
+about one request.
 
-Use --no-cache to skip the index and query the API directly. That path reads
-only the most recently updated tasks and says so when it runs out of budget.
---comments and --assignee also bypass the index.
+Limits, all of which are disclosed on stderr when they bite:
+  - at most 200 rows are returned
+  - descriptions are indexed to their first 4096 bytes
+  - with --comments, comments are checked on at most 100 tasks
+  - the index is reconciled weekly, so a task deleted upstream can linger
+    until then; --refresh rebuilds it immediately
 
-Use --space and --folder to search a specific part of the tree instead; this
-reaches tasks of any age, at the cost of walking every list.
+Use --no-cache to skip the index and sweep the API directly; that path reads
+only the most recently updated tasks. --comments and --assignee bypass the
+index too. --space and --folder search a specific part of the tree instead,
+reaching tasks of any age at the cost of walking every list.
+
+The index holds task names and descriptions in plaintext. 'clickup auth
+logout' deletes it.
+
+--json emits `parent` (empty for top-level tasks) and `date_updated` (epoch
+milliseconds, as a string) alongside the task fields.
 
 In interactive mode (TTY), if many results are found you will be asked
 whether to refine the search. Use --pick to interactively select a single
@@ -89,6 +100,7 @@ clickup task search [query] [flags]
       --no-cache           Bypass the local task index and query the API directly
       --pick               Interactively select a task and print its ID
   -r, --raw                Output raw strings instead of JSON-encoded (use with --jq)
+      --refresh            Rebuild the local task index from scratch before searching
       --space string       Limit search to a specific space (name or ID)
       --template string    Format JSON output using a Go template
 ```

@@ -466,3 +466,93 @@ func TestUpdate_AppliesToTheCurrentOnDiskState(t *testing.T) {
 	got, _ := Load(dir, "12345")
 	assert.Len(t, got.Entries, 2)
 }
+
+// ---------------------------------------------------------------------------
+// Hostile and awkward inputs
+// ---------------------------------------------------------------------------
+
+// The workspace id is interpolated into a filename. It comes from the ClickUp
+// API and is normally numeric, but nothing validated it, so a value containing
+// ../ escaped the cache directory and clobbered a file outside it.
+func TestSave_RefusesAWorkspaceIDThatEscapesTheCacheDir(t *testing.T) {
+	dir := t.TempDir()
+	idx := New("../../../victim/important")
+	idx.Merge([]Entry{entry("a", "A", 100)})
+
+	err := Save(dir, idx)
+
+	assert.Error(t, err, "a traversing workspace id was accepted")
+	assert.Contains(t, err.Error(), "workspace")
+}
+
+func TestLoad_RefusesAWorkspaceIDThatEscapesTheCacheDir(t *testing.T) {
+	_, err := Load(t.TempDir(), "../escape")
+	assert.Error(t, err)
+}
+
+// Interrupting a slow first build — the documented, expected reaction — killed
+// the process mid-save and left a temp file holding every task name and
+// description fetched so far. Nothing ever reaped them.
+func TestSave_ReapsAbandonedTempFiles(t *testing.T) {
+	dir := t.TempDir()
+	stale := filepath.Join(dir, ".index-orphan.tmp")
+	if err := os.WriteFile(stale, []byte(`{"leaked":"workspace data"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(stale, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Save(dir, New("12345")); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := os.Stat(stale)
+	assert.True(t, os.IsNotExist(err), "abandoned temp file still holding workspace data")
+}
+
+// Terminal escapes in cached names would be replayed into the user's terminal
+// on every search, and a cache file is a local input the renderer has no reason
+// to trust more than any other.
+func TestLoad_StripsControlSequencesFromCachedText(t *testing.T) {
+	dir := t.TempDir()
+	idx := New("12345")
+	idx.Merge([]Entry{{ID: "a", Name: "\x1b[31mCU-PWN\x1b[0m", DateUpdated: 100}})
+	if err := Save(dir, idx); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := Load(dir, "12345")
+	assert.NoError(t, err)
+	assert.NotContains(t, got.Entries["a"].Name, "\x1b", "escape sequence survived the cache")
+	assert.Contains(t, got.Entries["a"].Name, "CU-PWN")
+}
+
+// An existing loose directory is not tightened by MkdirAll, and the cache holds
+// the whole workspace in plaintext.
+func TestSave_TightensAnExistingLooseCacheDir(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "cache")
+	if err := os.MkdirAll(dir, 0o777); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Save(dir, New("12345")); err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, os.FileMode(0o700), info.Mode().Perm(), "cache dir left world-accessible")
+}
+
+// Descriptions are the bulk of the index and the tail is extreme (max observed
+// 35KB against a 97-byte median), so they are bounded.
+func TestMerge_BoundsDescriptionLength(t *testing.T) {
+	idx := New("12345")
+	idx.Merge([]Entry{{ID: "a", Name: "A", Description: strings.Repeat("x", maxDescriptionBytes*2), DateUpdated: 1}})
+
+	assert.LessOrEqual(t, len(idx.Entries["a"].Description), maxDescriptionBytes)
+}
