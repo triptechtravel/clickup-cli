@@ -688,7 +688,10 @@ func TestFetchTeamTasks(t *testing.T) {
 	assert.Contains(t, capturedQuery, "include_closed=true")
 	assert.Contains(t, capturedQuery, "page=3")
 	assert.Contains(t, capturedQuery, "order_by=updated")
-	assert.Contains(t, capturedQuery, "reverse=true")
+	// Not reverse=true: ClickUp reads that as ascending, and every caller here
+	// pages through a prefix, so it pointed them at the oldest tasks in the
+	// workspace rather than the ones anyone is looking for.
+	assert.NotContains(t, capturedQuery, "reverse=true")
 	assert.Contains(t, capturedQuery, "assignees%5B%5D=user1")
 	require.Len(t, tasks, 1)
 	assert.Equal(t, "task123", tasks[0].ID)

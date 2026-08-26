@@ -65,10 +65,19 @@ func grepRepo(t *testing.T, dir, pattern string) []string {
 	rootDir := filepath.Join(repoRoot(t), dir)
 
 	err := filepath.WalkDir(rootDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil {
 			return err
 		}
 		name := d.Name()
+		if d.IsDir() {
+			// Skip hidden trees (.git, .claude/worktrees — a scratch worktree
+			// holds a second copy of the source and would fail these guards on
+			// code that is not in the tree under test) and vendored deps.
+			if path != rootDir && (strings.HasPrefix(name, ".") || name == "vendor" || name == "node_modules") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		if !strings.HasSuffix(name, ".go") ||
 			strings.HasSuffix(name, "_test.go") ||
 			strings.HasSuffix(name, ".gen.go") {

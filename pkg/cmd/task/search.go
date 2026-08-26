@@ -300,6 +300,9 @@ func runSearch(opts *searchOptions) error {
 		}
 	}
 
+	if res.cancelled {
+		fmt.Fprintf(ios.ErrOut, "Not shown: the search ran out of time and stopped early; results are partial.\n")
+	}
 	if truncated {
 		fmt.Fprintf(ios.ErrOut, "Not shown: the sweep stopped at its %d-page cap (~%d most recently updated tasks); older matches may exist. Narrow with --space/--folder to walk the full tree.\n",
 			maxSweepPages, maxSweepPages*tasksPerPage)
@@ -440,8 +443,13 @@ const tasksPerPage = 100
 // sweepResult is what one paginated pass produced, together with whether the
 // page cap cut it short.
 type sweepResult struct {
-	tasks     []scoredTask
+	tasks []scoredTask
+	// truncated means the read ran out of budget with more still behind it.
 	truncated bool
+	// cancelled means the deadline or an interrupt ended the read. Kept apart
+	// from truncated so the user is not told the sweep "stopped at its page
+	// cap" when it in fact stopped after one page.
+	cancelled bool
 }
 
 // sweepPages pulls up to maxPages of tasks and filters them here, returning
@@ -450,7 +458,8 @@ func sweepPages(ctx context.Context, client *api.Client, teamID, query, extraPar
 	var res sweepResult
 	for page := 0; page < maxPages; page++ {
 		if ctx.Err() != nil {
-			break
+			res.cancelled = true
+			return res, nil
 		}
 
 		tasks, err := fetchTeamTasks(ctx, client, teamID, page, extraParams)
@@ -580,6 +589,12 @@ const maxSweepPages = 10
 // until something reconciles it, and this is that something.
 const cacheTTL = 7 * 24 * time.Hour
 
+// syncBudget caps how long a sync may take before the search gives up on it and
+// works with what it has. The rate limiter sleeps uninterruptibly for up to a
+// minute when the quota is exhausted, so a large rebuild can otherwise consume
+// the whole command deadline and return nothing.
+const syncBudget = 60 * time.Second
+
 // maxFullSyncPages bounds a cold rebuild. Far larger than maxSweepPages
 // because it is paid once a week rather than once a search.
 const maxFullSyncPages = 200
@@ -597,6 +612,7 @@ func toEntry(t searchTask) taskindex.Entry {
 		Name:        t.Name,
 		Description: t.Description,
 		Status:      t.Status.Status,
+		Priority:    t.Priority.Priority,
 		Parent:      t.Parent,
 		Assignees:   names,
 		URL:         t.URL,
@@ -612,6 +628,7 @@ func fromEntry(e taskindex.Entry) searchTask {
 	t.Name = e.Name
 	t.Description = e.Description
 	t.Status.Status = e.Status
+	t.Priority.Priority = e.Priority
 	t.Parent = e.Parent
 	t.URL = e.URL
 	t.DateUpdated = strconv.FormatInt(e.DateUpdated, 10)
@@ -623,26 +640,43 @@ func fromEntry(e taskindex.Entry) searchTask {
 	return t
 }
 
+// syncResult is what one sync pass managed to fetch, and whether it saw the
+// whole of what it asked for. A short slice and a complete one are otherwise
+// indistinguishable, which is how a capped fetch comes to be mistaken for the
+// whole workspace.
+type syncResult struct {
+	entries   []taskindex.Entry
+	truncated bool
+}
+
 // fetchEntries pulls tasks page by page until a page comes back empty, which is
 // the only trustworthy end-of-corpus signal ClickUp gives.
-func fetchEntries(ctx context.Context, client *api.Client, teamID, extraParams string, maxPages int) ([]taskindex.Entry, error) {
-	var out []taskindex.Entry
+//
+// It reports rather than returns a truncation: running out of pages or time is
+// a partial answer, not a failure, and the entries already fetched are worth
+// keeping. A hard API error is still an error, but the pages read before it are
+// handed back too.
+func fetchEntries(ctx context.Context, client *api.Client, teamID, extraParams string, maxPages int) (syncResult, error) {
+	var res syncResult
 	for page := 0; page < maxPages; page++ {
 		if ctx.Err() != nil {
-			return out, ctx.Err()
+			res.truncated = true
+			return res, nil
 		}
 		tasks, err := fetchTeamTasks(ctx, client, teamID, page, extraParams)
 		if err != nil {
-			return nil, err
+			res.truncated = true
+			return res, err
 		}
 		if len(tasks) == 0 {
-			return out, nil
+			return res, nil
 		}
 		for _, t := range tasks {
-			out = append(out, toEntry(t))
+			res.entries = append(res.entries, toEntry(t))
 		}
 	}
-	return out, nil
+	res.truncated = true
+	return res, nil
 }
 
 // searchViaIndex answers from the local mirror, topping it up first.
@@ -659,26 +693,55 @@ func searchViaIndex(ctx context.Context, opts *searchOptions, client *api.Client
 		return sweepResult{}, err
 	}
 
+	// The sync gets its own budget so a slow rebuild cannot eat the whole
+	// command's deadline and come back with nothing to show for it.
+	syncCtx, cancel := context.WithTimeout(ctx, syncBudget)
+	defer cancel()
+
+	var (
+		changed bool
+		syncErr error
+		res     syncResult
+	)
 	if idx.NeedsFullSync(now, cacheTTL) {
-		fmt.Fprintf(ios.ErrOut, "  building local index (first run)...\n")
-		entries, err := fetchEntries(ctx, client, teamID, "subtasks=true", maxFullSyncPages)
-		if err != nil {
-			return sweepResult{}, err
+		if len(idx.Entries) == 0 {
+			fmt.Fprintf(ios.ErrOut, "  building local index (first run, this one is slow)...\n")
+		} else {
+			fmt.Fprintf(ios.ErrOut, "  rebuilding local index...\n")
 		}
-		idx.Replace(entries, now)
+		res, syncErr = fetchEntries(syncCtx, client, teamID, "subtasks=true", maxFullSyncPages)
+		if res.truncated {
+			// A fetch that did not see the whole workspace cannot be used to
+			// decide what has been deleted from it, so merge rather than replace.
+			changed = idx.MergePartial(res.entries, now)
+		} else {
+			idx.Replace(res.entries, now)
+			changed = true
+		}
 	} else {
 		fmt.Fprintf(ios.ErrOut, "  searching local index...\n")
 		params := fmt.Sprintf("subtasks=true&date_updated_gt=%d", idx.Since())
-		entries, err := fetchEntries(ctx, client, teamID, params, maxFullSyncPages)
-		if err != nil {
-			return sweepResult{}, err
+		res, syncErr = fetchEntries(syncCtx, client, teamID, params, maxFullSyncPages)
+		if res.truncated {
+			changed = idx.MergeKeepingWatermark(res.entries)
+		} else {
+			changed = idx.Merge(res.entries)
 		}
-		idx.Merge(entries)
 	}
 
-	// A cache that cannot be written is a slower search, not a failed one.
-	if err := taskindex.Save(dir, idx); err != nil {
-		fmt.Fprintf(ios.ErrOut, "warning: could not write task index: %v\n", err)
+	// Persist before reacting to any error. Whatever was fetched is what stops
+	// the next run from repeating the same doomed sync from scratch.
+	if changed {
+		if err := taskindex.Save(dir, idx); err != nil {
+			fmt.Fprintf(ios.ErrOut, "warning: could not write task index: %v\n", err)
+		}
+	}
+
+	if syncErr != nil {
+		if len(idx.Entries) == 0 {
+			return sweepResult{}, syncErr
+		}
+		fmt.Fprintf(ios.ErrOut, "warning: index sync incomplete (%v); searching what is cached\n", syncErr)
 	}
 
 	entries := idx.All()
@@ -701,9 +764,10 @@ func searchViaIndex(ctx context.Context, opts *searchOptions, client *api.Client
 	}
 
 	matched, _ := filterTasks(query, tasks)
-	// The index holds the whole workspace, so no page cap applies: nothing to
-	// disclose.
-	return sweepResult{tasks: matched}, nil
+	// An index that does not cover the workspace is disclosed the same way a
+	// capped sweep is. Serving the answer from a cache changes nothing about
+	// the user's right to know the answer is partial.
+	return sweepResult{tasks: matched, truncated: idx.Partial || res.truncated}, nil
 }
 
 // doSearch performs the actual search using progressive drill-down or
@@ -781,7 +845,21 @@ func doSearch(ctx context.Context, opts *searchOptions) (sweepResult, error) {
 	// serve fall through: --comments needs comment bodies it does not hold, and
 	// --assignee is one of the few filters ClickUp genuinely applies server-side.
 	if !opts.noCache && !opts.comments && opts.assignee == "" {
-		return searchViaIndex(ctx, opts, client, teamID, query)
+		res, err := searchViaIndex(ctx, opts, client, teamID, query)
+		if err != nil {
+			return res, err
+		}
+		if len(res.tasks) > 0 || !res.truncated {
+			// A complete index covers the same tasks the space walk would visit,
+			// so an empty result from it is the answer, not a reason to spend
+			// minutes walking every list to hear the same thing.
+			return res, nil
+		}
+		// An incomplete index genuinely may be missing the task, so the walk is
+		// worth its cost here.
+		fmt.Fprintf(ios.ErrOut, "Local index is incomplete; falling back to space/folder search...\n")
+		tasks, err := searchViaSpaces(ctx, opts)
+		return sweepResult{tasks: tasks, truncated: res.truncated}, err
 	}
 
 	// One pass over the workspace, filtered here. There is no cheaper place to

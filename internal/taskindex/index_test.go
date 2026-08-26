@@ -182,3 +182,82 @@ func TestIndex_RemembersParent(t *testing.T) {
 
 	assert.Equal(t, "parent", idx.Entries["child"].Parent)
 }
+
+// ---------------------------------------------------------------------------
+// Truncated syncs
+// ---------------------------------------------------------------------------
+
+// A capped incremental fetch reads newest-first down to some floor, leaving a
+// gap between the old watermark and that floor. Advancing the watermark past
+// the gap would make those tasks permanently invisible: they are older than
+// the new watermark, so no later incremental sync would ever ask for them.
+// Re-reading is cheap; losing them is not.
+func TestIndex_MergeKeepingWatermarkDoesNotAdvancePastAGap(t *testing.T) {
+	idx := New("12345")
+	idx.Merge([]Entry{entry("old", "Old", 100)})
+
+	idx.MergeKeepingWatermark([]Entry{entry("new", "New", 9_000)})
+
+	assert.Contains(t, idx.Entries, "new", "entries still merge")
+	assert.Equal(t, int64(100), idx.SyncedAt, "watermark advanced over an unread gap")
+}
+
+// A capped full sync has not seen the whole workspace, so it must not be used
+// to decide what no longer exists.
+func TestIndex_MarkPartialKeepsUnseenEntries(t *testing.T) {
+	idx := New("12345")
+	idx.Merge([]Entry{entry("older", "Older task", 100)})
+
+	now := time.UnixMilli(9_000_000)
+	idx.MergePartial([]Entry{entry("newer", "Newer task", 500)}, now)
+
+	assert.Contains(t, idx.Entries, "older", "a capped rebuild deleted what it never read")
+	assert.Contains(t, idx.Entries, "newer")
+	assert.True(t, idx.Partial, "index not flagged incomplete")
+}
+
+// The reconcile clock still ticks on a partial rebuild, otherwise every search
+// retries the same oversized sync.
+func TestIndex_MarkPartialStillRecordsTheAttempt(t *testing.T) {
+	idx := New("12345")
+	now := time.UnixMilli(9_000_000)
+	idx.MergePartial(nil, now)
+
+	assert.False(t, idx.NeedsFullSync(now, time.Hour), "partial rebuild retries immediately")
+}
+
+// A complete rebuild clears the incomplete flag.
+func TestIndex_ReplaceClearsPartial(t *testing.T) {
+	idx := New("12345")
+	idx.MergePartial(nil, time.UnixMilli(1))
+	idx.Replace([]Entry{entry("a", "A", 100)}, time.UnixMilli(2))
+
+	assert.False(t, idx.Partial)
+}
+
+// ---------------------------------------------------------------------------
+// Change tracking
+// ---------------------------------------------------------------------------
+
+// The common case is a search that changes nothing. Rewriting a multi-megabyte
+// index for that undercuts the point of having one.
+func TestIndex_MergeReportsWhetherAnythingChanged(t *testing.T) {
+	idx := New("12345")
+	assert.True(t, idx.Merge([]Entry{entry("a", "A", 100)}), "first insert is a change")
+	assert.False(t, idx.Merge([]Entry{entry("a", "A", 100)}), "identical re-merge is not a change")
+	assert.True(t, idx.Merge([]Entry{entry("a", "A renamed", 200)}), "updated task is a change")
+	assert.False(t, idx.Merge(nil), "empty merge is not a change")
+}
+
+// ---------------------------------------------------------------------------
+// Projection completeness
+// ---------------------------------------------------------------------------
+
+// Priority is rendered in --json output. If the index drops it, the same query
+// returns different JSON depending on whether the cache was warm.
+func TestIndex_KeepsPriority(t *testing.T) {
+	idx := New("12345")
+	idx.Merge([]Entry{{ID: "a", Name: "A", Priority: "high", DateUpdated: 100}})
+
+	assert.Equal(t, "high", idx.Entries["a"].Priority)
+}

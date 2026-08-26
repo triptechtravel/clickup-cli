@@ -38,6 +38,10 @@ type Entry struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
 	Status      string `json:"status,omitempty"`
+	// Priority is kept because search renders it in --json. Dropping it would
+	// make the same query emit different JSON depending on whether the cache
+	// happened to be warm.
+	Priority string `json:"priority,omitempty"`
 	// Parent is the parent task ID, empty for top-level tasks. The sync always
 	// pulls subtasks so one cache serves both --include-subtasks and plain
 	// searches; this is what lets the caller tell them apart.
@@ -45,6 +49,23 @@ type Entry struct {
 	Assignees   []string `json:"assignees,omitempty"`
 	URL         string   `json:"url,omitempty"`
 	DateUpdated int64    `json:"date_updated"`
+}
+
+// equal reports whether two entries carry the same data. Written out because
+// Entry holds a slice and so is not comparable with ==.
+func (e Entry) equal(o Entry) bool {
+	if e.ID != o.ID || e.CustomID != o.CustomID || e.Name != o.Name ||
+		e.Description != o.Description || e.Status != o.Status ||
+		e.Priority != o.Priority || e.Parent != o.Parent || e.URL != o.URL ||
+		e.DateUpdated != o.DateUpdated || len(e.Assignees) != len(o.Assignees) {
+		return false
+	}
+	for i := range e.Assignees {
+		if e.Assignees[i] != o.Assignees[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // Index is a workspace's task mirror plus the bookkeeping needed to refresh it.
@@ -55,8 +76,12 @@ type Index struct {
 	// FullSyncAt is when the index was last rebuilt from scratch, in epoch
 	// millis. Incremental syncs cannot see deletions, so only a rebuild can
 	// drop tasks that have gone away.
-	FullSyncAt int64            `json:"full_sync_at"`
-	Entries    map[string]Entry `json:"entries"`
+	FullSyncAt int64 `json:"full_sync_at"`
+	// Partial records that the last rebuild hit its page cap and so does not
+	// cover the whole workspace. Searches served from it must disclose that
+	// rather than presenting an empty result as authoritative.
+	Partial bool             `json:"partial,omitempty"`
+	Entries map[string]Entry `json:"entries"`
 }
 
 // New returns an empty index for a workspace.
@@ -64,18 +89,44 @@ func New(workspace string) *Index {
 	return &Index{Workspace: workspace, Entries: map[string]Entry{}}
 }
 
-// Merge upserts entries by ID and advances the watermark. It never removes
-// anything, and never moves the watermark backwards.
-func (i *Index) Merge(entries []Entry) {
+// Merge upserts entries by ID and advances the watermark, reporting whether
+// anything actually changed. It never removes anything, and never moves the
+// watermark backwards.
+func (i *Index) Merge(entries []Entry) bool {
+	changed := i.upsert(entries)
+	for _, e := range entries {
+		if e.DateUpdated > i.SyncedAt {
+			i.SyncedAt = e.DateUpdated
+			changed = true
+		}
+	}
+	return changed
+}
+
+// MergeKeepingWatermark upserts entries without advancing the watermark.
+//
+// For a fetch that was cut short. The fetch reads newest-first, so a capped run
+// covers [floor, newest] and leaves [watermark, floor) unread. Advancing to
+// `newest` would strand that gap for good — everything in it is older than the
+// new watermark, so no later incremental sync would ask for it again. Standing
+// still costs a repeated read; moving costs the tasks.
+func (i *Index) MergeKeepingWatermark(entries []Entry) bool {
+	return i.upsert(entries)
+}
+
+func (i *Index) upsert(entries []Entry) bool {
 	if i.Entries == nil {
 		i.Entries = map[string]Entry{}
 	}
+	changed := false
 	for _, e := range entries {
-		i.Entries[e.ID] = e
-		if e.DateUpdated > i.SyncedAt {
-			i.SyncedAt = e.DateUpdated
+		if existing, ok := i.Entries[e.ID]; ok && existing.equal(e) {
+			continue
 		}
+		i.Entries[e.ID] = e
+		changed = true
 	}
+	return changed
 }
 
 // Replace rebuilds the index from a complete fetch, dropping anything absent
@@ -85,6 +136,23 @@ func (i *Index) Replace(entries []Entry, at time.Time) {
 	i.SyncedAt = 0
 	i.Merge(entries)
 	i.FullSyncAt = at.UnixMilli()
+	i.Partial = false
+}
+
+// MergePartial records a rebuild that hit its page cap. It merges rather than
+// replaces — a fetch that did not see the whole workspace cannot be used to
+// decide what has been deleted from it — and flags the index incomplete.
+//
+// The reconcile clock is still stamped: without that, an index too large to
+// rebuild in one pass would retry the same oversized sync on every search.
+func (i *Index) MergePartial(entries []Entry, at time.Time) bool {
+	changed := i.Merge(entries)
+	i.FullSyncAt = at.UnixMilli()
+	if !i.Partial {
+		i.Partial = true
+		changed = true
+	}
+	return changed
 }
 
 // Since returns the date_updated_gt value for the next incremental sync, or 0

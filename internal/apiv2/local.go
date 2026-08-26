@@ -355,7 +355,10 @@ func DeleteDependencyLocal(ctx context.Context, client *api.Client, taskID, qs s
 // FetchTeamTasks fetches one page of tasks from the team endpoint with optional
 // extra query params. Used by inbox and view for paginated team task fetching.
 func FetchTeamTasks(ctx context.Context, client *api.Client, teamID string, page int, extraParams string) ([]clickup.Task, error) {
-	path := fmt.Sprintf("team/%s/task?include_closed=true&page=%d&order_by=updated&reverse=true",
+	// Newest first. Callers page through a prefix of this, and reverse=true is
+	// ascending at ClickUp, so asking for it pointed them at the oldest tasks
+	// in the workspace.
+	path := fmt.Sprintf("team/%s/task?include_closed=true&page=%d&order_by=updated",
 		teamID, page)
 	if extraParams != "" {
 		path += "&" + extraParams

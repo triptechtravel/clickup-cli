@@ -48,7 +48,9 @@ clickup task view 86abc1 86abc2 86abc3 --json
 clickup task view 86abc1 86abc2 86abc3 --jq '[.[] | {id: .id, tags: [.tags[].name]}]'
 
 # Search tasks by name and description (supports fuzzy matching)
-# Uses server-side search (Level 0) with parallel space traversal
+# Matching is local: ClickUp ignores the API's search param, so the CLI keeps
+# an index of the workspace (~/.cache/clickup) and tops it up per run.
+# First search builds it (slow); later ones cover every task in ~1 request.
 clickup task search "login bug"
 clickup task search "login bug" --exact    # Exact matches only
 clickup task search "login bug" --assignee me       # Only your tasks
@@ -662,7 +664,15 @@ clickup task checklist item edit <checklist-id> <item-id1> <item-id2> --assignee
 - **Naming conventions**: Task names follow `[Work Type] Context — Action (Platform)` format for sprint-board scannability. Check existing tasks in the list for the prevailing convention before creating
 - **Tag reuse**: Always check available tags with `clickup tag list` before creating tasks. Use existing tags for consistency; don't invent new ones without user confirmation
 - **Per-directory config**: `folder select --local` and `list select --local` store defaults in the current directory, useful for monorepos with different ClickUp contexts
-- **Server-side search**: `task search` uses ClickUp's server-side search with parallel space traversal for faster results
+- **There is no server-side search**: ClickUp accepts `search=` on the task
+  endpoint and ignores it, so `task search` matches locally against a cached
+  index of the workspace. Consequences worth knowing: the first search on a
+  machine is slow while the index builds; `--no-cache`, `--comments` and
+  `--assignee` bypass the index and only read the most recently updated tasks;
+  and that bypass path prints a `Not shown:` line when it hits its page cap.
+  Never read an empty result as proof of absence without checking that line —
+  and if a task is old and the index is cold, `--space`/`--folder` walks the
+  full tree
 - **Assignee shortcut**: `task search --assignee me` filters results to the authenticated user; also accepts names, usernames, or IDs
 - **Contextual task list**: `task list` falls back to the configured default list (via `list select`) when no `--list-id` is given
 - **Bulk delete**: `task delete ID1 ID2 ID3 -y` deletes multiple tasks in one command

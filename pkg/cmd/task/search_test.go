@@ -1,6 +1,7 @@
 package task
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -388,10 +389,14 @@ func searchTasksJSON(pairs ...[2]string) string {
 	list := make([]map[string]any, 0, len(pairs))
 	for _, p := range pairs {
 		list = append(list, map[string]any{
-			"id":        p[0],
-			"name":      p[1],
-			"status":    map[string]any{"status": "open"},
-			"assignees": []any{},
+			"id":     p[0],
+			"name":   p[1],
+			"status": map[string]any{"status": "open"},
+			// Non-zero and newer than the fixtures' watermarks, so a sync that
+			// merges these would visibly move the watermark. Without it, tests
+			// about watermark movement pass whatever the code does.
+			"date_updated": "9000000",
+			"assignees":    []any{},
 		})
 	}
 	b, _ := json.Marshal(map[string]any{"tasks": list})
@@ -579,4 +584,21 @@ func TestSearch_SweepsNewestFirst(t *testing.T) {
 		assert.Contains(t, u, "order_by=updated")
 		assert.NotContains(t, u, "reverse=true", "reverse=true orders oldest-first")
 	}
+}
+
+// A sweep cut short by the deadline has not "stopped at its 10-page cap", and
+// saying so misstates how much of the workspace was actually read.
+func TestSweepPages_CancellationIsNotReportedAsAPageCap(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	tf.Handle("GET", "team/12345/task", 200, searchTasksJSON(fillerPairs(100)...))
+	client, _ := tf.Factory.ApiClient()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	res, err := sweepPages(ctx, client, "12345", "anything", "", maxSweepPages, false)
+
+	assert.NoError(t, err)
+	assert.False(t, res.truncated, "a cancelled sweep claimed it hit the page cap")
+	assert.True(t, res.cancelled, "cancellation not reported")
 }

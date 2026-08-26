@@ -36,6 +36,32 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# search_finds <expected-id> <query> [extra args...]
+#
+# Runs a search and asserts the id appears in stdout. Deliberately captures to a
+# file rather than piping into `grep -q`: grep exits on its first match, the CLI
+# takes SIGPIPE mid-write, and under `set -o pipefail` that surfaces as a failed
+# assertion at random. It also cost a real debugging session, so it is written
+# down here rather than rediscovered.
+search_finds() {
+  local expected="$1" query="$2"; shift 2
+  local out err rc
+  out="$(mktemp)"; err="$(mktemp)"
+  set +e
+  "$BIN" task search "$query" "$@" > "$out" 2> "$err"
+  rc=$?
+  set -e
+  if ! grep -q "$expected" "$out"; then
+    printf '  search exited %s\n  stdout:\n' "$rc" >&2
+    sed 's/^/    /' "$out" >&2
+    printf '  stderr:\n' >&2
+    sed 's/^/    /' "$err" >&2
+    rm -f "$out" "$err"
+    return 1
+  fi
+  rm -f "$out" "$err"
+}
+
 step() { printf '\n→ %s\n' "$1"; }
 ok()   { printf '  ✓ %s\n' "$1"; }
 fail() { printf '  ✗ %s\n' "$1" >&2; exit 1; }
@@ -152,21 +178,21 @@ fi
 
 # --- search end-to-end ----------------------------------------------------
 step "task search --no-cache — live sweep finds a freshly created task"
-"$BIN" task search "$TOKEN" --no-cache --exact 2>/dev/null | grep -q "$PARENT_ID" \
+search_finds "$PARENT_ID" "$TOKEN" --no-cache --exact \
   || fail "live search did not find $PARENT_ID"
 ok "live sweep found it"
 
 step "task search (indexed) — builds an index, finds it, and persists"
 SMOKE_CACHE="$(mktemp -d)"
 # First run is a cold build over the whole workspace and is expected to be slow.
-CLICKUP_CACHE_DIR="$SMOKE_CACHE" "$BIN" task search "$TOKEN" --exact 2>/dev/null \
-  | grep -q "$PARENT_ID" || fail "indexed search did not find $PARENT_ID"
+CLICKUP_CACHE_DIR="$SMOKE_CACHE" search_finds "$PARENT_ID" "$TOKEN" --exact \
+  || fail "indexed search did not find $PARENT_ID"
 ls "$SMOKE_CACHE"/index-*.json > /dev/null 2>&1 || fail "no index written"
 ok "index built and search matched"
 
 step "task search (warm index) — second run stays correct"
-CLICKUP_CACHE_DIR="$SMOKE_CACHE" "$BIN" task search "$TOKEN" --exact 2>/dev/null \
-  | grep -q "$PARENT_ID" || fail "warm indexed search lost $PARENT_ID"
+CLICKUP_CACHE_DIR="$SMOKE_CACHE" search_finds "$PARENT_ID" "$TOKEN" --exact \
+  || fail "warm indexed search lost $PARENT_ID"
 ok "warm index still matched"
 
 # --- bulk task delete (zsh-quirk regression) ------------------------------

@@ -290,3 +290,195 @@ func TestSearch_CorruptCacheFallsBackToFullSync(t *testing.T) {
 func writeFileHelper(dir, name, content string) error {
 	return os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600)
 }
+
+// ---------------------------------------------------------------------------
+// Sync failure and truncation
+// ---------------------------------------------------------------------------
+
+// The worst outcome available: a cold build that cannot finish, discarded, so
+// every later search repeats it and search never works again on a workspace
+// large enough to need the index most. Whatever was fetched has to survive.
+func TestSearch_PartialColdSyncIsPersisted(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	dir := tf.CacheDir
+
+	// Page 0 lands, page 1 fails: a stand-in for the deadline or a 5xx.
+	tf.HandleFunc("team/12345/task", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("page") != "0" {
+			w.WriteHeader(500)
+			_, _ = w.Write([]byte(`{"err":"boom"}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-RateLimit-Remaining", "99")
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(searchTasksJSON(append(fillerPairs(99), [2]string{"A", "5.6.1 card"})...)))
+	})
+
+	cmd := NewCmdSearch(tf.Factory)
+	if err := testutil.RunCommand(t, cmd, "5.6.1"); err != nil {
+		t.Fatalf("a partial sync should degrade, not fail: %v", err)
+	}
+
+	idx, _ := taskindex.Load(dir, "12345")
+	assert.Contains(t, idx.Entries, "A", "partial sync discarded — next run repeats it")
+	assert.Contains(t, tf.OutBuf.String(), "5.6.1 card", "fetched data not searched")
+}
+
+// An index that does not cover the workspace must say so. This is the same
+// contract the live sweep honours; serving it from a cache changes nothing.
+func TestSearch_PartialIndexDisclosesIncompleteness(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	idx := taskindex.New("12345")
+	idx.MergePartial([]taskindex.Entry{
+		{ID: "a", Name: "5.6.1 card", DateUpdated: 1_000_000},
+	}, time.Now())
+	if err := taskindex.Save(tf.CacheDir, idx); err != nil {
+		t.Fatal(err)
+	}
+	recordingMux(tf, nil)
+
+	cmd := NewCmdSearch(tf.Factory)
+	if err := testutil.RunCommand(t, cmd, "5.6.1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	assert.Contains(t, tf.ErrBuf.String(), "Not shown:", "partial index passed off as complete")
+}
+
+// A capped incremental sync must not advance the watermark over the range it
+// never read, or those tasks are invisible until the weekly rebuild.
+func TestSearch_TruncatedIncrementalSyncHoldsTheWatermark(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	dir := tf.CacheDir
+	idx := taskindex.New("12345")
+	idx.Replace([]taskindex.Entry{{ID: "seed", Name: "Seed", DateUpdated: 1_000_000}}, time.Now())
+	if err := taskindex.Save(dir, idx); err != nil {
+		t.Fatal(err)
+	}
+
+	// Every page full, so the fetch runs to its cap and is truncated.
+	full := searchTasksJSON(fillerPairs(100)...)
+	pages := map[int]string{}
+	for i := 0; i < maxFullSyncPages+1; i++ {
+		pages[i] = full
+	}
+	recordingMux(tf, pages)
+	// The query matches nothing, so search now falls through to the space walk.
+	tf.Handle("GET", "team/12345/space", 200, `{"spaces":[]}`)
+
+	cmd := NewCmdSearch(tf.Factory)
+	if err := testutil.RunCommand(t, cmd, "nothingmatchesthis"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	reloaded, _ := taskindex.Load(dir, "12345")
+	assert.Equal(t, int64(1_000_000), reloaded.SyncedAt,
+		"watermark advanced past a range the capped sync never read")
+}
+
+// Nothing changed upstream, so nothing should be rewritten. The index is
+// multi-megabyte; a needless read-modify-write per search undoes the win.
+func TestSearch_WarmNoChangeSyncDoesNotRewriteTheIndex(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	dir := tf.CacheDir
+	idx := taskindex.New("12345")
+	idx.Replace([]taskindex.Entry{{ID: "a", Name: "5.6.1 card", DateUpdated: 1_000_000}}, time.Now())
+	if err := taskindex.Save(dir, idx); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(filepath.Join(dir, "index-12345.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	recordingMux(tf, nil) // API reports nothing changed
+
+	cmd := NewCmdSearch(tf.Factory)
+	if err := testutil.RunCommand(t, cmd, "5.6.1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	after, err := os.Stat(filepath.Join(dir, "index-12345.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, before.ModTime(), after.ModTime(), "index rewritten with no changes")
+}
+
+// A complete index covers the same tasks the space walk would visit, so "no
+// match" is authoritative and walking every list in the workspace can only
+// spend minutes to confirm it. Say so instead.
+func TestSearch_CompleteIndexWithNoMatchDoesNotWalkTheTree(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	idx := taskindex.New("12345")
+	idx.Replace([]taskindex.Entry{{ID: "a", Name: "Something else", DateUpdated: 1_000_000}}, time.Now())
+	if err := taskindex.Save(tf.CacheDir, idx); err != nil {
+		t.Fatal(err)
+	}
+	recordingMux(tf, nil)
+
+	var walked bool
+	tf.HandleFunc("team/12345/space", func(w http.ResponseWriter, r *http.Request) {
+		walked = true
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-RateLimit-Remaining", "99")
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{"spaces":[]}`))
+	})
+
+	cmd := NewCmdSearch(tf.Factory)
+	if err := testutil.RunCommand(t, cmd, "5.6.1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	assert.False(t, walked, "walked the whole tree to confirm a complete index")
+}
+
+// An incomplete index is a different story: it genuinely may be missing the
+// task, so the walk is worth its cost.
+func TestSearch_PartialIndexWithNoMatchFallsBackToSpaceWalk(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	idx := taskindex.New("12345")
+	idx.MergePartial([]taskindex.Entry{
+		{ID: "a", Name: "Something else", DateUpdated: 1_000_000},
+	}, time.Now())
+	if err := taskindex.Save(tf.CacheDir, idx); err != nil {
+		t.Fatal(err)
+	}
+	recordingMux(tf, nil)
+
+	var walked bool
+	tf.HandleFunc("team/12345/space", func(w http.ResponseWriter, r *http.Request) {
+		walked = true
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-RateLimit-Remaining", "99")
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{"spaces":[]}`))
+	})
+
+	cmd := NewCmdSearch(tf.Factory)
+	if err := testutil.RunCommand(t, cmd, "5.6.1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	assert.True(t, walked, "no fallback despite an admittedly incomplete index")
+}
+
+// A weekly rebuild is not a first run, and telling the user it is makes a
+// multi-minute wait look like something has gone wrong.
+func TestSearch_RebuildIsNotAnnouncedAsAFirstRun(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	idx := taskindex.New("12345")
+	idx.Replace([]taskindex.Entry{{ID: "a", Name: "5.6.1 card", DateUpdated: 1_000}}, time.Now().Add(-2*cacheTTL))
+	if err := taskindex.Save(tf.CacheDir, idx); err != nil {
+		t.Fatal(err)
+	}
+	recordingMux(tf, map[int]string{0: searchTasksJSON([2]string{"a", "5.6.1 card"})})
+
+	cmd := NewCmdSearch(tf.Factory)
+	if err := testutil.RunCommand(t, cmd, "5.6.1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	assert.NotContains(t, tf.ErrBuf.String(), "first run")
+}

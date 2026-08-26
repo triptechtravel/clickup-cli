@@ -247,7 +247,10 @@ func searchTasks(f *cmdutil.Factory, query string) ([]resolveSearchTask, error) 
 			break
 		}
 
-		path := fmt.Sprintf("team/%s/task?include_closed=true&page=%d&order_by=updated&reverse=true",
+		// Newest first: this reads at most maxSearchPages, and someone resolving
+		// a task by name is looking for a recent one. reverse=true is ascending
+		// at ClickUp, which spent that budget on the oldest tasks instead.
+		path := fmt.Sprintf("team/%s/task?include_closed=true&page=%d&order_by=updated",
 			teamID, page)
 
 		var result resolveSearchResponse
