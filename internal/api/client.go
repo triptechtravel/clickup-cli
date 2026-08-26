@@ -35,7 +35,7 @@ func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 
-	resp, err := t.base.RoundTrip(req)
+	resp, err := t.send(req)
 	if err != nil {
 		return resp, err
 	}
@@ -48,7 +48,7 @@ func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		if err := t.rl.WaitContext(req.Context()); err != nil {
 			return nil, err
 		}
-		resp, err = t.base.RoundTrip(req)
+		resp, err = t.send(req)
 		if err != nil {
 			return resp, err
 		}
