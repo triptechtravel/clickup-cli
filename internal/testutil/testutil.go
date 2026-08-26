@@ -28,6 +28,10 @@ type TestFactory struct {
 	ErrBuf  *bytes.Buffer
 	Server  *httptest.Server
 	Mux     *http.ServeMux
+	// CacheDir is a throwaway directory the CLI's cache is pointed at for the
+	// duration of the test, so no test can read or write the developer's real
+	// ~/.cache/clickup.
+	CacheDir string
 }
 
 // NewTestFactory creates a fully wired test environment:
@@ -46,6 +50,9 @@ func NewTestFactory(t *testing.T) *TestFactory {
 		ErrOut: errBuf,
 	}
 
+	cacheDir := t.TempDir()
+	t.Setenv("CLICKUP_CACHE_DIR", cacheDir)
+
 	mux := http.NewServeMux()
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
@@ -61,12 +68,13 @@ func NewTestFactory(t *testing.T) *TestFactory {
 	})
 
 	return &TestFactory{
-		Factory: f,
-		IOS:     ios,
-		OutBuf:  outBuf,
-		ErrBuf:  errBuf,
-		Server:  server,
-		Mux:     mux,
+		Factory:  f,
+		IOS:      ios,
+		OutBuf:   outBuf,
+		ErrBuf:   errBuf,
+		Server:   server,
+		Mux:      mux,
+		CacheDir: cacheDir,
 	}
 }
 

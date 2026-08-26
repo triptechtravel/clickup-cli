@@ -299,3 +299,20 @@ func TestSaveAndLoadWithDirectoryDefaults(t *testing.T) {
 		t.Errorf("SpaceForDir(/projects/other) = %q, want %q", got, "global-space")
 	}
 }
+
+func TestCacheDir_EnvOverride(t *testing.T) {
+	t.Setenv("CLICKUP_CACHE_DIR", "/tmp/clickup-cache-test")
+
+	if got, want := CacheDir(), "/tmp/clickup-cache-test"; got != want {
+		t.Errorf("CacheDir() = %q, want %q", got, want)
+	}
+}
+
+func TestCacheDir_Default(t *testing.T) {
+	t.Setenv("CLICKUP_CACHE_DIR", "")
+	t.Setenv("HOME", "/home/tester")
+
+	if got, want := CacheDir(), "/home/tester/.cache/clickup"; got != want {
+		t.Errorf("CacheDir() = %q, want %q", got, want)
+	}
+}

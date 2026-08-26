@@ -15,9 +15,11 @@ import (
 	"github.com/triptechtravel/clickup-cli/internal/api"
 	"github.com/triptechtravel/clickup-cli/internal/apiv2"
 	"github.com/triptechtravel/clickup-cli/internal/clickup"
+	"github.com/triptechtravel/clickup-cli/internal/config"
 	"github.com/triptechtravel/clickup-cli/internal/iostreams"
 	"github.com/triptechtravel/clickup-cli/internal/prompter"
 	"github.com/triptechtravel/clickup-cli/internal/tableprinter"
+	"github.com/triptechtravel/clickup-cli/internal/taskindex"
 	"github.com/triptechtravel/clickup-cli/pkg/cmdutil"
 )
 
@@ -31,6 +33,7 @@ type searchOptions struct {
 	comments        bool
 	exact           bool
 	includeSubtasks bool
+	noCache         bool
 	jsonFlags       cmdutil.JSONFlags
 }
 
@@ -48,7 +51,9 @@ type searchTask struct {
 	Assignees []struct {
 		Username string `json:"username"`
 	} `json:"assignees"`
-	URL string `json:"url"`
+	URL         string `json:"url"`
+	Parent      string `json:"parent"`
+	DateUpdated string `json:"date_updated"` // epoch millis, as a string
 }
 
 type searchResponse struct {
@@ -128,14 +133,22 @@ func NewCmdSearch(f *cmdutil.Factory) *cobra.Command {
 		Long: `Search ClickUp tasks across the workspace by name and description.
 
 Returns tasks whose names or descriptions match the search query. Matching
-priority: name substring > name fuzzy > description substring. When no
---space or --folder is specified, search uses progressive drill-down:
-server-side search first, then sprint tasks, then your assigned tasks,
-then configured space, then full workspace.
+priority: name substring > name fuzzy > description substring.
 
-Use --space and --folder to narrow the search scope for faster results.
-Use --comments to also search through task comments (slower).
-Use --assignee to filter by team member (name, username, ID, or "me").
+ClickUp has no server-side text search, so matching happens locally. To keep
+that from meaning "paginate the workspace on every search", the CLI keeps an
+index of the workspace under ~/.cache/clickup (override with CLICKUP_CACHE_DIR)
+and tops it up with only what changed since the last run. The first search
+builds the index and is slow; later ones read every task in the workspace for
+about one request. The index is rebuilt weekly so that deleted and archived
+tasks fall out of it.
+
+Use --no-cache to skip the index and query the API directly. That path reads
+only the most recently updated tasks and says so when it runs out of budget.
+--comments and --assignee also bypass the index.
+
+Use --space and --folder to search a specific part of the tree instead; this
+reaches tasks of any age, at the cost of walking every list.
 
 In interactive mode (TTY), if many results are found you will be asked
 whether to refine the search. Use --pick to interactively select a single
@@ -195,6 +208,7 @@ recently updated tasks and discover which folders/lists to search in.`,
 	cmd.Flags().BoolVar(&opts.comments, "comments", false, "Also search through task comments (slower)")
 	cmd.Flags().BoolVar(&opts.exact, "exact", false, "Only show exact substring matches (no fuzzy results)")
 	cmd.Flags().BoolVar(&opts.includeSubtasks, "include-subtasks", false, "Include subtasks in search results")
+	cmd.Flags().BoolVar(&opts.noCache, "no-cache", false, "Bypass the local task index and query the API directly")
 	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 
 	return cmd
@@ -561,6 +575,137 @@ func resolveAssigneeFromMembers(members []clickup.TeamUser, input string, curren
 // an absence of rows read as "there is nothing else".
 const maxSweepPages = 10
 
+// cacheTTL is how long the local index goes before a full rebuild. Incremental
+// syncs only ever add: a task deleted or archived upstream stays in the mirror
+// until something reconciles it, and this is that something.
+const cacheTTL = 7 * 24 * time.Hour
+
+// maxFullSyncPages bounds a cold rebuild. Far larger than maxSweepPages
+// because it is paid once a week rather than once a search.
+const maxFullSyncPages = 200
+
+// toEntry projects a fetched task into what the index keeps.
+func toEntry(t searchTask) taskindex.Entry {
+	names := make([]string, 0, len(t.Assignees))
+	for _, a := range t.Assignees {
+		names = append(names, a.Username)
+	}
+	updated, _ := strconv.ParseInt(t.DateUpdated, 10, 64)
+	return taskindex.Entry{
+		ID:          t.ID,
+		CustomID:    t.CustomID,
+		Name:        t.Name,
+		Description: t.Description,
+		Status:      t.Status.Status,
+		Parent:      t.Parent,
+		Assignees:   names,
+		URL:         t.URL,
+		DateUpdated: updated,
+	}
+}
+
+// fromEntry rebuilds enough of a task for matching and display.
+func fromEntry(e taskindex.Entry) searchTask {
+	var t searchTask
+	t.ID = e.ID
+	t.CustomID = e.CustomID
+	t.Name = e.Name
+	t.Description = e.Description
+	t.Status.Status = e.Status
+	t.Parent = e.Parent
+	t.URL = e.URL
+	t.DateUpdated = strconv.FormatInt(e.DateUpdated, 10)
+	for _, n := range e.Assignees {
+		t.Assignees = append(t.Assignees, struct {
+			Username string `json:"username"`
+		}{Username: n})
+	}
+	return t
+}
+
+// fetchEntries pulls tasks page by page until a page comes back empty, which is
+// the only trustworthy end-of-corpus signal ClickUp gives.
+func fetchEntries(ctx context.Context, client *api.Client, teamID, extraParams string, maxPages int) ([]taskindex.Entry, error) {
+	var out []taskindex.Entry
+	for page := 0; page < maxPages; page++ {
+		if ctx.Err() != nil {
+			return out, ctx.Err()
+		}
+		tasks, err := fetchTeamTasks(ctx, client, teamID, page, extraParams)
+		if err != nil {
+			return nil, err
+		}
+		if len(tasks) == 0 {
+			return out, nil
+		}
+		for _, t := range tasks {
+			out = append(out, toEntry(t))
+		}
+	}
+	return out, nil
+}
+
+// searchViaIndex answers from the local mirror, topping it up first.
+//
+// The sync always requests subtasks so one cache serves both modes; whether
+// they are shown is decided here, not at fetch time.
+func searchViaIndex(ctx context.Context, opts *searchOptions, client *api.Client, teamID, query string) (sweepResult, error) {
+	ios := opts.factory.IOStreams
+	dir := config.CacheDir()
+	now := time.Now()
+
+	idx, err := taskindex.Load(dir, teamID)
+	if err != nil {
+		return sweepResult{}, err
+	}
+
+	if idx.NeedsFullSync(now, cacheTTL) {
+		fmt.Fprintf(ios.ErrOut, "  building local index (first run)...\n")
+		entries, err := fetchEntries(ctx, client, teamID, "subtasks=true", maxFullSyncPages)
+		if err != nil {
+			return sweepResult{}, err
+		}
+		idx.Replace(entries, now)
+	} else {
+		fmt.Fprintf(ios.ErrOut, "  searching local index...\n")
+		params := fmt.Sprintf("subtasks=true&date_updated_gt=%d", idx.Since())
+		entries, err := fetchEntries(ctx, client, teamID, params, maxFullSyncPages)
+		if err != nil {
+			return sweepResult{}, err
+		}
+		idx.Merge(entries)
+	}
+
+	// A cache that cannot be written is a slower search, not a failed one.
+	if err := taskindex.Save(dir, idx); err != nil {
+		fmt.Fprintf(ios.ErrOut, "warning: could not write task index: %v\n", err)
+	}
+
+	entries := idx.All()
+	// Map iteration is unordered; without this, equally-scored matches would
+	// come out in a different order on every run. Newest first mirrors the
+	// live sweep.
+	sort.SliceStable(entries, func(a, b int) bool {
+		if entries[a].DateUpdated != entries[b].DateUpdated {
+			return entries[a].DateUpdated > entries[b].DateUpdated
+		}
+		return entries[a].ID < entries[b].ID
+	})
+
+	tasks := make([]searchTask, 0, len(entries))
+	for _, e := range entries {
+		if e.Parent != "" && !opts.includeSubtasks {
+			continue
+		}
+		tasks = append(tasks, fromEntry(e))
+	}
+
+	matched, _ := filterTasks(query, tasks)
+	// The index holds the whole workspace, so no page cap applies: nothing to
+	// disclose.
+	return sweepResult{tasks: matched}, nil
+}
+
 // doSearch performs the actual search using progressive drill-down or
 // the space/folder hierarchy (when --space or --folder is specified).
 func doSearch(ctx context.Context, opts *searchOptions) (sweepResult, error) {
@@ -630,6 +775,14 @@ func doSearch(ctx context.Context, opts *searchOptions) (sweepResult, error) {
 	}
 
 	query := strings.ToLower(opts.query)
+
+	// The index reads the whole workspace for about one request; the live sweep
+	// below reads a bounded prefix for ten. Only the cases the index cannot
+	// serve fall through: --comments needs comment bodies it does not hold, and
+	// --assignee is one of the few filters ClickUp genuinely applies server-side.
+	if !opts.noCache && !opts.comments && opts.assignee == "" {
+		return searchViaIndex(ctx, opts, client, teamID, query)
+	}
 
 	// One pass over the workspace, filtered here. There is no cheaper place to
 	// do it (see maxSweepPages) and no tier worth stopping at: the old

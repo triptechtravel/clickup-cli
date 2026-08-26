@@ -339,7 +339,7 @@ func TestSearch_MatchFromWorkspaceReachesOutput(t *testing.T) {
 	tf.Handle("GET", "user", 200, `{"user":{"id":100}}`)
 
 	cmd := NewCmdSearch(tf.Factory)
-	if err := testutil.RunCommand(t, cmd, "Bug"); err != nil {
+	if err := testutil.RunCommand(t, cmd, "Bug", "--no-cache"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -456,7 +456,7 @@ func TestSearch_ReturnsMatchesFromEveryPage(t *testing.T) {
 	}, searchTasksJSON([2]string{"A", "Tech debt 5.6.1 offline DB"}))
 
 	cmd := NewCmdSearch(tf.Factory)
-	if err := testutil.RunCommand(t, cmd, "5.6.1"); err != nil {
+	if err := testutil.RunCommand(t, cmd, "5.6.1", "--no-cache"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -479,7 +479,7 @@ func TestSearch_ContinuesPastUnderFullPage(t *testing.T) {
 	}, `{"tasks":[]}`)
 
 	cmd := NewCmdSearch(tf.Factory)
-	if err := testutil.RunCommand(t, cmd, "5.6.1"); err != nil {
+	if err := testutil.RunCommand(t, cmd, "5.6.1", "--no-cache"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -497,7 +497,7 @@ func TestSearch_StopsPaginatingOnEmptyPage(t *testing.T) {
 	}, `{"tasks":[]}`)
 
 	cmd := NewCmdSearch(tf.Factory)
-	if err := testutil.RunCommand(t, cmd, "5.6.1"); err != nil {
+	if err := testutil.RunCommand(t, cmd, "5.6.1", "--no-cache"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -520,7 +520,7 @@ func TestSearch_DisclosesTruncationAtPageCap(t *testing.T) {
 	urls := sweepMux(tf, pages, `{"tasks":[]}`)
 
 	cmd := NewCmdSearch(tf.Factory)
-	if err := testutil.RunCommand(t, cmd, "5.6.1"); err != nil {
+	if err := testutil.RunCommand(t, cmd, "5.6.1", "--no-cache"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -546,7 +546,7 @@ func TestSearch_OmitsIgnoredServerSideSearchParam(t *testing.T) {
 	}, `{"tasks":[]}`)
 
 	cmd := NewCmdSearch(tf.Factory)
-	if err := testutil.RunCommand(t, cmd, "Bug"); err != nil {
+	if err := testutil.RunCommand(t, cmd, "Bug", "--no-cache"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -570,7 +570,7 @@ func TestSearch_SweepsNewestFirst(t *testing.T) {
 	}, `{"tasks":[]}`)
 
 	cmd := NewCmdSearch(tf.Factory)
-	if err := testutil.RunCommand(t, cmd, "5.6.1"); err != nil {
+	if err := testutil.RunCommand(t, cmd, "5.6.1", "--no-cache"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 

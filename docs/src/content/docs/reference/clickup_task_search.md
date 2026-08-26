@@ -10,14 +10,22 @@ Search tasks by name and description
 Search ClickUp tasks across the workspace by name and description.
 
 Returns tasks whose names or descriptions match the search query. Matching
-priority: name substring > name fuzzy > description substring. When no
---space or --folder is specified, search uses progressive drill-down:
-server-side search first, then sprint tasks, then your assigned tasks,
-then configured space, then full workspace.
+priority: name substring > name fuzzy > description substring.
 
-Use --space and --folder to narrow the search scope for faster results.
-Use --comments to also search through task comments (slower).
-Use --assignee to filter by team member (name, username, ID, or "me").
+ClickUp has no server-side text search, so matching happens locally. To keep
+that from meaning "paginate the workspace on every search", the CLI keeps an
+index of the workspace under ~/.cache/clickup (override with CLICKUP_CACHE_DIR)
+and tops it up with only what changed since the last run. The first search
+builds the index and is slow; later ones read every task in the workspace for
+about one request. The index is rebuilt weekly so that deleted and archived
+tasks fall out of it.
+
+Use --no-cache to skip the index and query the API directly. That path reads
+only the most recently updated tasks and says so when it runs out of budget.
+--comments and --assignee also bypass the index.
+
+Use --space and --folder to search a specific part of the tree instead; this
+reaches tasks of any age, at the cost of walking every list.
 
 In interactive mode (TTY), if many results are found you will be asked
 whether to refine the search. Use --pick to interactively select a single
@@ -78,6 +86,7 @@ clickup task search [query] [flags]
       --include-subtasks   Include subtasks in search results
       --jq string          Filter JSON output using a jq expression
       --json               Output JSON
+      --no-cache           Bypass the local task index and query the API directly
       --pick               Interactively select a task and print its ID
   -r, --raw                Output raw strings instead of JSON-encoded (use with --jq)
       --space string       Limit search to a specific space (name or ID)

@@ -27,6 +27,19 @@ type DirectoryConfig struct {
 	List   string `yaml:"list,omitempty"`
 }
 
+// CacheDir returns the path to the cache directory (~/.cache/clickup).
+//
+// Kept separate from ConfigDir: the config is hand-edited and worth backing
+// up, whereas everything here is a rebuildable mirror of the API and is safe
+// to delete at any time.
+func CacheDir() string {
+	if dir := os.Getenv("CLICKUP_CACHE_DIR"); dir != "" {
+		return dir
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".cache", "clickup")
+}
+
 // ConfigDir returns the path to the config directory (~/.config/clickup).
 func ConfigDir() string {
 	if dir := os.Getenv("CLICKUP_CONFIG_DIR"); dir != "" {
