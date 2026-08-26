@@ -57,9 +57,33 @@ type searchTask struct {
 	Assignees []struct {
 		Username string `json:"username"`
 	} `json:"assignees"`
-	URL         string `json:"url"`
-	Parent      string `json:"parent"`
-	DateUpdated string `json:"date_updated"` // epoch millis, as a string
+	URL         string      `json:"url"`
+	Parent      string      `json:"parent"`
+	DateUpdated flexibleInt `json:"date_updated"` // epoch millis; ClickUp sends a string
+}
+
+// flexibleInt decodes a JSON string or number into a string.
+//
+// ClickUp sends date_updated as a string today. Decoding it as one meant a
+// single numeric response would fail the whole page and index nothing, which is
+// a lot of blast radius for a field used only for ordering and the watermark.
+type flexibleInt string
+
+func (f *flexibleInt) UnmarshalJSON(b []byte) error {
+	s := strings.TrimSpace(string(b))
+	if s == "null" || s == "" {
+		*f = ""
+		return nil
+	}
+	*f = flexibleInt(strings.Trim(s, `"`))
+	return nil
+}
+
+func (f flexibleInt) MarshalJSON() ([]byte, error) {
+	if f == "" {
+		return []byte(`""`), nil
+	}
+	return []byte(`"` + string(f) + `"`), nil
 }
 
 type searchResponse struct {
@@ -85,15 +109,52 @@ type scoredTask struct {
 
 // scoreTaskName checks whether a task name matches the query and returns the
 // match kind and fuzzy rank. Returns ok=false if there is no match at all.
+// normalizeForMatch folds typographic punctuation onto its ASCII equivalent.
+//
+// Task names here are written with em-dashes, middots and curly quotes —
+// "[Tech debt] 5.6.1 — Profiling", "[QA] 5.6.0 (228) · 160e519" — and nobody
+// types those. Without folding, the ASCII form failed substring matching and
+// the fuzzy ranker as well, so a single-token query or --exact missed
+// entirely. Skipped for pure-ASCII text, which is the common case.
+func normalizeForMatch(in string) string {
+	ascii := true
+	for i := 0; i < len(in); i++ {
+		if in[i] >= 0x80 {
+			ascii = false
+			break
+		}
+	}
+	if ascii {
+		return in
+	}
+	return strings.Map(func(r rune) rune {
+		switch r {
+		case '—', '–', '‒', '−', '―':
+			return '-'
+		case '·', '•', '‧':
+			return '.'
+		case '’', '‘', '‚', '‛':
+			return '\''
+		case '“', '”', '„', '‟':
+			return '"'
+		case '…':
+			return '.'
+		case '\u00a0', '\u2007', '\u202f', '\u2009':
+			return ' '
+		}
+		return r
+	}, in)
+}
+
 func scoreTaskName(query, name string) (kind matchKind, rank int, ok bool) {
-	lowerName := strings.ToLower(name)
-	lowerQuery := strings.ToLower(query)
+	lowerName := strings.ToLower(normalizeForMatch(name))
+	lowerQuery := strings.ToLower(normalizeForMatch(query))
 
 	if strings.Contains(lowerName, lowerQuery) {
 		return matchSubstring, 0, true
 	}
 
-	rank = fuzzy.RankMatchNormalizedFold(query, lowerName)
+	rank = fuzzy.RankMatchNormalizedFold(lowerQuery, lowerName)
 	if rank > -1 {
 		return matchFuzzy, rank, true
 	}
@@ -757,7 +818,7 @@ func toEntry(t searchTask, at time.Time) taskindex.Entry {
 	for _, a := range t.Assignees {
 		names = append(names, a.Username)
 	}
-	updated, _ := strconv.ParseInt(t.DateUpdated, 10, 64)
+	updated, _ := strconv.ParseInt(string(t.DateUpdated), 10, 64)
 	return taskindex.Entry{
 		ID:          t.ID,
 		CustomID:    t.CustomID,
@@ -785,7 +846,7 @@ func fromEntry(e taskindex.Entry) searchTask {
 	t.Parent = e.Parent
 	t.URL = e.URL
 	if e.DateUpdated != 0 {
-		t.DateUpdated = strconv.FormatInt(e.DateUpdated, 10)
+		t.DateUpdated = flexibleInt(strconv.FormatInt(e.DateUpdated, 10))
 	}
 	// Non-nil, so --json emits [] like the live paths do rather than null. The
 	// only field that differed between a warm and a cold cache was this one.
@@ -1207,7 +1268,7 @@ func keepAssignee(tasks []scoredTask, username string) []scoredTask {
 // filterTasks scores tasks by name and description, separating matched from unmatched.
 // Priority: name substring > name fuzzy > description substring.
 func filterTasks(query string, tasks []searchTask) (matched []scoredTask, unmatched []searchTask) {
-	lowerQuery := strings.ToLower(query)
+	lowerQuery := strings.ToLower(normalizeForMatch(query))
 	for _, t := range tasks {
 		kind, rank, ok := scoreTaskName(query, t.Name)
 		if ok {
@@ -1216,7 +1277,7 @@ func filterTasks(query string, tasks []searchTask) (matched []scoredTask, unmatc
 				kind:       kind,
 				fuzzyRank:  rank,
 			})
-		} else if strings.Contains(strings.ToLower(t.Description), lowerQuery) {
+		} else if strings.Contains(strings.ToLower(normalizeForMatch(t.Description)), lowerQuery) {
 			matched = append(matched, scoredTask{
 				searchTask: t,
 				kind:       matchDescription,

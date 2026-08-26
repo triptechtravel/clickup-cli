@@ -1,6 +1,7 @@
 package task
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -235,4 +236,43 @@ func TestSearch_CapMessageDoesNotSuggestDroppingAFlagNotPassed(t *testing.T) {
 
 	assert.NotContains(t, tf.ErrBuf.String(), "Drop --no-cache",
 		"told the user to drop a flag they never passed")
+}
+
+// Your task names are full of typographic punctuation — "[Tech debt] 5.6.1 —
+// Profiling", "[QA] 5.6.0 (228) · 160e519". Typing the ASCII equivalent found
+// nothing: the em-dash failed substring matching and the fuzzy ranker too, so
+// a single-token query or --exact simply missed.
+func TestScoreTaskName_TypographicPunctuationMatchesItsASCIIForm(t *testing.T) {
+	cases := []struct{ query, name string }{
+		{"Phase 2 - Payments", "Phase 2 — Payments"},
+		{"5.6.1 - Profiling", "[Tech debt] 5.6.1 — Profiling (CamperMate)"},
+		{"(228) . 160e519", "[QA] 5.6.0 (228) · 160e519 — Release test pass"},
+		{"don't ship", "don’t ship"},
+	}
+	for _, c := range cases {
+		kind, _, ok := scoreTaskName(c.query, c.name)
+		assert.True(t, ok, "%q did not match %q", c.query, c.name)
+		assert.Equal(t, matchSubstring, kind, "%q matched %q only fuzzily", c.query, c.name)
+	}
+}
+
+// The reverse direction: a typographic query against an ASCII name.
+func TestScoreTaskName_NormalisationWorksBothWays(t *testing.T) {
+	_, _, ok := scoreTaskName("Phase 2 — Payments", "Phase 2 - Payments")
+	assert.True(t, ok)
+}
+
+// ClickUp returns date_updated as a string today. If it ever returns a number,
+// the whole page failed to decode and zero tasks were indexed.
+func TestSearchTask_AcceptsDateUpdatedAsStringOrNumber(t *testing.T) {
+	for _, body := range []string{
+		`{"id":"a","name":"N","date_updated":"1700000000000"}`,
+		`{"id":"a","name":"N","date_updated":1700000000000}`,
+		`{"id":"a","name":"N","date_updated":null}`,
+		`{"id":"a","name":"N"}`,
+	} {
+		var task searchTask
+		assert.NoError(t, json.Unmarshal([]byte(body), &task), "failed on %s", body)
+		assert.Equal(t, "a", task.ID)
+	}
 }
