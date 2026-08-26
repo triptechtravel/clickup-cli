@@ -310,6 +310,36 @@ func TestSave_LeavesNoPartialFileBehind(t *testing.T) {
 	}
 }
 
+// The point of write-then-rename is that a reader never sees a half-written
+// file. Counting entries and checking for leftovers does not test that — both
+// hold for a plain in-place WriteFile, which is exactly the corruption the
+// rename exists to prevent. A rename replaces the file; an in-place write keeps
+// the same one, and os.SameFile can tell them apart.
+func TestSave_ReplacesTheFileRatherThanTruncatingInPlace(t *testing.T) {
+	dir := t.TempDir()
+	idx := New("12345")
+	idx.Merge([]Entry{entry("a", "A", 100)})
+	if err := Save(dir, idx); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(filepath.Join(dir, "index-12345.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	idx.Merge([]Entry{entry("b", "B", 200)})
+	if err := Save(dir, idx); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.Stat(filepath.Join(dir, "index-12345.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.False(t, os.SameFile(before, after),
+		"index was rewritten in place; a concurrent reader can see it half-written")
+}
+
 // ---------------------------------------------------------------------------
 // Resumable rebuild
 //

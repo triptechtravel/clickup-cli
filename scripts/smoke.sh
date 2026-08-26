@@ -153,8 +153,13 @@ grep -q "^$PARENT_ID$" <<< "$NEWEST_PAGE" \
   || fail "freshly created task absent from page 0 of order_by=updated — ordering assumption broken"
 ok "newest-first confirmed"
 
-OLDEST_PAGE="$("$BIN" api "team/$WORKSPACE/task?include_closed=true&page=0&order_by=updated&reverse=true" \
-  --jq '.tasks[].id' --raw 2>/dev/null)"
+# stderr kept and the exit status checked: with 2>/dev/null and a bare grep, an
+# API error made this probe *pass*, reporting the assumption as confirmed when
+# the call had failed outright.
+if ! OLDEST_PAGE="$("$BIN" api "team/$WORKSPACE/task?include_closed=true&page=0&order_by=updated&reverse=true" \
+  --jq '.tasks[].id' --raw)"; then
+  fail "could not fetch the reverse=true page; the ordering assumption is unverified"
+fi
 if grep -q "^$PARENT_ID$" <<< "$OLDEST_PAGE"; then
   printf '  ! reverse=true now returns newest-first too; the ordering comment in\n'
   printf '    fetchTeamTasks is stale and the sweep can drop reverse handling.\n'
@@ -168,12 +173,14 @@ step "api pagination — only an empty page proves the corpus is exhausted"
 P0=$(wc -l <<< "$NEWEST_PAGE" | tr -d ' ')
 P1=$("$BIN" api "team/$WORKSPACE/task?include_closed=true&page=1&order_by=updated" \
   --jq '.tasks | length' 2>/dev/null | tail -1)
-if [ "$P0" -lt 100 ] && [ "$P1" -gt 0 ]; then
+# An assertion, not an observation. The sweep's correctness rests on "only an
+# empty page ends the corpus", so a run that cannot demonstrate it must say so
+# rather than printing a tick.
+[ "$P1" -gt 0 ] || fail "page 1 is empty on a workspace with >100 tasks; cannot verify the pagination assumption"
+if [ "$P0" -lt 100 ]; then
   ok "page 0 returned $P0 rows yet page 1 has $P1 — short page is not end-of-corpus"
-elif [ "$P0" -eq 100 ]; then
-  ok "page 0 returned a full 100 rows (short-page trap not reproducible here)"
 else
-  fail "page 0 returned $P0 rows and page 1 is empty — cannot verify the pagination assumption"
+  ok "page 0 was a full 100 rows and page 1 has $P1 — pagination continues past a full page"
 fi
 
 # --- search end-to-end ----------------------------------------------------
@@ -202,6 +209,16 @@ ALL_IDS="$PARENT_ID ${SUBTASK_IDS[*]}"
 "$BIN" task delete "$ALL_IDS" -y > /dev/null 2>&1 \
   || fail "bulk task delete failed (ExpandIDArgs regression)"
 ok "bulk delete succeeded for ${#SUBTASK_IDS[@]} subtask(s) + parent"
+
+# --- search after delete --------------------------------------------------
+step "task search --refresh — a deleted task leaves the index"
+# Incremental syncs cannot see deletions, so without --refresh a deleted task
+# lingers until the weekly reconcile. This asserts the lever works; the branch
+# claimed the weekly rebuild handled it, which a capped rebuild does not.
+if CLICKUP_CACHE_DIR="$SMOKE_CACHE" search_finds "$PARENT_ID" "$TOKEN" --refresh --exact 2>/dev/null; then
+  fail "deleted task $PARENT_ID still returned after --refresh"
+fi
+ok "deleted task gone after --refresh"
 
 # Cleanup trap is now a no-op — the resources are gone.
 PARENT_ID=""

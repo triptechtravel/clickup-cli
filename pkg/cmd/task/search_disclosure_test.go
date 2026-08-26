@@ -2,11 +2,13 @@ package task
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -98,8 +100,12 @@ func TestSpaceWalk_DisclosesListsItCouldNotRead(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	assert.Contains(t, tf.ErrBuf.String(), "Not shown:", "unreadable list passed over in silence")
-	assert.Contains(t, tf.ErrBuf.String(), "1 list")
+	errOut := tf.ErrBuf.String()
+	assert.Contains(t, errOut, "Not shown:", "unreadable list passed over in silence")
+	assert.Contains(t, errOut, "could only be read partway",
+		"a list read partway was reported with the wrong mechanism: %s", errOut)
+	assert.NotContains(t, errOut, "hold more than",
+		"per-list failure described as the page cap")
 }
 
 // A capped live sweep that then finds nothing in the tree walk must still say
@@ -264,27 +270,153 @@ func TestSearch_WordRetryDoesNotResyncPerWord(t *testing.T) {
 }
 
 // A deadline is not a permission problem. Counting every list left unvisited
-// when the clock ran out as "could not be read" reports 127 broken lists when
-// the truth is one expired budget — the wrong-mechanism failure again, one
+// when the clock ran out as "could not be read" reported 127 broken lists when
+// the truth was one expired budget — the wrong-mechanism failure again, one
 // level down.
+//
+// The first version of this test cancelled the context up front, which made the
+// walk bail during space discovery and never reach the per-list loop it claims
+// to exercise; the guard could be deleted and the test stayed green. Discovery
+// now succeeds and the deadline expires inside the list fetch.
 func TestSpaceWalk_DeadlineIsNotReportedAsUnreadableLists(t *testing.T) {
 	tf := testutil.NewTestFactory(t)
-	pages := map[string]map[int]string{}
-	for _, id := range []string{"L1", "L2", "L3"} {
-		pages[id] = map[int]string{0: `{"tasks":[]}`}
-	}
-	spaceTree(tf, pages, nil)
+	tf.Handle("GET", "team/12345/space", 200, `{"spaces":[{"id":"sp1","name":"Space One"}]}`)
+	tf.Handle("GET", "space/sp1/folder", 200, `{"folders":[]}`)
+	tf.Handle("GET", "space/sp1/list", 200, `{"lists":[{"id":"L1","name":"L1"},{"id":"L2","name":"L2"}]}`)
 
 	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
+	defer cancel()
+	var reached atomic.Bool
+	for _, id := range []string{"L1", "L2"} {
+		tf.HandleFunc("list/"+id+"/task", func(w http.ResponseWriter, r *http.Request) {
+			// The walk got as far as fetching tasks; now the clock runs out.
+			reached.Store(true)
+			cancel()
+			<-r.Context().Done()
+		})
+	}
 
 	opts := &searchOptions{factory: tf.Factory, query: "5.6.1", space: "Space One"}
 	res, err := searchViaSpaces(ctx, opts)
 
 	assert.NoError(t, err)
+	assert.True(t, reached.Load(), "test never reached the per-list fetch it is about")
 	assert.True(t, res.cancelled, "cancellation not reported")
 	for _, n := range res.notShown {
 		assert.NotContains(t, n, "could not be read",
 			"a cancelled walk blamed the lists: %s", n)
 	}
+}
+
+// Every indexed field has to survive the round trip, or the same query returns
+// different JSON depending on whether the cache happened to be warm. Asserted
+// through the command, because in-memory assertions on the struct stayed green
+// when the projection dropped fields.
+func TestSearch_CachedResultsCarryEveryProjectedField(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	tf.HandleFunc("team/12345/task", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-RateLimit-Remaining", "99")
+		w.WriteHeader(200)
+		if r.URL.Query().Get("page") != "0" {
+			_, _ = w.Write([]byte(`{"tasks":[]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"tasks":[{
+			"id":"A","custom_id":"CU-A","name":"Offline DB upgrade",
+			"description":"replace op-sqlite with the maintained fork",
+			"status":{"status":"in progress"},"priority":{"priority":"high"},
+			"assignees":[{"username":"isaac"}],"url":"https://app.clickup.com/t/A",
+			"parent":"","date_updated":"1700000000000"},{
+			"id":"B","name":"Offline DB unassigned","status":{"status":"open"},
+			"assignees":[],"date_updated":"1700000000001"}]}`))
+	})
+
+	cmd := NewCmdSearch(tf.Factory)
+	if err := testutil.RunCommand(t, cmd, "Offline", "--exact", "--json"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var got []map[string]any
+	if err := json.Unmarshal(tf.OutBuf.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, tf.OutBuf.String())
+	}
+	assert.Len(t, got, 2)
+	// Newest first, so the unassigned task leads. It is the one that matters
+	// here: with an assignee present the slice is non-nil either way, which is
+	// why the first version of this assertion could not fail.
+	assert.NotNil(t, got[0]["assignees"], "unassigned task came back null, not []")
+	assert.Len(t, got[0]["assignees"], 0)
+
+	assert.Equal(t, "CU-A", got[1]["custom_id"])
+	assert.Equal(t, "replace op-sqlite with the maintained fork", got[1]["description"])
+	assert.Equal(t, "high", got[1]["priority"].(map[string]any)["priority"])
+	assert.Equal(t, "in progress", got[1]["status"].(map[string]any)["status"])
+	assert.Equal(t, "https://app.clickup.com/t/A", got[1]["url"])
+	assert.Equal(t, "1700000000000", got[1]["date_updated"])
+	assert.Len(t, got[1]["assignees"], 1)
+}
+
+// The command matches on descriptions as well as names, and the index has to
+// preserve that. Every other cache fixture matches on Name, so dropping the
+// description from the projection went unnoticed.
+func TestSearch_IndexPreservesDescriptionMatching(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	recordingMux(tf, map[int]string{
+		0: `{"tasks":[{"id":"A","name":"Unrelated title","description":"mentions 5.6.1 in the body","status":{"status":"open"},"assignees":[],"date_updated":"9000000"}]}`,
+	})
+
+	cmd := NewCmdSearch(tf.Factory)
+	if err := testutil.RunCommand(t, cmd, "5.6.1", "--exact"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	assert.Contains(t, tf.OutBuf.String(), "Unrelated title",
+		"description match lost in the index round trip")
+}
+
+// The incremental sync must ask from the overlap window, not the raw
+// watermark. Asserting only that the param is present let the overlap — whose
+// absence the index docs call permanent task loss — be deleted silently.
+func TestSearch_IncrementalAsksFromTheOverlappedWatermark(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	idx := taskindex.New("12345")
+	idx.Replace([]taskindex.Entry{{ID: "a", Name: "A", DateUpdated: 5_000_000}}, time.Now())
+	if err := taskindex.Save(tf.CacheDir, idx); err != nil {
+		t.Fatal(err)
+	}
+	urls := recordingMux(tf, nil)
+
+	cmd := NewCmdSearch(tf.Factory)
+	if err := testutil.RunCommand(t, cmd, "anything"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := fmt.Sprintf("date_updated_gt=%d", idx.Since())
+	assert.True(t, anyContains(*urls, want),
+		"expected %s, got %v", want, *urls)
+}
+
+// Results come out of a map, so without an explicit sort the order changes run
+// to run. Pinned by asserting the order rather than hoping to observe flake.
+func TestSearch_IndexResultsAreOrderedNewestFirst(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	idx := taskindex.New("12345")
+	idx.Replace([]taskindex.Entry{
+		{ID: "old", Name: "5.6.1 older card", DateUpdated: 1_000},
+		{ID: "new", Name: "5.6.1 newer card", DateUpdated: 9_000},
+	}, time.Now())
+	if err := taskindex.Save(tf.CacheDir, idx); err != nil {
+		t.Fatal(err)
+	}
+	recordingMux(tf, nil)
+
+	cmd := NewCmdSearch(tf.Factory)
+	if err := testutil.RunCommand(t, cmd, "5.6.1", "--exact"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	out := tf.OutBuf.String()
+	assert.Less(t, strings.Index(out, "newer card"), strings.Index(out, "older card"),
+		"index results not ordered newest first")
 }
