@@ -89,7 +89,7 @@ SPEC_V3_URL := https://developer.clickup.com/openapi/ClickUp_PUBLIC_API_V3.yaml
 # Generated code is deliberately not committed, which makes the spec the source
 # of truth — so the spec is pinned. Without this, two clean clones a week apart
 # can silently produce different clients. Bump deliberately with `make api-update`.
-SPEC_V2_SHA := 224a4d4d1a50116268be54dbf887a59a444a6bffadd133c620cd1a6c32b1069b
+SPEC_V2_SHA := a0a72ec97ddb4e4859b9ed89b997bb784ba5828412ff35119f41e87103069662
 SPEC_V3_SHA := 167e0b99e0c2218312d1318fff613f180dccdfcb8decb724ce08559aa04329f2
 
 # verify_spec <file> <expected-sha> <name>
