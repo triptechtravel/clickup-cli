@@ -286,7 +286,7 @@ recently updated tasks and discover which folders/lists to search in.`, maxResul
 	cmd.Flags().BoolVar(&opts.comments, "comments", false, "Also search through task comments (slower)")
 	cmd.Flags().BoolVar(&opts.exact, "exact", false, "Only show exact substring matches (no fuzzy results)")
 	cmd.Flags().BoolVar(&opts.includeSubtasks, "include-subtasks", false, "Include subtasks in search results")
-	cmd.Flags().BoolVar(&opts.noCache, "no-cache", false, "Bypass the local task index and query the API directly")
+	cmd.Flags().BoolVar(&opts.noCache, "no-cache", false, "Bypass the local task index and sweep the API directly (no effect with --space/--folder, which never use the index)")
 	cmd.Flags().BoolVar(&opts.refresh, "refresh", false, "Rebuild the local task index from scratch before searching")
 	cmdutil.AddJSONFlags(cmd, &opts.jsonFlags)
 

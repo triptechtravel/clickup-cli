@@ -56,6 +56,11 @@ clickup task search "login bug" --exact    # Exact matches only
 clickup task search "login bug" --assignee me       # Only your tasks
 clickup task search "login bug" --assignee "alice"   # By name/username/ID
 clickup task search "Phase 1" --include-subtasks    # Discover subtasks by name without knowing parent ID
+clickup task search "login bug" --refresh   # Rebuild the index first (a deleted task is still showing)
+clickup task search "login bug" --no-cache  # Skip the index (ephemeral container, or a one-off)
+
+# Typographic punctuation matches its ASCII form, so a name can be typed as read:
+#   "5.6.1 - Profiling" matches "[Tech debt] 5.6.1 — Profiling (CamperMate)"
 
 # Recent tasks (excludes archived folders)
 clickup task recent

@@ -15,6 +15,23 @@ If the system keyring is unavailable, the CLI falls back to an encrypted file at
 
 Tokens are never stored in the config file (`config.yml`) or logged to stdout.
 
+## Cached task data
+
+`clickup task search` keeps a local index of the workspace under
+`~/.cache/clickup` (override with `CLICKUP_CACHE_DIR`). It contains task names,
+statuses, assignee usernames, URLs and **task descriptions** — in plaintext,
+for the whole workspace, including tasks you have never opened.
+
+- The directory is `0700` and the file `0600`.
+- No credentials are cached; the index holds task data only.
+- `clickup auth logout` deletes it. Revoking a token should not leave a copy of
+  the workspace on the machine.
+- `--no-cache` skips the index for a single search. There is no persistent
+  opt-out; delete the directory, or use `--no-cache` per invocation.
+
+If you work in an environment where task descriptions are sensitive, or on a
+shared machine, prefer `--no-cache` and remove `~/.cache/clickup`.
+
 ## Token expiration handling
 
 If your API token expires, is revoked, or becomes invalid, the CLI detects the `401 Unauthorized` response and displays a clear message:
@@ -41,7 +58,8 @@ clickup auth login
 
 4. **Don't commit config files**: While `~/.config/clickup/config.yml` does not contain secrets, avoid committing it to shared repositories.
 5. **Keep updated**: Always use the latest version for security patches.
-6. **Logout when done**: Remove stored credentials with `clickup auth logout`.
+6. **Logout when done**: Remove stored credentials with `clickup auth logout`. This also deletes the cached task index.
+7. **Shared machines**: The search index mirrors task descriptions to disk. Use `--no-cache`, or clear `~/.cache/clickup` when you are finished.
 
 ## Reporting a vulnerability
 

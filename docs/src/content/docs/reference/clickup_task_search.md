@@ -97,7 +97,7 @@ clickup task search [query] [flags]
       --include-subtasks   Include subtasks in search results
       --jq string          Filter JSON output using a jq expression
       --json               Output JSON
-      --no-cache           Bypass the local task index and query the API directly
+      --no-cache           Bypass the local task index and sweep the API directly (no effect with --space/--folder, which never use the index)
       --pick               Interactively select a task and print its ID
   -r, --raw                Output raw strings instead of JSON-encoded (use with --jq)
       --refresh            Rebuild the local task index from scratch before searching

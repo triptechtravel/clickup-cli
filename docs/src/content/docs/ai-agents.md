@@ -198,6 +198,39 @@ clickup task search "auth" --folder "Engineering Sprint"
 
 The `task search` command also suggests `task recent` when no results are found, both in interactive mode (as a menu option) and non-interactive mode (as a tip message).
 
+## Reading search results correctly
+
+`task search` matches locally against a cached index of the workspace, because
+ClickUp has no server-side text search. Two consequences matter for agents:
+
+**An empty result is not proof of absence.** Every path that returns fewer
+results than exist prints a `Not shown:` line on **stderr**, naming the limit
+that applied — the index still building, a page cap, lists that could not be
+read, matches hidden by `--exact`, the 200-row result cap. Under `--json` the
+payload on stdout carries no truncation marker, so an agent that discards
+stderr cannot tell a complete answer from a partial one. Keep stderr.
+
+**The first search on a machine is slow.** It builds the index (~25s for 4,000
+tasks). Later searches cost roughly one request. In an ephemeral environment
+with no persisted `~/.cache` — a fresh CI container, for example — every search
+pays that build, so prefer `--no-cache`, or `--space` to scope the work.
+
+```sh
+# Keep stderr so truncation is visible
+clickup task search "auth" --json 2>search.err
+grep "Not shown:" search.err
+
+# Fresh container, no persisted cache: skip the index
+clickup task search "auth" --no-cache --json
+
+# A task was deleted upstream and is still being returned
+clickup task search "auth" --refresh
+```
+
+Deletions are the one thing the index lags on: incremental syncs cannot see
+them, so a deleted task can appear in results until the weekly reconcile.
+`--refresh` rebuilds immediately. Renames are picked up straight away.
+
 ## Claude Code skill (plugin marketplace)
 
 Install the ClickUp CLI skill into Claude Code so it automatically uses the CLI for ClickUp operations. No need to clone this repo.
@@ -228,4 +261,6 @@ make install-skill
 - Use `clickup field list --list-id ID --json` to discover custom fields before setting them
 - Use `clickup task dependency add` to express task relationships programmatically
 - Use `clickup member list --json` to look up user IDs for assigning tasks or adding watchers
-- When search returns no results, check `clickup task recent` to find the right folder/list
+- When search returns no results, read the `Not shown:` lines on stderr first — they say whether the search was complete. Then try `clickup task recent` to find the right folder/list
+- Searching for a task by its exact name works even when the name uses typographic punctuation: `5.6.1 - Profiling` matches `5.6.1 — Profiling`
+- `--exact` suppresses fuzzy matches and reports how many it hid; treat that count as a signal to re-run without it rather than as "no such task"

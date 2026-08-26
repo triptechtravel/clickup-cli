@@ -73,8 +73,30 @@ The `link` commands store GitHub links in the task's `markdown_description` fiel
 | Variable | Description |
 |----------|-------------|
 | `CLICKUP_CONFIG_DIR` | Override the config directory path. Default: `~/.config/clickup`. |
+| `CLICKUP_CACHE_DIR` | Override the cache directory path. Default: `~/.cache/clickup`. |
 
 When `CLICKUP_CONFIG_DIR` is set, the CLI reads and writes `config.yml` from that directory instead of the default location.
+
+## Cache directory
+
+`clickup task search` keeps a local index of the workspace so it can match
+locally instead of paginating the API on every search. It lives in the cache
+directory, one file per workspace.
+
+The cache is disposable: delete it and the next search rebuilds it. It is kept
+separate from the config directory for exactly that reason — the config is
+hand-edited and worth backing up, the cache is a rebuildable mirror.
+
+```sh
+clickup task search "auth" --refresh    # rebuild the index now
+clickup task search "auth" --no-cache   # skip it for this search
+clickup auth logout                     # delete it along with your credentials
+rm -rf ~/.cache/clickup                 # or just remove it
+```
+
+If `HOME` is unset — some cron, CI and container environments — the cache falls
+back to a directory under the system temp path rather than the working
+directory.
 
 ## Config file location
 
