@@ -183,6 +183,12 @@ func (i *Index) upsert(entries []Entry) bool {
 			e.Description = e.Description[:maxDescriptionBytes]
 		}
 		if existing, ok := i.Entries[e.ID]; ok && existing.equal(e) {
+			// Same content, so nothing to write — but the fetch timestamp still
+			// has to move. It is what a rebuild uses to tell "seen again" from
+			// "gone upstream", and leaving it stale made a rebuild delete every
+			// task that simply had not changed.
+			existing.IndexedAt = e.IndexedAt
+			i.Entries[e.ID] = existing
 			continue
 		}
 		i.Entries[e.ID] = e
@@ -295,7 +301,11 @@ func (i *Index) CompleteRebuild(entries []Entry, at time.Time) bool {
 			seen++
 		}
 	}
-	if seen == 0 && len(i.Entries) > 0 {
+	// A rebuild that accounts for almost none of a populated index is far more
+	// likely to be a broken pass than a workspace that lost its contents, and
+	// acting on it deletes real data and then answers "no tasks found" with
+	// total confidence.
+	if len(i.Entries) > 0 && seen*10 < len(i.Entries) {
 		i.Partial = true
 		i.RebuildFloor = 0
 		return false

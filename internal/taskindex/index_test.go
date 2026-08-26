@@ -586,3 +586,46 @@ func TestMerge_BoundsDescriptionLength(t *testing.T) {
 
 	assert.LessOrEqual(t, len(idx.Entries["a"].Description), maxDescriptionBytes)
 }
+
+// Two correct-looking optimisations that destroy the index together: upsert
+// skips entries that compare equal so a no-change sync does not rewrite a
+// multi-megabyte file, and equal() ignores IndexedAt because it is bookkeeping
+// rather than content. But IndexedAt is the marker CompleteRebuild uses to
+// decide what the rebuild saw — so every unchanged task kept its stale stamp
+// and was deleted as missing. Observed live: a rebuild of a healthy 4,089-entry
+// index left 7 entries and reported itself complete.
+func TestIndex_RebuildKeepsTasksThatDidNotChange(t *testing.T) {
+	first := time.UnixMilli(1_000_000)
+	idx := New("12345")
+	idx.BeginRebuild(first)
+	unchanged := Entry{ID: "a", Name: "Steady task", DateUpdated: 500, IndexedAt: first.UnixMilli()}
+	idx.CompleteRebuild([]Entry{unchanged}, first)
+
+	// A later rebuild sees the identical task again, still unmodified upstream.
+	second := time.UnixMilli(2_000_000)
+	idx.BeginRebuild(second)
+	seen := unchanged
+	seen.IndexedAt = second.UnixMilli()
+	ok := idx.CompleteRebuild([]Entry{seen}, second)
+
+	assert.True(t, ok)
+	assert.Contains(t, idx.Entries, "a", "an unchanged task was deleted by its own rebuild")
+}
+
+// Defence in depth for the same class: a rebuild that accounts for almost none
+// of a populated index is not evidence that the workspace emptied.
+func TestIndex_CompletedRebuildRefusesToDropNearlyEverything(t *testing.T) {
+	idx := New("12345")
+	var seed []Entry
+	for i := 0; i < 100; i++ {
+		seed = append(seed, Entry{ID: fmt.Sprintf("t%d", i), Name: "Task", DateUpdated: 100, IndexedAt: 1})
+	}
+	idx.Merge(seed)
+
+	now := time.UnixMilli(9_000_000)
+	idx.BeginRebuild(now)
+	ok := idx.CompleteRebuild([]Entry{{ID: "only", Name: "Sole survivor", DateUpdated: 900, IndexedAt: now.UnixMilli()}}, now)
+
+	assert.False(t, ok, "a rebuild covering 1% of the index was treated as authoritative")
+	assert.Greater(t, len(idx.Entries), 50, "index gutted by an implausible rebuild")
+}
