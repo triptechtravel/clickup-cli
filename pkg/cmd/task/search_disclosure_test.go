@@ -152,10 +152,11 @@ func TestSearch_IndexTruncationNamesTheIndexNotTheSweep(t *testing.T) {
 		"index truncation described as the live sweep's page cap")
 }
 
-// A transient 5xx is not the same as running out of budget. Treating it as
-// truncation stamped the reconcile clock and flagged the index incomplete,
-// locking in a degraded index for a week over one bad response.
-func TestSearch_SyncErrorDoesNotMarkTheIndexPartialForAWeek(t *testing.T) {
+// A transient 5xx must not be recorded as a finished rebuild. It keeps the
+// pages that arrived, leaves a resume point, and does not stamp the reconcile
+// clock — so the next search continues rather than writing the workspace off
+// for a week, which is what treating an error as budget exhaustion did.
+func TestSearch_SyncErrorLeavesAResumePointNotAFinishedBuild(t *testing.T) {
 	tf := testutil.NewTestFactory(t)
 	dir := tf.CacheDir
 
@@ -178,9 +179,9 @@ func TestSearch_SyncErrorDoesNotMarkTheIndexPartialForAWeek(t *testing.T) {
 
 	reloaded, _ := taskindex.Load(dir, "12345")
 	assert.Contains(t, reloaded.Entries, "A", "pages read before the error were discarded")
-	assert.False(t, reloaded.Partial, "a transient error marked the index incomplete")
 	assert.True(t, reloaded.NeedsFullSync(time.Now(), cacheTTL),
-		"a failed build stamped the reconcile clock, so it will not be retried")
+		"a failed build was recorded as finished, so it will not be retried")
+	assert.NotZero(t, reloaded.RebuildFloor, "no resume point, so the next run restarts from scratch")
 }
 
 // An index that has never held anything must be rebuilt, not topped up, and a

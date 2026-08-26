@@ -49,6 +49,11 @@ type Entry struct {
 	Assignees   []string `json:"assignees,omitempty"`
 	URL         string   `json:"url,omitempty"`
 	DateUpdated int64    `json:"date_updated"`
+	// IndexedAt is when this entry was last fetched, in epoch millis. It is
+	// what makes a multi-segment rebuild able to reconcile deletions: anything
+	// still carrying a timestamp from before the rebuild began was never seen
+	// during it, and so is gone upstream.
+	IndexedAt int64 `json:"indexed_at,omitempty"`
 }
 
 // equal reports whether two entries carry the same data. Written out because
@@ -80,8 +85,15 @@ type Index struct {
 	// Partial records that the last rebuild hit its page cap and so does not
 	// cover the whole workspace. Searches served from it must disclose that
 	// rather than presenting an empty result as authoritative.
-	Partial bool             `json:"partial,omitempty"`
-	Entries map[string]Entry `json:"entries"`
+	Partial bool `json:"partial,omitempty"`
+	// RebuildFloor is the oldest date_updated a partial rebuild reached, in
+	// epoch millis, or 0 when no rebuild is in progress. The next segment
+	// continues below it, so a workspace too large to rebuild inside one sync
+	// budget converges over consecutive searches instead of failing forever.
+	RebuildFloor int64 `json:"rebuild_floor,omitempty"`
+	// RebuildStartedAt is when the current rebuild began, in epoch millis.
+	RebuildStartedAt int64            `json:"rebuild_started_at,omitempty"`
+	Entries          map[string]Entry `json:"entries"`
 }
 
 // New returns an empty index for a workspace.
@@ -168,19 +180,109 @@ func (i *Index) RequestFullSync() {
 // Since returns the date_updated_gt value for the next incremental sync, or 0
 // if the index has never been populated.
 func (i *Index) Since() int64 {
-	if i.SyncedAt == 0 {
+	return i.SinceAt(time.Now())
+}
+
+// SinceAt is Since as of a given moment, clamped so a timestamp in the future
+// cannot poison the watermark.
+//
+// date_updated is server-set, but importers and integrations do emit rows dated
+// ahead of now. One such row pushed the watermark past every real change, so
+// every later incremental asked for something newer than the future and got
+// nothing — silently indexing no new work until the weekly rebuild re-ingested
+// the same row and did it again.
+func (i *Index) SinceAt(now time.Time) int64 {
+	watermark := i.SyncedAt
+	if ms := now.UnixMilli(); watermark > ms {
+		watermark = ms
+	}
+	if watermark < overlapMillis {
 		return 0
 	}
-	if i.SyncedAt < overlapMillis {
-		return 0
+	return watermark - overlapMillis
+}
+
+// BeginRebuild marks the start of a full rebuild pass.
+func (i *Index) BeginRebuild(at time.Time) {
+	i.RebuildStartedAt = at.UnixMilli()
+	i.RebuildFloor = 0
+}
+
+// AdvanceRebuild records one completed segment of a rebuild that has not
+// finished, so the next run can pick up where this one stopped.
+//
+// It deliberately leaves SyncedAt alone: a rebuild in flight has not
+// established a new incremental watermark, and moving it would strand every
+// change between the old watermark and this segment's floor.
+func (i *Index) AdvanceRebuild(entries []Entry, floor int64) bool {
+	i.upsert(entries)
+	if floor != 0 {
+		i.RebuildFloor = floor
+	} else if i.RebuildFloor == 0 {
+		// Nothing came back and no earlier segment set a floor. Leave a marker
+		// so NeedsFullSync keeps the rebuild alive rather than treating this as
+		// a finished pass.
+		i.RebuildFloor = -1
 	}
-	return i.SyncedAt - overlapMillis
+	i.Partial = true
+	return true
+}
+
+// CompleteRebuild finishes a rebuild: it merges the final segment, drops every
+// task the rebuild never saw, and restores the index to complete.
+//
+// It refuses, returning false, when a rebuild that saw nothing at all is asked
+// to reconcile a populated index. An empty response is far more likely to be a
+// bad page than a workspace that lost every task, and accepting it wipes the
+// mirror and then answers "no tasks found" with total confidence.
+func (i *Index) CompleteRebuild(entries []Entry, at time.Time) bool {
+	i.upsert(entries)
+
+	started := i.RebuildStartedAt
+	seen := 0
+	for _, e := range i.Entries {
+		if e.IndexedAt >= started && started > 0 {
+			seen++
+		}
+	}
+	if seen == 0 && len(i.Entries) > 0 {
+		i.Partial = true
+		i.RebuildFloor = 0
+		return false
+	}
+
+	if started > 0 {
+		for id, e := range i.Entries {
+			if e.IndexedAt < started {
+				delete(i.Entries, id)
+			}
+		}
+	}
+
+	// The rebuild walked the whole corpus, so the newest row in it is the
+	// watermark every later incremental starts from.
+	i.SyncedAt = 0
+	for _, e := range i.Entries {
+		if e.DateUpdated > i.SyncedAt {
+			i.SyncedAt = e.DateUpdated
+		}
+	}
+
+	i.FullSyncAt = at.UnixMilli()
+	i.RebuildFloor = 0
+	i.RebuildStartedAt = 0
+	i.Partial = false
+	return true
 }
 
 // NeedsFullSync reports whether the index should be rebuilt rather than topped
 // up — either it has never been built, or it is old enough that accumulated
 // deletions are worth reconciling.
 func (i *Index) NeedsFullSync(now time.Time, ttl time.Duration) bool {
+	if i.RebuildFloor != 0 {
+		// A rebuild is mid-flight; finishing it takes priority over any clock.
+		return true
+	}
 	if i.FullSyncAt == 0 {
 		return true
 	}

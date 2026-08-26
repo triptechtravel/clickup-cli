@@ -29,7 +29,11 @@ func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.Header.Set("Authorization", t.token)
 	req.Header.Set("User-Agent", fmt.Sprintf("clickup-cli/%s", build.Version))
 
-	t.rl.Wait()
+	// Tied to the request's context so the caller's deadline actually bounds
+	// the backoff.
+	if err := t.rl.WaitContext(req.Context()); err != nil {
+		return nil, err
+	}
 
 	resp, err := t.base.RoundTrip(req)
 	if err != nil {
@@ -41,7 +45,9 @@ func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Retry once on 429
 	if t.rl.ShouldRetry(resp) {
 		resp.Body.Close()
-		t.rl.Wait()
+		if err := t.rl.WaitContext(req.Context()); err != nil {
+			return nil, err
+		}
 		resp, err = t.base.RoundTrip(req)
 		if err != nil {
 			return resp, err

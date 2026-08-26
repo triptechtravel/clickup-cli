@@ -434,9 +434,12 @@ func TestSearch_CompleteIndexWithNoMatchDoesNotWalkTheTree(t *testing.T) {
 	assert.False(t, walked, "walked the whole tree to confirm a complete index")
 }
 
-// An incomplete index is a different story: it genuinely may be missing the
-// task, so the walk is worth its cost.
-func TestSearch_PartialIndexWithNoMatchFallsBackToSpaceWalk(t *testing.T) {
+// An incomplete index used to trigger an automatic full-tree walk. Measured on
+// the real workspace that was 234 requests and 112 seconds per zero-result
+// search — multiplied by word count once the per-word retry joined in — which
+// reinstated exactly the cost the index exists to remove. The index now says it
+// is incomplete and leaves the walk to the user.
+func TestSearch_PartialIndexWithNoMatchDisclosesInsteadOfWalking(t *testing.T) {
 	tf := testutil.NewTestFactory(t)
 	idx := taskindex.New("12345")
 	idx.MergePartial([]taskindex.Entry{
@@ -457,11 +460,12 @@ func TestSearch_PartialIndexWithNoMatchFallsBackToSpaceWalk(t *testing.T) {
 	})
 
 	cmd := NewCmdSearch(tf.Factory)
-	if err := testutil.RunCommand(t, cmd, "5.6.1"); err != nil {
+	if err := testutil.RunCommand(t, cmd, "5.6.1", "--exact"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	assert.True(t, walked, "no fallback despite an admittedly incomplete index")
+	assert.False(t, walked, "walked the whole tree as a reflex on a partial index")
+	assert.Contains(t, tf.ErrBuf.String(), "Not shown:", "incompleteness not disclosed")
 }
 
 // A weekly rebuild is not a first run, and telling the user it is makes a

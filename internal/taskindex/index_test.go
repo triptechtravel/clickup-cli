@@ -1,9 +1,11 @@
 package taskindex
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -306,4 +308,161 @@ func TestSave_LeavesNoPartialFileBehind(t *testing.T) {
 	for _, f := range files {
 		assert.False(t, strings.HasPrefix(f.Name(), ".index-"), "temp file left behind: %s", f.Name())
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Resumable rebuild
+//
+// A rebuild that cannot finish inside one sync budget used to give up and mark
+// the index permanently incomplete: past roughly 10,500 tasks every rebuild hit
+// the wall, flagged Partial, stamped the reconcile clock, and the next one hit
+// the same wall a week later. Rebuilds now carry a floor cursor and resume from
+// it, so a large workspace converges over consecutive searches.
+// ---------------------------------------------------------------------------
+
+func TestIndex_TruncatedRebuildRecordsAResumePoint(t *testing.T) {
+	idx := New("12345")
+	now := time.UnixMilli(9_000_000)
+	idx.BeginRebuild(now)
+
+	idx.AdvanceRebuild([]Entry{entry("a", "A", 900), entry("b", "B", 500)}, 500)
+
+	assert.Equal(t, int64(500), idx.RebuildFloor, "no resume point recorded")
+	assert.True(t, idx.Partial)
+	assert.Contains(t, idx.Entries, "a")
+}
+
+// The resume point is where the next segment starts, and it must not be
+// mistaken for the incremental watermark.
+func TestIndex_TruncatedRebuildDoesNotTouchTheWatermark(t *testing.T) {
+	idx := New("12345")
+	idx.Merge([]Entry{entry("seed", "Seed", 1000)})
+	before := idx.SyncedAt
+
+	idx.BeginRebuild(time.UnixMilli(9_000_000))
+	idx.AdvanceRebuild([]Entry{entry("a", "A", 500_000)}, 400_000)
+
+	assert.Equal(t, before, idx.SyncedAt, "a mid-flight rebuild moved the incremental watermark")
+}
+
+// Finishing the rebuild is what makes the index complete again.
+func TestIndex_CompletedRebuildClearsPartialAndResumePoint(t *testing.T) {
+	idx := New("12345")
+	now := time.UnixMilli(9_000_000)
+	idx.BeginRebuild(now)
+	idx.AdvanceRebuild([]Entry{{ID: "a", Name: "A", DateUpdated: 900, IndexedAt: now.UnixMilli()}}, 900)
+
+	idx.CompleteRebuild([]Entry{{ID: "b", Name: "B", DateUpdated: 100, IndexedAt: now.UnixMilli()}}, now)
+
+	assert.False(t, idx.Partial)
+	assert.Zero(t, idx.RebuildFloor)
+	assert.False(t, idx.NeedsFullSync(now, time.Hour))
+	assert.Equal(t, int64(900), idx.SyncedAt, "watermark not set from the completed rebuild")
+	assert.Contains(t, idx.Entries, "a", "an earlier segment's entries were dropped")
+	assert.Contains(t, idx.Entries, "b")
+}
+
+// Deletions are reconciled across the whole multi-segment rebuild, not just the
+// final segment: anything not seen during the rebuild is gone upstream.
+func TestIndex_CompletedRebuildDropsTasksNotSeenInAnySegment(t *testing.T) {
+	idx := New("12345")
+	idx.Merge([]Entry{{ID: "stale", Name: "Deleted upstream", DateUpdated: 50, IndexedAt: 1}})
+
+	now := time.UnixMilli(9_000_000)
+	idx.BeginRebuild(now)
+	idx.AdvanceRebuild([]Entry{{ID: "kept", Name: "Kept", DateUpdated: 900, IndexedAt: now.UnixMilli()}}, 900)
+	idx.CompleteRebuild(nil, now)
+
+	assert.Contains(t, idx.Entries, "kept")
+	assert.NotContains(t, idx.Entries, "stale", "deleted task survived a completed rebuild")
+}
+
+// A rebuild that comes back empty against a populated index is far more likely
+// to be a bad response than a workspace that lost every task, and treating it
+// as truth wipes the mirror and answers "no tasks found" with confidence.
+func TestIndex_CompletedRebuildRefusesToEmptyAPopulatedIndex(t *testing.T) {
+	idx := New("12345")
+	idx.Merge([]Entry{entry("a", "A", 100), entry("b", "B", 200)})
+
+	now := time.UnixMilli(9_000_000)
+	idx.BeginRebuild(now)
+	ok := idx.CompleteRebuild(nil, now)
+
+	assert.False(t, ok, "an empty rebuild was accepted as authoritative")
+	assert.Len(t, idx.Entries, 2, "index wiped by a single empty response")
+	assert.True(t, idx.Partial, "wiped index not flagged for another attempt")
+}
+
+// A rebuild in progress must continue, whatever the reconcile clock says.
+func TestIndex_RebuildInProgressForcesContinuation(t *testing.T) {
+	idx := New("12345")
+	now := time.UnixMilli(9_000_000)
+	idx.BeginRebuild(now)
+	idx.AdvanceRebuild([]Entry{entry("a", "A", 900)}, 900)
+
+	assert.True(t, idx.NeedsFullSync(now, time.Hour), "resume point ignored")
+}
+
+// ---------------------------------------------------------------------------
+// Watermark sanity
+// ---------------------------------------------------------------------------
+
+// date_updated is server-set, but importers and integrations do produce rows
+// dated in the future. One such row set the watermark ahead of now, and every
+// later incremental asked for changes newer than that — returning nothing,
+// forever, with no disclosure.
+func TestIndex_SinceIgnoresAFutureWatermark(t *testing.T) {
+	idx := New("12345")
+	now := time.UnixMilli(1_000_000_000)
+	idx.Merge([]Entry{entry("skewed", "Imported", now.UnixMilli()+31_536_000_000)})
+
+	assert.LessOrEqual(t, idx.SinceAt(now), now.UnixMilli(),
+		"a future timestamp poisoned the incremental watermark")
+}
+
+// ---------------------------------------------------------------------------
+// Concurrent processes
+// ---------------------------------------------------------------------------
+
+// Two searches at once each loaded, synced and saved, so the last writer threw
+// away the other's work entirely — and because a truncated sync stamps the
+// reconcile clock, the loser's complete rebuild could be replaced by the
+// winner's partial one and pinned there for a week.
+func TestUpdate_ConcurrentWritersDoNotLoseEachOthersEntries(t *testing.T) {
+	dir := t.TempDir()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			_ = Update(dir, "12345", func(idx *Index) bool {
+				return idx.Merge([]Entry{entry(fmt.Sprintf("t%d", n), "Task", int64(100+n))})
+			})
+		}(i)
+	}
+	wg.Wait()
+
+	got, err := Load(dir, "12345")
+	assert.NoError(t, err)
+	assert.Len(t, got.Entries, 8, "concurrent writers lost entries")
+}
+
+// Update must read the state it is about to modify, not one captured earlier.
+func TestUpdate_AppliesToTheCurrentOnDiskState(t *testing.T) {
+	dir := t.TempDir()
+	seed := New("12345")
+	seed.Merge([]Entry{entry("existing", "Existing", 100)})
+	if err := Save(dir, seed); err != nil {
+		t.Fatal(err)
+	}
+
+	err := Update(dir, "12345", func(idx *Index) bool {
+		assert.Contains(t, idx.Entries, "existing", "Update did not see what was on disk")
+		return idx.Merge([]Entry{entry("added", "Added", 200)})
+	})
+	assert.NoError(t, err)
+
+	got, _ := Load(dir, "12345")
+	assert.Len(t, got.Entries, 2)
 }

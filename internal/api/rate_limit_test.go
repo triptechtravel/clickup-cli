@@ -1,10 +1,13 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewRateLimiter(t *testing.T) {
@@ -243,4 +246,42 @@ func TestShouldRetry(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A context deadline has to actually bound the wait. The limiter slept with
+// time.Sleep, which nothing can interrupt, so a quota-exhausted workspace made
+// every deadline above it — the 30s HTTP timeout, the 60s index sync budget,
+// the 90s command deadline — advisory. Measured overruns of 112s and 126s on
+// searches that were supposed to stop at 90s.
+func TestRateLimiter_WaitReturnsWhenTheContextEnds(t *testing.T) {
+	rl := NewRateLimiter()
+	rl.remaining = 0
+	rl.resetAt = time.Now().Add(time.Hour)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	start := time.Now()
+	err := rl.WaitContext(ctx)
+
+	assert.Error(t, err, "a cancelled wait should report it")
+	assert.Less(t, time.Since(start), time.Second, "wait ignored the cancelled context")
+}
+
+// A reset timestamp in the wrong unit (millis rather than seconds) computed a
+// wait decades long. Nothing capped it, so one bad header parked the CLI
+// indefinitely.
+func TestRateLimiter_WaitIsCapped(t *testing.T) {
+	rl := NewRateLimiter()
+	rl.remaining = 0
+	rl.resetAt = time.Now().Add(400 * 24 * time.Hour)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	_ = rl.WaitContext(ctx)
+
+	assert.Less(t, time.Since(start), 5*time.Second,
+		"an absurd reset time was honoured without a ceiling")
 }
