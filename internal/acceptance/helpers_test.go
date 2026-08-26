@@ -88,6 +88,11 @@ func grepRepo(t *testing.T, dir, pattern string) []string {
 			return readErr
 		}
 		for i, line := range strings.Split(string(b), "\n") {
+			// Comments describe the defect these guards look for, so matching
+			// them turns every explanation into a false positive.
+			if strings.HasPrefix(strings.TrimSpace(line), "//") {
+				continue
+			}
 			if re.MatchString(line) {
 				rel, _ := filepath.Rel(repoRoot(t), path)
 				hits = append(hits, rel+":"+itoa(i+1))

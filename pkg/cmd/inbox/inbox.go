@@ -159,6 +159,9 @@ func inboxRun(opts *inboxOptions) error {
 		Assignees:     []string{strconv.Itoa(user.User.ID)},
 		IncludeClosed: true,
 		Subtasks:      true,
+		// Explicitly newest-first: this truncates to opts.limit, so without an
+		// order it reads a prefix of whatever ClickUp happens to return.
+		OrderBy: "updated",
 	}, opts.limit)
 	if err != nil {
 		return fmt.Errorf("failed to fetch assigned tasks: %w", err)
@@ -172,6 +175,7 @@ func inboxRun(opts *inboxOptions) error {
 		DateUpdGt:     cutoffMs,
 		IncludeClosed: true,
 		Subtasks:      true,
+		OrderBy:       "updated",
 	}, opts.limit)
 	if err != nil {
 		return fmt.Errorf("failed to fetch tasks: %w", err)

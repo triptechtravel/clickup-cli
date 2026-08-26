@@ -74,9 +74,13 @@ func FetchRecentTeamTasks(f *Factory, limit int) ([]RecentTask, error) {
 func fetchRecentTeamTasks(client *api.Client, teamID string, assignees []string, limit int) ([]RecentTask, error) {
 	ctx := context.Background()
 
+	// Newest first. ClickUp reads Reverse as ascending, so this asked for the
+	// oldest tasks in the workspace and then took the first `limit` of them —
+	// a command named "recent" was returning tasks untouched for years. Three
+	// callers depend on it: `task recent`, the no-results fallback in
+	// `task search`, and the interactive picker in `clickup link`.
 	params := apiv2.FilteredTeamTasksParams{
 		OrderBy:  "updated",
-		Reverse:  true,
 		Subtasks: true,
 	}
 	if len(assignees) > 0 {
