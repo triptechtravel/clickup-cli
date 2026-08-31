@@ -92,6 +92,16 @@ SPEC_V3_URL := https://developer.clickup.com/openapi/ClickUp_PUBLIC_API_V3.yaml
 SPEC_V2_SHA := a0a72ec97ddb4e4859b9ed89b997bb784ba5828412ff35119f41e87103069662
 SPEC_V3_SHA := 167e0b99e0c2218312d1318fff613f180dccdfcb8decb724ce08559aa04329f2
 
+# The generator is pinned for the same reason the specs are: `make check`
+# regenerates and compares, which proves nothing if the tool doing the
+# generating floats. CI used to install this at @latest.
+OAPI_CODEGEN := github.com/oapi-codegen/oapi-codegen-exp/experimental/cmd/oapi-codegen
+OAPI_CODEGEN_VERSION := v0.0.0-20260414001447-ff920b08e315
+
+.PHONY: tools
+tools:
+	go install $(OAPI_CODEGEN)@$(OAPI_CODEGEN_VERSION)
+
 # verify_spec <file> <expected-sha> <name>
 define verify_spec
 	@actual=$$(shasum -a 256 $(1) | cut -d' ' -f1); \
@@ -132,6 +142,8 @@ api-spec: api/specs/clickup-v2.json api/specs/clickup-v3.yaml
 
 .PHONY: api-gen
 api-gen: api-spec
+	@command -v oapi-codegen > /dev/null || { \
+		echo "oapi-codegen not on PATH. Run: make tools"; exit 1; }
 	@echo "Generating types from specs..."
 	cd api && go generate .
 	@echo "Fixing self-referencing types (V2)..."
