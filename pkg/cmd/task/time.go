@@ -439,12 +439,17 @@ type timeEntryTaskLocation struct {
 	ListID string `json:"list_id"`
 }
 
+// Duration, Start and End are flexibleInt because ClickUp types them
+// inconsistently: durations arrive as strings on the time-entries endpoints and
+// as numbers elsewhere (a running timer is the number -1), and the timestamps
+// swing the same way. Decoding them as plain strings meant one numeric entry
+// failed the entire listing.
 type timeEntry struct {
-	ID          string `json:"id"`
-	Duration    string `json:"duration"`
-	Description string `json:"description"`
-	Start       string `json:"start"`
-	End         string `json:"end"`
+	ID          string      `json:"id"`
+	Duration    flexibleInt `json:"duration"`
+	Description string      `json:"description"`
+	Start       flexibleInt `json:"start"`
+	End         flexibleInt `json:"end"`
 	User        struct {
 		Username string `json:"username"`
 	} `json:"user"`
@@ -827,8 +832,8 @@ func printTimesheetTable(f *cmdutil.Factory, entries []timeEntry, startDate, end
 	var totalMs int64
 	for _, e := range entries {
 		// Convert start ms to date.
-		dateStr := e.Start
-		if t, err := parseUnixMillis(e.Start); err == nil {
+		dateStr := string(e.Start)
+		if t, err := parseUnixMillis(string(e.Start)); err == nil {
 			dateStr = t.Format("2006-01-02")
 		}
 		tp.AddField(dateStr)
@@ -840,12 +845,12 @@ func printTimesheetTable(f *cmdutil.Factory, entries []timeEntry, startDate, end
 		tp.AddField(taskName)
 
 		tp.AddField(e.User.Username)
-		tp.AddField(formatDuration(e.Duration))
+		tp.AddField(formatDuration(string(e.Duration)))
 		tp.AddField(e.Description)
 
 		tp.EndRow()
 
-		if ms, err := strconv.ParseInt(e.Duration, 10, 64); err == nil {
+		if ms, err := strconv.ParseInt(string(e.Duration), 10, 64); err == nil {
 			totalMs += ms
 		}
 	}
@@ -892,14 +897,14 @@ func printTimeEntryTable(f *cmdutil.Factory, entries []timeEntry, taskID string)
 		tp.AddField(e.ID)
 
 		// Convert start ms to date.
-		dateStr := e.Start
-		if t, err := parseUnixMillis(e.Start); err == nil {
+		dateStr := string(e.Start)
+		if t, err := parseUnixMillis(string(e.Start)); err == nil {
 			dateStr = t.Format("2006-01-02")
 		}
 		tp.AddField(dateStr)
 
 		tp.AddField(e.User.Username)
-		tp.AddField(formatDuration(e.Duration))
+		tp.AddField(formatDuration(string(e.Duration)))
 		tp.AddField(e.Description)
 
 		billableStr := "No"

@@ -98,6 +98,30 @@ COUNT=$("$BIN" task list --list-id "$LIST_ID" --include-subtasks --include-close
 [ "$COUNT" -ge 2 ] || fail "task list with --include-subtasks returned $COUNT for token $TOKEN, expected >=2"
 ok "task list returned $COUNT items matching token (parent + subtask)"
 
+# --- time tracking (issue #27) --------------------------------------------
+# ClickUp returns time_spent as a number until time is tracked and as a string
+# afterwards, in the same response. Logging time on the subtask and then reading
+# the parent is the exact shape that used to make the parent undecodable — and
+# only the real API produces the mixed types.
+step "task time log — track time on the subtask"
+"$BIN" task time log "$SUB_ID" --duration 34m --description "Smoke probe $TOKEN" > /dev/null 2>&1 \
+  || fail "task time log failed"
+ok "logged 34m on $SUB_ID"
+
+step "task time list — duration decodes whichever type the API sends"
+LOGGED=$("$BIN" task time list "$SUB_ID" --json --jq 'length' 2>/dev/null | tail -1)
+[ "${LOGGED:-0}" -ge 1 ] || fail "task time list returned no entries for $SUB_ID"
+ok "read $LOGGED time entry/entries"
+
+step "task view parent — a tracked subtask must not break the parent decode"
+SPENT=$("$BIN" task view "$PARENT_ID" --json --jq '.subtasks | length' --raw 2>/dev/null | tail -1)
+[ -n "$SPENT" ] || fail "task view failed on a parent whose subtask has tracked time (issue #27)"
+ok "parent decoded with $SPENT subtask(s)"
+
+step "task time running — no timer is still a clean decode"
+"$BIN" task time running > /dev/null 2>&1 || fail "task time running failed"
+ok "running-timer endpoint decoded"
+
 # --- comment add (CreateTaskComment, typed response) ----------------------
 step "comment add — exercises typed response decode (the v0.34.1 regression)"
 COMMENT_ID="$("$BIN" comment add "$PARENT_ID" "Smoke probe: **bold** and \`code\` should render." \

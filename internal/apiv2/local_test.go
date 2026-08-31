@@ -714,3 +714,57 @@ func TestFetchTeamTasks_NoExtraParams(t *testing.T) {
 	assert.Contains(t, capturedQuery, "page=0")
 	assert.NotContains(t, capturedQuery, "&&")
 }
+
+// Regression for issue #27: ClickUp returns time_spent as a JSON number when no
+// time is tracked and as a JSON string when it is, sometimes in the same
+// response. Typing the field as int64 meant one subtask with logged time made
+// the parent task — name, status, every other subtask — completely unreadable.
+func TestGetTaskLocal_StringTimeSpentInSubtasks(t *testing.T) {
+	const body = `{
+		"id": "86cay82n2",
+		"name": "Parent task",
+		"status": {"status": "in progress"},
+		"time_spent": 0,
+		"subtasks": [
+			{"id": "86caxfujb", "name": "A", "time_spent": 0},
+			{"id": "86cay82vx", "name": "B", "time_spent": "2040000"},
+			{"id": "86cazgwc1", "name": "C", "time_spent": 0, "time_estimate": "3600000"}
+		]
+	}`
+
+	_, client := localTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Remaining", "99")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	})
+
+	task, err := GetTaskLocal(context.Background(), client, "86cay82n2", "?include_subtasks=true")
+	require.NoError(t, err, "a string time_spent on a subtask must not fail the whole task")
+	require.NotNil(t, task)
+	assert.Equal(t, "Parent task", task.Name)
+	require.Len(t, task.Subtasks, 3)
+	assert.Equal(t, int64(2040000), task.Subtasks[1].TimeSpent.Int64())
+	assert.Equal(t, int64(3600000), task.Subtasks[2].TimeEstimate.Int64())
+}
+
+// The parent's own fields swing the same way, and so do tasks returned by the
+// list endpoint.
+func TestGetTasksLocal_StringTimeFields(t *testing.T) {
+	const body = `{"tasks": [
+		{"id": "t1", "name": "One", "time_spent": "600000", "time_estimate": "1200000"},
+		{"id": "t2", "name": "Two", "time_spent": 0, "time_estimate": null}
+	], "last_page": true}`
+
+	_, client := localTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Remaining", "99")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	})
+
+	tasks, err := GetTasksLocal(context.Background(), client, "list1", "")
+	require.NoError(t, err)
+	require.Len(t, tasks, 2)
+	assert.Equal(t, int64(600000), tasks[0].TimeSpent.Int64())
+	assert.Equal(t, int64(1200000), tasks[0].TimeEstimate.Int64())
+	assert.Equal(t, int64(0), tasks[1].TimeEstimate.Int64())
+}

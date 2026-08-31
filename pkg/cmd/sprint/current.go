@@ -239,8 +239,8 @@ func runSprintCurrent(f *cmdutil.Factory, folderID string, jsonFlags *cmdutil.JS
 			Priority:     priority,
 			DueDate:      dueStr,
 			Points:       pts,
-			TimeEstimate: formatSprintDuration(t.TimeEstimate),
-			TimeSpent:    formatSprintDuration(t.TimeSpent),
+			TimeEstimate: formatSprintDuration(t.TimeEstimate.Int64()),
+			TimeSpent:    formatSprintDuration(t.TimeSpent.Int64()),
 			ListID:       currentList.ID,
 			SprintName:   currentList.Name,
 		})

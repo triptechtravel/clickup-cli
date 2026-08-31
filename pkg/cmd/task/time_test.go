@@ -1,9 +1,12 @@
 package task
 
 import (
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/triptechtravel/clickup-cli/internal/testutil"
 )
 
 func TestNewCmdTime_Subcommands(t *testing.T) {
@@ -56,4 +59,28 @@ func TestFormatDuration(t *testing.T) {
 	assert.Equal(t, "1h 30m", formatDuration("5400000"))
 	assert.Equal(t, "0m", formatDuration("0"))
 	assert.Equal(t, "invalid", formatDuration("invalid"))
+}
+
+// ClickUp returns a time entry's duration as a string ("3600000") on the time
+// entries endpoints, but a number on others — and the running-timer sentinel is
+// a negative number. Whichever arrives, the listing must render rather than
+// fail.
+func TestTimeList_MixedDurationTypes(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	tf.HandleFunc("team/12345/time_entries", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-RateLimit-Remaining", "99")
+		_, _ = w.Write([]byte(`{"data": [
+			{"id": "te1", "duration": "3600000", "description": "String duration", "user": {"username": "alice"}},
+			{"id": "te2", "duration": 1800000, "description": "Numeric duration", "user": {"username": "alice"}}
+		]}`))
+	})
+
+	cmd := NewCmdTimeList(tf.Factory)
+	err := testutil.RunCommand(t, cmd, "abc123")
+	require.NoError(t, err)
+
+	out := tf.OutBuf.String()
+	assert.Contains(t, out, "1h")
+	assert.Contains(t, out, "30m")
 }

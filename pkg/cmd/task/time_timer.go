@@ -168,7 +168,7 @@ func runTimeStop(f *cmdutil.Factory, jsonFlags *cmdutil.JSONFlags) error {
 		return jsonFlags.OutputJSON(ios.Out, resp)
 	}
 
-	dur := formatDuration(strconv.Itoa(resp.Data.Duration))
+	dur := formatMillisDuration(resp.Data.Duration.Int64())
 	fmt.Fprintf(ios.Out, "%s Timer stopped — %s logged", cs.Green("!"), cs.Bold(dur))
 	if resp.Data.Task.ID != "" {
 		fmt.Fprintf(ios.Out, " on task %s", cs.Bold(resp.Data.Task.ID))
