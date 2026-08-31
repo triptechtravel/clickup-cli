@@ -17,6 +17,10 @@ Timesheet mode: When --start-date and --end-date are provided, shows all
 time entries across tasks for the given date range. By default filters to
 the current user; use --assignee to change.
 
+In --json output, duration, start and end are milliseconds as JSON numbers,
+matching "task time stop" and "task time running". They were quoted strings
+before v0.39.0.
+
 ```
 clickup task time list [<task-id>] [flags]
 ```
@@ -46,7 +50,7 @@ clickup task time list [<task-id>] [flags]
   clickup task time list 86a3xrwkp --json
 
   # Filter with jq
-  clickup task time list --start-date 2026-02-01 --end-date 2026-02-28 --jq '[.[] | {task: .task.name, hrs: (.duration | tonumber / 3600000)}]'
+  clickup task time list --start-date 2026-02-01 --end-date 2026-02-28 --jq '[.[] | {task: .task.name, hrs: (.duration / 3600000)}]'
 ```
 
 ### Options
