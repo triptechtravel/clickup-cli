@@ -64,11 +64,11 @@ type searchTask struct {
 
 // flexibleInt decodes a JSON string or number into a string.
 //
-// ClickUp sends date_updated as a string today, and a time entry's duration as
-// a string on some endpoints and a number on others. Decoding either as the one
-// form it usually takes meant a single response in the other form failed the
-// whole page — a lot of blast radius for fields used only for display and
-// ordering. Fields the CLI does arithmetic on use clickup.Millis instead.
+// ClickUp sends date_updated as a string today. Decoding it as one meant a
+// single numeric response would fail the whole page and index nothing, which is
+// a lot of blast radius for a field used only for ordering and the watermark.
+// It preserves the raw token, so it is for display and ordering only — fields
+// the CLI does arithmetic on use clickup.Millis, which validates.
 type flexibleInt string
 
 func (f *flexibleInt) UnmarshalJSON(b []byte) error {

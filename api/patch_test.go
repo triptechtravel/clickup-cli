@@ -453,6 +453,50 @@ func TestPatch_IdempotentOnAlreadyPatchedInput(t *testing.T) {
 // rely on. Skipped in CI environments without the spec materialised.
 // ---------------------------------------------------------------------------
 
+func TestPatchedSpec_RealFile_MillisFieldsArePatched(t *testing.T) {
+	_, thisFile, _, _ := runtime.Caller(0)
+	specPath := filepath.Join(filepath.Dir(thisFile), "specs", "clickup-v2.json")
+
+	// Every field the CLI reads as milliseconds, at the paths it reads them
+	// from. The synthetic tests above invent their own paths, so only this one
+	// notices if ClickUp renames an endpoint out from under the patch.
+	cmd := exec.Command("jq", "-r",
+		`[ .paths."/v2/team/{team_id}/time_entries/stop".post.responses."200".content."application/json".schema.properties.data.properties
+		   | .duration, .start, .end, .at ]
+		 + [ .paths."/v2/team/{team_id}/time_entries/current".get.responses."200".content."application/json".schema.properties.data.properties
+		   | .duration, .start, .at ]
+		 + [ .paths."/v2/task/{task_id}".get.responses."200".content."application/json".schema.properties
+		   | .time_spent, .time_estimate ]
+		 | map(."x-go-type" // "MISSING") | unique | .[]`,
+		specPath)
+	out, err := cmd.Output()
+	if err != nil {
+		t.Skipf("real spec not present (run `make api/specs/clickup-v2.json` to materialise): %v", err)
+	}
+
+	got := strings.Fields(string(out))
+	assert.Equal(t, []string{"clickup.Millis"}, got,
+		"every millisecond field on the timer and task endpoints must carry the flexible Go type")
+}
+
+// The counterpart: request bodies must not pick it up, or the generated flag
+// sets lose the scalar they bind --duration and --time-estimate to.
+func TestPatchedSpec_RealFile_RequestBodiesStayScalar(t *testing.T) {
+	_, thisFile, _, _ := runtime.Caller(0)
+	specPath := filepath.Join(filepath.Dir(thisFile), "specs", "clickup-v2.json")
+
+	cmd := exec.Command("jq", "-r",
+		`[ .paths[] | .[] | objects | .requestBody? // empty
+		   | .. | objects | select(has("x-go-type")) | ."x-go-type" ] | length`,
+		specPath)
+	out, err := cmd.Output()
+	if err != nil {
+		t.Skipf("real spec not present: %v", err)
+	}
+	assert.Equal(t, "0", strings.TrimSpace(string(out)),
+		"no request body should carry an x-go-type from the millis patch")
+}
+
 func TestPatchedSpec_RealFile_ContractMatchesGeneratedWrappers(t *testing.T) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	specPath := filepath.Join(filepath.Dir(thisFile), "specs", "clickup-v2.json")

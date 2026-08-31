@@ -78,3 +78,32 @@ func TestTask_StringTimeSpentOnSubtask(t *testing.T) {
 	assert.Equal(t, int64(2040000), task.Subtasks[1].TimeSpent.Int64())
 	assert.Equal(t, "B", task.Subtasks[1].Name)
 }
+
+// The float fallback exists for "2040000.0". It must not become a back door for
+// values int64 cannot hold: converting an out-of-range float is
+// implementation-defined in Go, so the same response would decode to MaxInt64
+// on arm64 and MinInt64 on amd64.
+func TestMillis_RejectsOutOfRangeAndNonFinite(t *testing.T) {
+	for _, in := range []string{
+		`1e30`,
+		`99999999999999999999`,
+		`-99999999999999999999`,
+		`"Inf"`,
+		`"-Inf"`,
+		`"NaN"`,
+		`"infinity"`,
+	} {
+		var m Millis
+		assert.Error(t, json.Unmarshal([]byte(in), &m), "%s must not decode to a fabricated millisecond count", in)
+	}
+}
+
+// math.MaxInt64 is not representable as a float64: it rounds to 2^63, which
+// int64 cannot hold. The boundary has to exclude it.
+func TestMillis_RejectsExactlyTwoToThe63(t *testing.T) {
+	var m Millis
+	assert.Error(t, json.Unmarshal([]byte(`9223372036854775808`), &m))
+
+	require.NoError(t, json.Unmarshal([]byte(`9223372036854775807`), &m))
+	assert.Equal(t, int64(9223372036854775807), m.Int64())
+}

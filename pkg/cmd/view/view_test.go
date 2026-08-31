@@ -124,3 +124,27 @@ func TestViewTasks_JSON(t *testing.T) {
 	assert.Len(t, parsed, 2)
 	assert.Equal(t, "task1", parsed[0]["id"])
 }
+
+// A task with no tracked time reports time_spent as 0, and that zero has always
+// appeared in --json output. It must survive: `omitempty` on a plain integer
+// kind drops a zero, and a jq filter summing the column then gets null instead
+// of a total.
+func TestViewTasks_JSONKeepsZeroTimeFields(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	tf.HandleFunc("view/3v-abc/task", viewsHandler(`{"tasks": [
+		{"id": "t1", "name": "Untracked", "time_spent": 0, "time_estimate": 0},
+		{"id": "t2", "name": "Tracked", "time_spent": "2040000"}
+	]}`))
+
+	cmd := NewCmdViewTasks(tf.Factory)
+	require.NoError(t, testutil.RunCommand(t, cmd, "3v-abc", "--json"))
+
+	var tasks []map[string]any
+	require.NoError(t, json.Unmarshal(tf.OutBuf.Bytes(), &tasks))
+	require.Len(t, tasks, 2)
+
+	assert.Contains(t, tasks[0], "time_spent", "a zero time_spent must still be emitted")
+	assert.Contains(t, tasks[0], "time_estimate", "a zero time_estimate must still be emitted")
+	assert.EqualValues(t, 0, tasks[0]["time_spent"])
+	assert.EqualValues(t, 2040000, tasks[1]["time_spent"])
+}
