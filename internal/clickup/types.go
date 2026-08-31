@@ -53,8 +53,8 @@ type Task struct {
 	DueDate             *Date                  `json:"due_date,omitempty"`
 	StartDate           string                 `json:"start_date,omitempty"`
 	Points              Point                  `json:"points,omitempty"`
-	TimeEstimate        int64                  `json:"time_estimate"`
-	TimeSpent           int64                  `json:"time_spent"`
+	TimeEstimate        Millis                 `json:"time_estimate"`
+	TimeSpent           Millis                 `json:"time_spent"`
 	CustomFields        []CustomField          `json:"custom_fields"`
 	Dependencies        []Dependence           `json:"dependencies"`
 	LinkedTasks         []LinkedTask           `json:"linked_tasks"`

@@ -191,3 +191,72 @@ func TestViewCommand_RecursiveSubtasks(t *testing.T) {
 	sub2 := subtasks[1].(map[string]interface{})
 	assert.Equal(t, "sub2", sub2["id"])
 }
+
+// Issue #27: one subtask with logged time made the whole parent unreadable —
+// name, status and every sibling included — because ClickUp sends time_spent as
+// a string once time is tracked and as a number when it is not.
+func TestViewCommand_SubtaskWithTrackedTime(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+
+	taskJSON := `{
+		"id": "86cay82n2",
+		"name": "Parent task",
+		"status": {"status": "in progress", "color": "#4194f6"},
+		"creator": {"id": 1, "username": "isaac"},
+		"assignees": [],
+		"tags": [],
+		"url": "https://app.clickup.com/t/86cay82n2",
+		"date_created": "1700000000000",
+		"date_updated": "1700100000000",
+		"time_spent": 0,
+		"subtasks": [
+			{"id": "86caxfujb", "name": "Untracked subtask", "status": {"status": "open"}, "assignees": [], "time_spent": 0},
+			{"id": "86caygxwe", "name": "Tracked subtask", "status": {"status": "done"}, "assignees": [], "time_spent": "2040000"}
+		]
+	}`
+
+	tf.HandleFunc("task/86cay82n2", taskHandler(taskJSON))
+	tf.HandleFunc("task/86cay82n2/", taskHandler(taskJSON))
+
+	cmd := NewCmdView(tf.Factory)
+	require.NoError(t, testutil.RunCommand(t, cmd, "86cay82n2"))
+
+	out := tf.OutBuf.String()
+	assert.Contains(t, out, "Parent task")
+	assert.Contains(t, out, "Untracked subtask")
+	assert.Contains(t, out, "Tracked subtask")
+}
+
+// The same task through --json: time_spent stays a JSON number whichever form
+// the API sent, so jq filters over the output keep working.
+func TestViewCommand_JSONNormalisesTrackedTime(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+
+	taskJSON := `{
+		"id": "86caygxwe",
+		"name": "Tracked task",
+		"status": {"status": "done"},
+		"creator": {"id": 1, "username": "isaac"},
+		"assignees": [],
+		"tags": [],
+		"date_created": "1700000000000",
+		"date_updated": "1700100000000",
+		"time_spent": "2040000",
+		"time_estimate": "3600000",
+		"subtasks": []
+	}`
+
+	tf.HandleFunc("task/86caygxwe", taskHandler(taskJSON))
+	tf.HandleFunc("task/86caygxwe/", taskHandler(taskJSON))
+
+	cmd := NewCmdView(tf.Factory)
+	require.NoError(t, testutil.RunCommand(t, cmd, "86caygxwe", "--json"))
+
+	var parsed struct {
+		TimeSpent    json.Number `json:"time_spent"`
+		TimeEstimate json.Number `json:"time_estimate"`
+	}
+	require.NoError(t, json.Unmarshal(tf.OutBuf.Bytes(), &parsed))
+	assert.Equal(t, "2040000", parsed.TimeSpent.String())
+	assert.Equal(t, "3600000", parsed.TimeEstimate.String())
+}

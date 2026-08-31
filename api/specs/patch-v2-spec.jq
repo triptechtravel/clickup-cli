@@ -1,7 +1,10 @@
 # patch-v2-spec.jq — Fixes known type mismatches in the ClickUp V2 OpenAPI spec.
 #
 # The official spec declares several response fields with incorrect types:
-#   - time_spent / time_estimate: declared as string|null, API returns integer (ms)
+#   - time_spent / time_estimate / duration: declared as string|null (or plain
+#     integer), but the API is inconsistent about which it sends — the same
+#     response can carry a number on one task and a string on the next. Patched
+#     to the clickup.Millis Go type, which accepts both.
 #   - assignees: declared as string[], API returns object[] with {id, username, email, ...}
 #   - watchers: declared as string[], API returns object[] with same shape as assignees
 #   - tags: declared as string[], API returns object[] with {name, tag_fg, tag_bg}
@@ -17,13 +20,37 @@
 #
 # Reported to ClickUp: https://feedback.clickup.com/public-api
 
+# Helper: the Go type every millisecond field is generated as.
+#
+# The spec's declared type is not enough on its own: ClickUp returns these
+# fields as a JSON number on one task and a JSON string on the next — in the
+# same response — so any single Go scalar aborts the decode on the other form.
+# clickup.Millis accepts both and marshals back as a number.
+def millis(desc):
+  {
+    "type": ["integer", "null"],
+    "description": desc,
+    "x-go-type": "clickup.Millis",
+    "x-go-type-import": {
+      "name": "clickup",
+      "path": "github.com/triptechtravel/clickup-cli/internal/clickup"
+    }
+  };
+
 # Helper: patch time_spent and time_estimate in a properties object
 def fix_time_fields:
   if .time_spent then
-    .time_spent = {"type": ["integer", "null"], "description": "Time spent in milliseconds"}
+    .time_spent = millis("Time spent in milliseconds")
   else . end
   | if .time_estimate then
-    .time_estimate = {"type": ["integer", "null"], "description": "Time estimate in milliseconds"}
+    .time_estimate = millis("Time estimate in milliseconds")
+  else . end;
+
+# Helper: patch a time entry's duration. Documented as an integer, returned as a
+# string by the time-entries endpoints; a running timer reports -1.
+def fix_duration:
+  if .duration then
+    .duration = millis("Duration in milliseconds")
   else . end;
 
 # Helper: patch assignees from string[] to object[]
@@ -141,10 +168,21 @@ def fix_comment_request:
     | (if .required then .required = (.required - ["comment_text", "assignee", "resolved"]) else . end)
   else . end;
 
-# Walk all schema properties objects and apply field-level fixes.
-(.. | objects | select(has("properties")) | .properties) |= (
-  fix_time_fields
-  | fix_assignees
+# Millisecond fields are patched in response schemas (and shared components)
+# only. Request bodies keep their plain integer type: the CLI is the side
+# sending them, so it always sends a number, and a plain scalar is what the
+# generated flag sets need in order to bind --duration and friends.
+def fix_millis_fields:
+  (.. | objects | select(has("properties")) | .properties) |= (
+    fix_time_fields | fix_duration
+  );
+
+(.paths[]?[]? | objects | select(has("responses")) | .responses) |= fix_millis_fields
+| (if has("components") then .components |= fix_millis_fields else . end)
+
+# Walk all schema properties objects and apply the remaining field-level fixes.
+| (.. | objects | select(has("properties")) | .properties) |= (
+  fix_assignees
   | fix_watchers
   | fix_tags
   | fix_group_assignees

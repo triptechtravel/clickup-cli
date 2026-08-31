@@ -116,3 +116,35 @@ func TestTimeSubcommands_Include_Timer(t *testing.T) {
 	assert.True(t, names["stop"], "expected 'stop' subcommand")
 	assert.True(t, names["running"], "expected 'running' subcommand")
 }
+
+// The stop response's duration comes back as a string on some workspaces.
+func TestTimeStop_StringDuration(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	tf.Handle("POST", "team/12345/time_entries/stop", 200, `{
+		"data": {"id": "te1", "task": {"id": "abc123", "name": "My Task"}, "duration": "3600000"}
+	}`)
+
+	cmd := NewCmdTimeStop(tf.Factory)
+	err := testutil.RunCommand(t, cmd)
+	require.NoError(t, err)
+
+	out := tf.OutBuf.String()
+	assert.Contains(t, out, "Timer stopped")
+	assert.Contains(t, out, "1h")
+}
+
+// Likewise for the running-timer endpoint.
+func TestTimeRunning_StringDuration(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	tf.Handle("GET", "team/12345/time_entries/current", 200, `{
+		"data": {"id": "te1", "task": {"id": "abc123", "name": "My Task"}, "start": "1700000000000", "duration": "-1", "description": "Working"}
+	}`)
+
+	cmd := NewCmdTimeRunning(tf.Factory)
+	err := testutil.RunCommand(t, cmd)
+	require.NoError(t, err)
+
+	out := tf.OutBuf.String()
+	assert.Contains(t, out, "Running timer")
+	assert.Contains(t, out, "My Task")
+}

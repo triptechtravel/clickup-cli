@@ -368,10 +368,10 @@ func printTaskView(f *cmdutil.Factory, task *clickup.Task, subtasks []subtaskInf
 	}
 
 	// Time Estimate & Time Spent
-	if s := formatMillisDuration(task.TimeEstimate); s != "" {
+	if s := formatMillisDuration(task.TimeEstimate.Int64()); s != "" {
 		fmt.Fprintf(out, "%s %s\n", cs.Bold("Time Estimate:"), s)
 	}
-	if s := formatMillisDuration(task.TimeSpent); s != "" {
+	if s := formatMillisDuration(task.TimeSpent.Int64()); s != "" {
 		fmt.Fprintf(out, "%s %s\n", cs.Bold("Time Spent:"), s)
 	}
 

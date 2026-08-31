@@ -107,6 +107,78 @@ func TestPatch_FixesTimeSpentToInteger(t *testing.T) {
 	assert.Contains(t, typeField, "integer", "time_spent should be widened to integer")
 }
 
+// Issue #27: the API returns time_spent as a number on one task and a string on
+// the next, so a Go scalar is not enough — the patch pins these fields to
+// clickup.Millis, which decodes either form.
+func TestPatch_ResponseMillisFieldsGetFlexibleGoType(t *testing.T) {
+	spec := map[string]any{
+		"paths": map[string]any{
+			"/v2/team/{team_id}/time_entries/stop": map[string]any{
+				"post": map[string]any{
+					"responses": map[string]any{
+						"200": map[string]any{
+							"content": map[string]any{
+								"application/json": map[string]any{
+									"schema": map[string]any{
+										"properties": map[string]any{
+											"duration":   map[string]any{"type": "integer"},
+											"time_spent": map[string]any{"type": []any{"string", "null"}},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	out := runPatch(t, spec)
+	props := dig(out, "paths", "/v2/team/{team_id}/time_entries/stop", "post", "responses",
+		"200", "content", "application/json", "schema", "properties").(map[string]any)
+
+	for _, field := range []string{"duration", "time_spent"} {
+		f, ok := props[field].(map[string]any)
+		require.True(t, ok, "%s should still be an object", field)
+		assert.Equal(t, "clickup.Millis", f["x-go-type"], "%s should decode from number or string", field)
+		imp, ok := f["x-go-type-import"].(map[string]any)
+		require.True(t, ok, "%s needs an import for its Go type", field)
+		assert.Equal(t, "github.com/triptechtravel/clickup-cli/internal/clickup", imp["path"])
+	}
+}
+
+// Request bodies keep plain scalars: the CLI is the one sending them, so it
+// always sends a number, and a scalar is what the generated flag set needs to
+// bind --duration to.
+func TestPatch_RequestMillisFieldsStayScalar(t *testing.T) {
+	spec := map[string]any{
+		"paths": map[string]any{
+			"/v2/team/{team_id}/time_entries": map[string]any{
+				"post": map[string]any{
+					"requestBody": map[string]any{
+						"content": map[string]any{
+							"application/json": map[string]any{
+								"schema": map[string]any{
+									"properties": map[string]any{
+										"duration": map[string]any{"type": "integer"},
+									},
+								},
+							},
+						},
+					},
+					"responses": map[string]any{},
+				},
+			},
+		},
+	}
+	out := runPatch(t, spec)
+	d := dig(out, "paths", "/v2/team/{team_id}/time_entries", "post", "requestBody",
+		"content", "application/json", "schema", "properties", "duration").(map[string]any)
+
+	assert.Equal(t, "integer", d["type"])
+	assert.Nil(t, d["x-go-type"], "request duration should stay a plain integer flag")
+}
+
 func TestPatch_FixesTagsToObjectItems(t *testing.T) {
 	spec := map[string]any{
 		"components": map[string]any{
