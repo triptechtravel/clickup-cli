@@ -124,7 +124,7 @@ available custom fields and their types.`,
 	// clearable sentinels) than a generic scalar flag can offer.
 	opts.specFlags.Register(cmd,
 		"name", "description", "markdown-content", "status", "priority",
-		"due-date", "start-date", "points", "parent",
+		"due-date", "start-date", "points", "parent", "time-estimate",
 		"due-date-time", "start-date-time",
 	)
 

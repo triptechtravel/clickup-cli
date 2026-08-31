@@ -3,6 +3,7 @@ package clickup
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -48,9 +49,16 @@ func (m *Millis) UnmarshalJSON(b []byte) error {
 		return nil
 	}
 	// Some fields arrive as floats ("2040000.0"); truncate rather than fail.
+	//
+	// ParseFloat is looser than JSON: it also accepts Inf, NaN and magnitudes
+	// int64 cannot hold, and converting one of those is implementation-defined
+	// in Go — the same response would decode to MaxInt64 on arm64 and MinInt64
+	// on amd64. A value that cannot be represented is an error, not a number.
 	if f, err := strconv.ParseFloat(s, 64); err == nil {
-		*m = Millis(int64(f))
-		return nil
+		if !math.IsNaN(f) && !math.IsInf(f, 0) && f >= math.MinInt64 && f < math.MaxInt64 {
+			*m = Millis(int64(f))
+			return nil
+		}
 	}
 
 	return fmt.Errorf("clickup: cannot decode %s as milliseconds", string(b))

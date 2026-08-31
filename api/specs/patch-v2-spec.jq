@@ -26,6 +26,10 @@
 # fields as a JSON number on one task and a JSON string on the next — in the
 # same response — so any single Go scalar aborts the decode on the other form.
 # clickup.Millis accepts both and marshals back as a number.
+# x-omitempty is not cosmetic: clickup.Millis is an int64, and `omitempty` on an
+# integer kind drops a zero before MarshalJSON is ever consulted. Without it a
+# task with no tracked time loses time_spent from --json entirely — the
+# generated Nullable[int] this replaced kept it.
 def millis(desc):
   {
     "type": ["integer", "null"],
@@ -34,7 +38,8 @@ def millis(desc):
     "x-go-type-import": {
       "name": "clickup",
       "path": "github.com/triptechtravel/clickup-cli/internal/clickup"
-    }
+    },
+    "x-omitempty": false
   };
 
 # Helper: patch time_spent and time_estimate in a properties object
@@ -46,20 +51,20 @@ def fix_time_fields:
     .time_estimate = millis("Time estimate in milliseconds")
   else . end;
 
-# Helper: patch a time entry's duration. Documented as an integer, returned as a
-# string by the time-entries endpoints; a running timer reports -1.
-def fix_duration:
-  if .duration then
-    .duration = millis("Duration in milliseconds")
-  else . end;
-
-# Helper: patch a time entry's timestamps. The spec's own stop-timer example
-# shows a string start beside a numeric end, and the running-timer example makes
-# all three strings. Applied to time-entry endpoints only (below), since `start`
-# and `end` mean other things elsewhere in the spec.
-def fix_time_entry_timestamps:
-  reduce ("start", "end", "at") as $f (.;
-    if .[$f] then .[$f] = millis("Unix timestamp in milliseconds") else . end
+# Helper: patch a time entry's own fields — its duration, documented as an
+# integer but returned as a string by the time-entries endpoints (a running
+# timer reports -1), and its timestamps, where the spec's own stop-timer example
+# shows a string start beside a numeric end while the running-timer example
+# makes all three strings.
+#
+# Applied to the time-entry endpoints only (below). `duration`, `start` and
+# `end` are generic enough to mean other things elsewhere in the spec — a media
+# length in seconds, a retry window — and a field silently retyped as
+# milliseconds is worse than one left alone: it decodes clean and is wrong by a
+# factor of 1000.
+def fix_time_entry_fields:
+  reduce ("duration", "start", "end", "at") as $f (.;
+    if .[$f] then .[$f] = millis("Milliseconds") else . end
   );
 
 # Helper: patch assignees from string[] to object[]
@@ -182,12 +187,10 @@ def fix_comment_request:
 # sending them, so it always sends a number, and a plain scalar is what the
 # generated flag sets need in order to bind --duration and friends.
 def fix_millis_fields:
-  (.. | objects | select(has("properties")) | .properties) |= (
-    fix_time_fields | fix_duration
-  );
+  (.. | objects | select(has("properties")) | .properties) |= fix_time_fields;
 
-def fix_timestamp_fields:
-  (.. | objects | select(has("properties")) | .properties) |= fix_time_entry_timestamps;
+def fix_time_entry_props:
+  (.. | objects | select(has("properties")) | .properties) |= fix_time_entry_fields;
 
 (.paths[]?[]? | objects | select(has("responses")) | .responses) |= fix_millis_fields
 # Shared schemas and responses, but not components.requestBodies — see above.
@@ -197,10 +200,10 @@ def fix_timestamp_fields:
        | (if has("responses") then .responses |= fix_millis_fields else . end)
      )
    else . end)
-# Timestamps, scoped to the time-entry endpoints by path.
+# Time-entry duration and timestamps, scoped to those endpoints by path.
 | (if (.paths | type) == "object" then .paths |= with_entries(
      if (.key | test("time_entries|/time$|/time/")) then
-       .value |= ((.[]? | objects | select(has("responses")) | .responses) |= fix_timestamp_fields)
+       .value |= ((.[]? | objects | select(has("responses")) | .responses) |= fix_time_entry_props)
      else . end
    ) else . end)
 

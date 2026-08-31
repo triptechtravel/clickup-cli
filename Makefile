@@ -109,7 +109,10 @@ define verify_spec
 	fi
 endef
 
-api/specs/clickup-v2.json:
+# Depends on the patch: editing patch-v2-spec.jq has to re-derive the spec, or a
+# tree that already has one silently keeps generating from the old rules — and
+# `make api-gen` looks up to date, so only `make api-clean` recovers.
+api/specs/clickup-v2.json: api/specs/patch-v2-spec.jq
 	@mkdir -p api/specs
 	curl -sfL -o $@.raw $(SPEC_V2_URL)
 	$(call verify_spec,$@.raw,$(SPEC_V2_SHA),V2)

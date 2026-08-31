@@ -14,6 +14,7 @@ import (
 	clickupv2 "github.com/triptechtravel/clickup-cli/api/clickupv2"
 	"github.com/triptechtravel/clickup-cli/internal/api"
 	"github.com/triptechtravel/clickup-cli/internal/apiv2"
+	"github.com/triptechtravel/clickup-cli/internal/clickup"
 	"github.com/triptechtravel/clickup-cli/internal/git"
 	"github.com/triptechtravel/clickup-cli/internal/prompter"
 	"github.com/triptechtravel/clickup-cli/internal/tableprinter"
@@ -199,7 +200,7 @@ func runTimeLog(f *cmdutil.Factory, opts *timeLogOptions) error {
 
 	fmt.Fprintf(ios.Out, "%s Logged %s to task %s",
 		cs.Green("✓"),
-		cs.Bold(formatDuration(strconv.FormatInt(durationMs, 10))),
+		cs.Bold(formatDurationMs(durationMs)),
 		cs.Bold(taskID),
 	)
 	if entryID != "" {
@@ -338,7 +339,7 @@ func runBulkTimeLog(f *cmdutil.Factory, opts *timeLogOptions) error {
 		logged++
 		fmt.Fprintf(ios.Out, "%s (%d/%d) Logged %s to task %s",
 			cs.Green("✓"), i+1, total,
-			formatDuration(strconv.FormatInt(durationMs, 10)),
+			formatDurationMs(durationMs),
 			entry.TaskID,
 		)
 		if entry.Description != "" {
@@ -439,17 +440,23 @@ type timeEntryTaskLocation struct {
 	ListID string `json:"list_id"`
 }
 
-// Duration, Start and End are flexibleInt because ClickUp types them
+// Duration, Start and End are clickup.Millis because ClickUp types them
 // inconsistently: durations arrive as strings on the time-entries endpoints and
 // as numbers elsewhere (a running timer is the number -1), and the timestamps
 // swing the same way. Decoding them as plain strings meant one numeric entry
 // failed the entire listing.
+//
+// Millis rather than a string-preserving type because the total below is
+// arithmetic, and because the generated models for the sibling endpoints —
+// which `task time stop` and `task time running` return — already use it. Two
+// normalisations across one command group means no single jq filter works on
+// all of it.
 type timeEntry struct {
-	ID          string      `json:"id"`
-	Duration    flexibleInt `json:"duration"`
-	Description string      `json:"description"`
-	Start       flexibleInt `json:"start"`
-	End         flexibleInt `json:"end"`
+	ID          string         `json:"id"`
+	Duration    clickup.Millis `json:"duration"`
+	Description string         `json:"description"`
+	Start       clickup.Millis `json:"start"`
+	End         clickup.Millis `json:"end"`
 	User        struct {
 		Username string `json:"username"`
 	} `json:"user"`
@@ -832,10 +839,7 @@ func printTimesheetTable(f *cmdutil.Factory, entries []timeEntry, startDate, end
 	var totalMs int64
 	for _, e := range entries {
 		// Convert start ms to date.
-		dateStr := string(e.Start)
-		if t, err := parseUnixMillis(string(e.Start)); err == nil {
-			dateStr = t.Format("2006-01-02")
-		}
+		dateStr := formatEntryDate(e.Start)
 		tp.AddField(dateStr)
 
 		taskName := ""
@@ -845,14 +849,12 @@ func printTimesheetTable(f *cmdutil.Factory, entries []timeEntry, startDate, end
 		tp.AddField(taskName)
 
 		tp.AddField(e.User.Username)
-		tp.AddField(formatDuration(string(e.Duration)))
+		tp.AddField(formatDurationMs(e.Duration.Int64()))
 		tp.AddField(e.Description)
 
 		tp.EndRow()
 
-		if ms, err := strconv.ParseInt(string(e.Duration), 10, 64); err == nil {
-			totalMs += ms
-		}
+		totalMs += e.Duration.Int64()
 	}
 
 	if err := tp.Render(); err != nil {
@@ -863,7 +865,7 @@ func printTimesheetTable(f *cmdutil.Factory, entries []timeEntry, startDate, end
 	fmt.Fprintln(ios.Out)
 	fmt.Fprintf(ios.Out, "%s %s across %d entries\n",
 		cs.Bold("Total:"),
-		cs.Green(formatDuration(strconv.FormatInt(totalMs, 10))),
+		cs.Green(formatDurationMs(totalMs)),
 		len(entries),
 	)
 
@@ -897,14 +899,11 @@ func printTimeEntryTable(f *cmdutil.Factory, entries []timeEntry, taskID string)
 		tp.AddField(e.ID)
 
 		// Convert start ms to date.
-		dateStr := string(e.Start)
-		if t, err := parseUnixMillis(string(e.Start)); err == nil {
-			dateStr = t.Format("2006-01-02")
-		}
+		dateStr := formatEntryDate(e.Start)
 		tp.AddField(dateStr)
 
 		tp.AddField(e.User.Username)
-		tp.AddField(formatDuration(string(e.Duration)))
+		tp.AddField(formatDurationMs(e.Duration.Int64()))
 		tp.AddField(e.Description)
 
 		billableStr := "No"
@@ -1013,12 +1012,29 @@ func runTimeDelete(opts *timeDeleteOptions) error {
 	return nil
 }
 
-// formatDuration converts a duration in milliseconds (as a string) to a human-readable format.
+// formatDuration converts a duration in milliseconds (as a string) to a
+// human-readable format. Callers holding an int64 want formatDurationMs.
 func formatDuration(msStr string) string {
 	ms, err := strconv.ParseInt(msStr, 10, 64)
 	if err != nil {
 		return msStr
 	}
+	return formatDurationMs(ms)
+}
+
+// formatEntryDate renders a time entry's start timestamp as a calendar date,
+// falling back to the raw milliseconds when there is nothing to render.
+func formatEntryDate(start clickup.Millis) string {
+	if start.Int64() <= 0 {
+		return ""
+	}
+	return time.UnixMilli(start.Int64()).Format("2006-01-02")
+}
+
+// formatDurationMs is formatDuration over the value callers actually hold. It
+// reports "0m" rather than an empty string for a zero or negative duration, so
+// a timer stopped inside a minute still says something.
+func formatDurationMs(ms int64) string {
 	d := time.Duration(ms) * time.Millisecond
 	h := int(d.Hours())
 	m := int(d.Minutes()) % 60

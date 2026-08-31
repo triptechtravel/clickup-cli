@@ -23,10 +23,22 @@ TOKEN="smoke$(date +%s)"
 PARENT_ID=""
 SUBTASK_IDS=()
 SMOKE_CACHE=""
+TIMER_STARTED=""
+TIME_ENTRY_IDS=()
 
 cleanup() {
   set +e
   [ -n "$SMOKE_CACHE" ] && rm -rf "$SMOKE_CACHE"
+  # A timer is server-side state on a real account: if the run aborts between
+  # start and stop — which is exactly what the timer assertions exist to catch —
+  # it would otherwise keep accruing against a task this trap is about to
+  # delete. Same for the logged entry, which outlives its task.
+  if [ -n "$TIMER_STARTED" ]; then
+    "$BIN" task time stop > /dev/null 2>&1 || true
+  fi
+  for entry in "${TIME_ENTRY_IDS[@]+"${TIME_ENTRY_IDS[@]}"}"; do
+    "$BIN" task time delete "$entry" > /dev/null 2>&1 || true
+  done
   if [ ${#SUBTASK_IDS[@]} -gt 0 ]; then
     "$BIN" task delete "${SUBTASK_IDS[@]}" -y > /dev/null 2>&1 || true
   fi
@@ -104,9 +116,16 @@ ok "task list returned $COUNT items matching token (parent + subtask)"
 # the parent is the exact shape that used to make the parent undecodable — and
 # only the real API produces the mixed types.
 step "task time log — track time on the subtask"
-"$BIN" task time log "$SUB_ID" --duration 34m --description "Smoke probe $TOKEN" > /dev/null 2>&1 \
-  || fail "task time log failed"
-ok "logged 34m on $SUB_ID"
+set +e
+LOG_OUT=$("$BIN" task time log "$SUB_ID" --duration 34m --description "Smoke probe $TOKEN" 2>&1)
+rc=$?
+set -e
+[ $rc -eq 0 ] || fail "task time log failed: $LOG_OUT"
+# `task time log` has no --json; it prints the new entry id as "(entry <id>)".
+# Capturing it lets cleanup() delete the entry, which outlives its task.
+ENTRY_ID=$(printf '%s' "$LOG_OUT" | sed -n 's/.*(entry \([0-9]*\)).*/\1/p' | head -1)
+[ -n "$ENTRY_ID" ] && TIME_ENTRY_IDS+=("$ENTRY_ID")
+ok "logged 34m on $SUB_ID (entry ${ENTRY_ID:-unknown})"
 
 # set +e around the capture: under `set -e` a failing decode — the very thing
 # these steps exist to catch — would abort the script before its fail() message.
@@ -123,17 +142,49 @@ SPENT=$("$BIN" task view "$PARENT_ID" --json --jq '.subtasks | length' --raw 2>&
 rc=$?
 set -e
 [ $rc -eq 0 ] || fail "task view failed on a parent whose subtask has tracked time (issue #27): $SPENT"
+# An assertion, not an observation: the subtask fetch swallows its own error, so
+# a decode regression there returns an empty list and exit 0. A run that cannot
+# see the tracked subtask has not tested anything.
+[ "${SPENT:-0}" -ge 1 ] 2>/dev/null \
+  || fail "task view returned $SPENT subtasks for a parent known to have one (issue #27)"
 ok "parent decoded with $SPENT subtask(s)"
 
 step "task time start/running/stop — the timer round trip"
-# The stop response is the one that must not fail: the timer is already stopped
-# server-side by the time the CLI decodes it, so an error here leaves the user
-# retrying against a timer that is no longer running.
-"$BIN" task time start "$SUB_ID" --description "Smoke timer $TOKEN" > /dev/null 2>&1 \
-  || fail "task time start failed"
-"$BIN" task time running > /dev/null 2>&1 || fail "task time running failed"
-"$BIN" task time stop > /dev/null 2>&1 || fail "task time stop failed to decode its own response"
-ok "timer started, read and stopped"
+# ClickUp allows one running timer per user, and none of these commands take an
+# id — they act on whatever the account has running. Displacing someone's real
+# tracking to run a smoke test is not a trade this script gets to make, so it
+# skips the round trip rather than clobbering it.
+set +e
+ALREADY=$("$BIN" task time running --json --jq '.data.id' --raw 2>/dev/null | tail -1)
+set -e
+if [ -n "$ALREADY" ] && [ "$ALREADY" != "null" ]; then
+  ok "skipped: a timer ($ALREADY) is already running on this account"
+else
+  # The stop response is the one that must not fail: the timer is already
+  # stopped server-side by the time the CLI decodes it, so an error here leaves
+  # the user retrying against a timer that is no longer running.
+  set +e
+  OUT=$("$BIN" task time start "$SUB_ID" --description "Smoke timer $TOKEN" 2>&1)
+  rc=$?
+  set -e
+  [ $rc -eq 0 ] || fail "task time start failed: $OUT"
+  TIMER_STARTED=1
+
+  set +e
+  OUT=$("$BIN" task time running --json --jq '.data.id' --raw 2>&1 | tail -1)
+  rc=$?
+  set -e
+  [ $rc -eq 0 ] || fail "task time running failed: $OUT"
+  [ -n "$OUT" ] && [ "$OUT" != "null" ] || fail "task time running reported no timer moments after starting one"
+
+  set +e
+  OUT=$("$BIN" task time stop 2>&1)
+  rc=$?
+  set -e
+  [ $rc -eq 0 ] || fail "task time stop failed to decode its own response: $OUT"
+  TIMER_STARTED=""
+  ok "timer started, read and stopped"
+fi
 
 # --- comment add (CreateTaskComment, typed response) ----------------------
 step "comment add — exercises typed response decode (the v0.34.1 regression)"

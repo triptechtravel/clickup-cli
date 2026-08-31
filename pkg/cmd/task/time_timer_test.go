@@ -149,12 +149,13 @@ func TestTimeRunning_StringDuration(t *testing.T) {
 	assert.Contains(t, out, "My Task")
 }
 
-// A timer stopped before a minute elapsed still reports a duration rather than
-// a blank: "Timer stopped —  logged" reads like something went wrong.
+// A timer stopped inside a minute still reports a duration rather than a blank:
+// "Timer stopped —  logged" reads like something went wrong. (It rounds to 0m —
+// this pins the reporting, not the precision.)
 func TestTimeStop_ShortDurationStillReportsATime(t *testing.T) {
 	tf := testutil.NewTestFactory(t)
 	tf.Handle("POST", "team/12345/time_entries/stop", 200, `{
-		"data": {"id": "te1", "task": {"id": "abc123", "name": "My Task"}, "duration": 0}
+		"data": {"id": "te1", "task": {"id": "abc123", "name": "My Task"}, "duration": 30000}
 	}`)
 
 	cmd := NewCmdTimeStop(tf.Factory)
@@ -195,4 +196,32 @@ func TestTimeRunning_NumericStart(t *testing.T) {
 	out := tf.OutBuf.String()
 	assert.Contains(t, out, "Running timer")
 	assert.Contains(t, out, "elapsed")
+}
+
+// The timer commands emit their millisecond fields as JSON numbers. This is a
+// deliberate change: `start` was a quoted string on these endpoints while `end`
+// and `at` were numbers, and the response could not decode at all when ClickUp
+// swapped them. One numeric shape across the command group is the contract now,
+// so pin it rather than let it drift again.
+func TestTimerCommands_JSONEmitsNumericMillis(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	tf.Handle("POST", "team/12345/time_entries/stop", 200, `{
+		"data": {"id": "te1", "task": {"id": "abc123", "name": "My Task"},
+		         "duration": "3600000", "start": "1700000000000", "end": 1700003600000}
+	}`)
+
+	cmd := NewCmdTimeStop(tf.Factory)
+	require.NoError(t, testutil.RunCommand(t, cmd, "--json"))
+
+	var parsed struct {
+		Data struct {
+			Duration json.Number `json:"duration"`
+			Start    json.Number `json:"start"`
+			End      json.Number `json:"end"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(tf.OutBuf.Bytes(), &parsed))
+	assert.Equal(t, "3600000", parsed.Data.Duration.String())
+	assert.Equal(t, "1700000000000", parsed.Data.Start.String())
+	assert.Equal(t, "1700003600000", parsed.Data.End.String())
 }

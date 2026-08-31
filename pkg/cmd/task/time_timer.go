@@ -3,7 +3,6 @@ package task
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -168,7 +167,7 @@ func runTimeStop(f *cmdutil.Factory, jsonFlags *cmdutil.JSONFlags) error {
 		return jsonFlags.OutputJSON(ios.Out, resp)
 	}
 
-	dur := formatDuration(strconv.FormatInt(resp.Data.Duration.Int64(), 10))
+	dur := formatDurationMs(resp.Data.Duration.Int64())
 	fmt.Fprintf(ios.Out, "%s Timer stopped — %s logged", cs.Green("!"), cs.Bold(dur))
 	if resp.Data.Task.ID != "" {
 		fmt.Fprintf(ios.Out, " on task %s", cs.Bold(resp.Data.Task.ID))

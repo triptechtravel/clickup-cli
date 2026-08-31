@@ -1,6 +1,7 @@
 package task
 
 import (
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -83,4 +84,59 @@ func TestTimeList_MixedDurationTypes(t *testing.T) {
 	out := tf.OutBuf.String()
 	assert.Contains(t, out, "1h")
 	assert.Contains(t, out, "30m")
+}
+
+// The timesheet total is a billing number: an entry it cannot parse must not be
+// dropped from the sum while still being counted in "across N entries". Floats
+// are the form ClickUp is known to send once time is tracked.
+func TestTimeList_TimesheetTotalCountsEveryEntry(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	tf.HandleFunc("team/12345/time_entries", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-RateLimit-Remaining", "99")
+		_, _ = w.Write([]byte(`{"data": [
+			{"id": "te1", "duration": "3600000", "start": "1700000000000", "description": "String", "user": {"username": "alice"}},
+			{"id": "te2", "duration": 1800000.0, "start": 1700000000000, "description": "Float", "user": {"username": "alice"}}
+		]}`))
+	})
+
+	tf.Handle("GET", "user", 200, `{"user": {"id": 54874661, "username": "alice"}}`)
+
+	cmd := NewCmdTimeList(tf.Factory)
+	err := testutil.RunCommand(t, cmd, "--start-date", "2026-08-01", "--end-date", "2026-08-31")
+	require.NoError(t, err)
+
+	out := tf.OutBuf.String()
+	assert.Contains(t, out, "30m", "a float duration must render as a duration, not raw milliseconds")
+	assert.NotContains(t, out, "1800000.0", "raw milliseconds must never reach the duration column")
+	assert.Contains(t, out, "Total: 1h 30m", "every rendered entry must be in the total")
+}
+
+// `task time list --json` emits the same numeric shape as its sibling timer
+// commands, whichever form the API sent. Before, the two halves of one command
+// group disagreed: a duration was a quoted string here and a number from
+// `task time stop`, so no single jq filter worked across them.
+func TestTimeList_JSONEmitsNumericMillis(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	tf.HandleFunc("team/12345/time_entries", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-RateLimit-Remaining", "99")
+		_, _ = w.Write([]byte(`{"data": [
+			{"id": "te1", "duration": "3600000", "start": "1700000000000", "end": 1700003600000}
+		]}`))
+	})
+
+	cmd := NewCmdTimeList(tf.Factory)
+	require.NoError(t, testutil.RunCommand(t, cmd, "abc123", "--json"))
+
+	var entries []struct {
+		Duration json.Number `json:"duration"`
+		Start    json.Number `json:"start"`
+		End      json.Number `json:"end"`
+	}
+	require.NoError(t, json.Unmarshal(tf.OutBuf.Bytes(), &entries))
+	require.Len(t, entries, 1)
+	assert.Equal(t, "3600000", entries[0].Duration.String())
+	assert.Equal(t, "1700000000000", entries[0].Start.String())
+	assert.Equal(t, "1700003600000", entries[0].End.String())
 }
