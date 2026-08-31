@@ -148,3 +148,51 @@ func TestTimeRunning_StringDuration(t *testing.T) {
 	assert.Contains(t, out, "Running timer")
 	assert.Contains(t, out, "My Task")
 }
+
+// A timer stopped before a minute elapsed still reports a duration rather than
+// a blank: "Timer stopped —  logged" reads like something went wrong.
+func TestTimeStop_ShortDurationStillReportsATime(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	tf.Handle("POST", "team/12345/time_entries/stop", 200, `{
+		"data": {"id": "te1", "task": {"id": "abc123", "name": "My Task"}, "duration": 0}
+	}`)
+
+	cmd := NewCmdTimeStop(tf.Factory)
+	require.NoError(t, testutil.RunCommand(t, cmd))
+
+	out := tf.OutBuf.String()
+	assert.Contains(t, out, "Timer stopped")
+	assert.Contains(t, out, "0m")
+}
+
+// The stop response mixes types across its own timestamp fields — the spec's
+// example shows a string start beside a numeric end. A failure here is
+// especially bad: the timer is already stopped server-side, so the user sees an
+// error and is then told no timer is running.
+func TestTimeStop_MixedTimestampTypes(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	tf.Handle("POST", "team/12345/time_entries/stop", 200, `{
+		"data": {"id": "te1", "task": {"id": "abc123", "name": "My Task"},
+		         "duration": 3600000, "start": "1595289395842", "end": 1595289452790, "at": "1595289452790"}
+	}`)
+
+	cmd := NewCmdTimeStop(tf.Factory)
+	require.NoError(t, testutil.RunCommand(t, cmd))
+	assert.Contains(t, tf.OutBuf.String(), "1h")
+}
+
+// The running-timer endpoint reads start back to compute elapsed time, so it
+// breaks on a numeric start the same way.
+func TestTimeRunning_NumericStart(t *testing.T) {
+	tf := testutil.NewTestFactory(t)
+	tf.Handle("GET", "team/12345/time_entries/current", 200, `{
+		"data": {"id": "te1", "task": {"id": "abc123", "name": "My Task"}, "start": 1700000000000, "duration": -1, "description": "Working"}
+	}`)
+
+	cmd := NewCmdTimeRunning(tf.Factory)
+	require.NoError(t, testutil.RunCommand(t, cmd))
+
+	out := tf.OutBuf.String()
+	assert.Contains(t, out, "Running timer")
+	assert.Contains(t, out, "elapsed")
+}

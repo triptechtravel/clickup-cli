@@ -53,6 +53,15 @@ def fix_duration:
     .duration = millis("Duration in milliseconds")
   else . end;
 
+# Helper: patch a time entry's timestamps. The spec's own stop-timer example
+# shows a string start beside a numeric end, and the running-timer example makes
+# all three strings. Applied to time-entry endpoints only (below), since `start`
+# and `end` mean other things elsewhere in the spec.
+def fix_time_entry_timestamps:
+  reduce ("start", "end", "at") as $f (.;
+    if .[$f] then .[$f] = millis("Unix timestamp in milliseconds") else . end
+  );
+
 # Helper: patch assignees from string[] to object[]
 def fix_assignees:
   if .assignees.items.type == "string" then
@@ -177,8 +186,23 @@ def fix_millis_fields:
     fix_time_fields | fix_duration
   );
 
+def fix_timestamp_fields:
+  (.. | objects | select(has("properties")) | .properties) |= fix_time_entry_timestamps;
+
 (.paths[]?[]? | objects | select(has("responses")) | .responses) |= fix_millis_fields
-| (if has("components") then .components |= fix_millis_fields else . end)
+# Shared schemas and responses, but not components.requestBodies — see above.
+| (if (.components | type) == "object" then
+     .components |= (
+       (if has("schemas") then .schemas |= fix_millis_fields else . end)
+       | (if has("responses") then .responses |= fix_millis_fields else . end)
+     )
+   else . end)
+# Timestamps, scoped to the time-entry endpoints by path.
+| (if (.paths | type) == "object" then .paths |= with_entries(
+     if (.key | test("time_entries|/time$|/time/")) then
+       .value |= ((.[]? | objects | select(has("responses")) | .responses) |= fix_timestamp_fields)
+     else . end
+   ) else . end)
 
 # Walk all schema properties objects and apply the remaining field-level fixes.
 | (.. | objects | select(has("properties")) | .properties) |= (

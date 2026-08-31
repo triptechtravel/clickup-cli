@@ -147,6 +147,68 @@ func TestPatch_ResponseMillisFieldsGetFlexibleGoType(t *testing.T) {
 	}
 }
 
+// A time entry's start/end/at swing between string and number the same way its
+// duration does — the spec's own stop-timer example shows a string start beside
+// a numeric end. Left rigid, a stop response would fail to decode *after* the
+// timer had already been stopped server-side.
+func TestPatch_TimeEntryTimestampsGetFlexibleGoType(t *testing.T) {
+	spec := map[string]any{
+		"paths": map[string]any{
+			"/v2/team/{team_id}/time_entries/stop": map[string]any{
+				"post": map[string]any{
+					"responses": map[string]any{
+						"200": map[string]any{
+							"content": map[string]any{
+								"application/json": map[string]any{
+									"schema": map[string]any{
+										"properties": map[string]any{
+											"start": map[string]any{"type": "string"},
+											"end":   map[string]any{"type": "integer"},
+											"at":    map[string]any{"type": "integer"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			// A task's own start_date is a different field on a different
+			// endpoint; the timestamp fix must not reach it.
+			"/v2/task/{task_id}": map[string]any{
+				"get": map[string]any{
+					"responses": map[string]any{
+						"200": map[string]any{
+							"content": map[string]any{
+								"application/json": map[string]any{
+									"schema": map[string]any{
+										"properties": map[string]any{
+											"start": map[string]any{"type": "string"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	out := runPatch(t, spec)
+
+	props := dig(out, "paths", "/v2/team/{team_id}/time_entries/stop", "post", "responses",
+		"200", "content", "application/json", "schema", "properties").(map[string]any)
+	for _, field := range []string{"start", "end", "at"} {
+		f, ok := props[field].(map[string]any)
+		require.True(t, ok, "%s should still be an object", field)
+		assert.Equal(t, "clickup.Millis", f["x-go-type"], "%s should decode from number or string", field)
+	}
+
+	other := dig(out, "paths", "/v2/task/{task_id}", "get", "responses",
+		"200", "content", "application/json", "schema", "properties", "start").(map[string]any)
+	assert.Nil(t, other["x-go-type"], "only time-entry endpoints get the timestamp fix")
+}
+
 // Request bodies keep plain scalars: the CLI is the one sending them, so it
 // always sends a number, and a scalar is what the generated flag set needs to
 // bind --duration to.
