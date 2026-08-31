@@ -445,11 +445,11 @@ func Save(dir string, idx *Index) error {
 	defer func() { _ = os.Remove(tmpName) }()
 
 	if _, err := tmp.Write(b); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return fmt.Errorf("write index: %w", err)
 	}
 	if err := tmp.Chmod(0o600); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return fmt.Errorf("chmod index: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
