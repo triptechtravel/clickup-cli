@@ -168,7 +168,7 @@ func runTimeStop(f *cmdutil.Factory, jsonFlags *cmdutil.JSONFlags) error {
 		return jsonFlags.OutputJSON(ios.Out, resp)
 	}
 
-	dur := formatMillisDuration(resp.Data.Duration.Int64())
+	dur := formatDuration(strconv.FormatInt(resp.Data.Duration.Int64(), 10))
 	fmt.Fprintf(ios.Out, "%s Timer stopped — %s logged", cs.Green("!"), cs.Bold(dur))
 	if resp.Data.Task.ID != "" {
 		fmt.Fprintf(ios.Out, " on task %s", cs.Bold(resp.Data.Task.ID))
@@ -237,16 +237,14 @@ func runTimeRunning(f *cmdutil.Factory, jsonFlags *cmdutil.JSONFlags) error {
 
 	// Calculate elapsed time from start timestamp.
 	elapsed := ""
-	if data.Start != "" {
-		if startMs, err := strconv.ParseInt(data.Start, 10, 64); err == nil {
-			dur := time.Since(time.UnixMilli(startMs))
-			hours := int(dur.Hours())
-			mins := int(dur.Minutes()) % 60
-			if hours > 0 {
-				elapsed = fmt.Sprintf("%dh %dm", hours, mins)
-			} else {
-				elapsed = fmt.Sprintf("%dm", mins)
-			}
+	if startMs := data.Start.Int64(); startMs > 0 {
+		dur := time.Since(time.UnixMilli(startMs))
+		hours := int(dur.Hours())
+		mins := int(dur.Minutes()) % 60
+		if hours > 0 {
+			elapsed = fmt.Sprintf("%dh %dm", hours, mins)
+		} else {
+			elapsed = fmt.Sprintf("%dm", mins)
 		}
 	}
 

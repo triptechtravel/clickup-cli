@@ -108,19 +108,32 @@ step "task time log — track time on the subtask"
   || fail "task time log failed"
 ok "logged 34m on $SUB_ID"
 
+# set +e around the capture: under `set -e` a failing decode — the very thing
+# these steps exist to catch — would abort the script before its fail() message.
 step "task time list — duration decodes whichever type the API sends"
-LOGGED=$("$BIN" task time list "$SUB_ID" --json --jq 'length' 2>/dev/null | tail -1)
-[ "${LOGGED:-0}" -ge 1 ] || fail "task time list returned no entries for $SUB_ID"
+set +e
+LOGGED=$("$BIN" task time list "$SUB_ID" --json --jq 'length' 2>&1 | tail -1)
+set -e
+[ "${LOGGED:-0}" -ge 1 ] 2>/dev/null || fail "task time list returned no entries for $SUB_ID: $LOGGED"
 ok "read $LOGGED time entry/entries"
 
 step "task view parent — a tracked subtask must not break the parent decode"
-SPENT=$("$BIN" task view "$PARENT_ID" --json --jq '.subtasks | length' --raw 2>/dev/null | tail -1)
-[ -n "$SPENT" ] || fail "task view failed on a parent whose subtask has tracked time (issue #27)"
+set +e
+SPENT=$("$BIN" task view "$PARENT_ID" --json --jq '.subtasks | length' --raw 2>&1 | tail -1)
+rc=$?
+set -e
+[ $rc -eq 0 ] || fail "task view failed on a parent whose subtask has tracked time (issue #27): $SPENT"
 ok "parent decoded with $SPENT subtask(s)"
 
-step "task time running — no timer is still a clean decode"
+step "task time start/running/stop — the timer round trip"
+# The stop response is the one that must not fail: the timer is already stopped
+# server-side by the time the CLI decodes it, so an error here leaves the user
+# retrying against a timer that is no longer running.
+"$BIN" task time start "$SUB_ID" --description "Smoke timer $TOKEN" > /dev/null 2>&1 \
+  || fail "task time start failed"
 "$BIN" task time running > /dev/null 2>&1 || fail "task time running failed"
-ok "running-timer endpoint decoded"
+"$BIN" task time stop > /dev/null 2>&1 || fail "task time stop failed to decode its own response"
+ok "timer started, read and stopped"
 
 # --- comment add (CreateTaskComment, typed response) ----------------------
 step "comment add — exercises typed response decode (the v0.34.1 regression)"
